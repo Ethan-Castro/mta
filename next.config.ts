@@ -3,9 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   // Turbopack configuration removed temporarily to fix build issues
   // Explicitly set the workspace root to avoid lockfile mis-detection
-  experimental: {
-    outputFileTracingRoot: "/Users/ethancastro/mta",
-  },
+  outputFileTracingRoot: "/Users/ethancastro/mta",
 };
 
 export default nextConfig;

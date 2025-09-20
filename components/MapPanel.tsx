@@ -4,6 +4,7 @@ import Map, { Marker, Popup, NavigationControl, Source, Layer } from "react-map-
 import { useMemo, useRef, useState } from "react";
 import "mapbox-gl/dist/mapbox-gl.css";
 import type { MapRef } from "react-map-gl/mapbox";
+import type { FeatureCollection, Feature, Point } from "geojson";
 
 type Props = {
   height?: number;
@@ -34,10 +35,10 @@ export default function MapPanel({ height = 300, center = [-73.9857, 40.7484], z
 
   const mapRef = useRef<MapRef | null>(null);
 
-  const geojson = useMemo(() => {
+  const geojson: FeatureCollection<Point> = useMemo(() => {
     return {
       type: "FeatureCollection",
-      features: markers.map((m) => ({
+      features: markers.map((m): Feature<Point> => ({
         type: "Feature",
         properties: {
           id: m.id,
@@ -48,7 +49,7 @@ export default function MapPanel({ height = 300, center = [-73.9857, 40.7484], z
         },
         geometry: { type: "Point", coordinates: [m.longitude, m.latitude] },
       })),
-    } as const;
+    };
   }, [markers]);
 
   const interactiveLayerIds = cluster ? ["clusters", "unclustered-point"] : undefined;
