@@ -1,4 +1,4 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+This project is a Next.js dashboard for the MTA ACE Datathon with stakeholder views and ML integration stubs.
 
 ## Getting Started
 
@@ -14,11 +14,46 @@ pnpm dev
 bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) and navigate to stakeholder views: `Executive`, `Operations`, `Policy`, and `Data Science`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Environment variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Create a `.env.local` with the following keys:
+
+```
+# OpenAI (server-only)
+OPENAI_API_KEY=
+
+# Mapbox (client-exposed)
+NEXT_PUBLIC_MAPBOX_TOKEN=
+
+# Socrata / data.ny.gov
+SOCRATA_APP_TOKEN=
+NY_API_KEY_ID=
+NY_API_KEY_SECRET=
+# Optional override (defaults to https://data.ny.gov)
+# NY_DATA_BASE_URL=https://data.ny.gov
+
+# REQUIRED: ACE violations dataset ID from data.ny.gov
+NY_ACE_DATASET_ID=kh8p-hcbm
+
+# Optional ML integration
+ML_PROVIDER_TOKEN=
+ML_PREDICT_URL=
+ML_SIMULATE_URL=
+
+CONGESTION_PRICING_START=2024-06-30
+# NEXT_PUBLIC_BASE_URL=
+```
+
+Only define secrets on the server; never expose them to the client. Client-visible keys must be prefixed with `NEXT_PUBLIC_`.
+
+## Stakeholder views
+
+- Executive: high-level KPIs and narrative area
+- Operations: route comparator and map placeholders
+- Policy: CBD map and pre/post trends placeholders
+- Data Science: buttons to trigger prediction and simulation API stubs
 
 ## Learn More
 
