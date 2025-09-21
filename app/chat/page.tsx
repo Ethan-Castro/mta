@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
+import { nanoid } from "nanoid";
 import {
   Conversation,
   ConversationContent,
@@ -26,9 +27,22 @@ import { InsightAgentUIMessage } from "@/lib/agents/insightAgent";
 
 export default function ChatPage() {
   const [input, setInput] = useState("");
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const { messages, sendMessage, status } = useChat<InsightAgentUIMessage>({
     transport: new DefaultChatTransport({ api: "/api/chat" }),
   });
+
+  // Initialize or reuse conversation id
+  useEffect(() => {
+    const existing = typeof window !== "undefined" ? window.localStorage.getItem("chat.conversationId") : null;
+    if (existing) {
+      setConversationId(existing);
+    } else {
+      const id = nanoid();
+      setConversationId(id);
+      try { window.localStorage.setItem("chat.conversationId", id); } catch {}
+    }
+  }, []);
 
   const starterPrompts = useMemo(() => AI_STARTER_PROMPTS.slice(0, 4), []);
   const quickDocs = useMemo(() => DOCUMENTATION_LINKS.slice(0, 4), []);
@@ -41,6 +55,7 @@ export default function ChatPage() {
     e.preventDefault();
     const text = message.text ?? input;
     if (!text.trim()) return;
+    // sendMessage only accepts message fields; forward conversation id via headers is not supported here
     sendMessage({ text });
     setInput("");
   };

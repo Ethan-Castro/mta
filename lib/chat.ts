@@ -1,0 +1,128 @@
+import { sql } from "@/lib/db";
+import { nanoid } from "nanoid";
+
+export type ChatRole = "user" | "assistant";
+
+export type Conversation = {
+  id: string;
+  title: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ChatMessage = {
+  id: string;
+  conversation_id: string;
+  role: ChatRole;
+  content: string;
+  created_at: string;
+};
+
+export async function ensureChatSchema(): Promise<void> {
+  // Use text ids so we don't depend on extensions
+  await sql`
+    CREATE TABLE IF NOT EXISTS conversations (
+      id TEXT PRIMARY KEY,
+      title TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS messages (
+      id TEXT PRIMARY KEY,
+      conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+      role TEXT NOT NULL CHECK (role IN ('user','assistant')),
+      content TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `;
+}
+
+export async function createConversation(title?: string | null): Promise<Conversation> {
+  const id = nanoid();
+  await ensureChatSchema();
+  const rows = await sql<Conversation[]>`
+    INSERT INTO conversations (id, title)
+    VALUES (${id}, ${title ?? null})
+    RETURNING id, title, created_at, updated_at
+  `;
+  return rows[0];
+}
+
+export async function touchConversation(conversationId: string): Promise<void> {
+  await ensureChatSchema();
+  await sql`UPDATE conversations SET updated_at = now() WHERE id = ${conversationId}`;
+}
+
+export async function upsertConversation(conversationId?: string | null, title?: string | null): Promise<Conversation> {
+  await ensureChatSchema();
+  if (!conversationId) {
+    return createConversation(title ?? null);
+  }
+  const existing = await sql<Conversation[]>`
+    SELECT id, title, created_at, updated_at FROM conversations WHERE id = ${conversationId}
+  `;
+  if (existing.length) {
+    if (title != null && title !== existing[0].title) {
+      const rows = await sql<Conversation[]>`
+        UPDATE conversations SET title = ${title}, updated_at = now() WHERE id = ${conversationId}
+        RETURNING id, title, created_at, updated_at
+      `;
+      return rows[0];
+    }
+    await touchConversation(conversationId);
+    return existing[0];
+  }
+  // If not found, create
+  const rows = await sql<Conversation[]>`
+    INSERT INTO conversations (id, title)
+    VALUES (${conversationId}, ${title ?? null})
+    RETURNING id, title, created_at, updated_at
+  `;
+  return rows[0];
+}
+
+export async function listConversations(limit = 50): Promise<Conversation[]> {
+  await ensureChatSchema();
+  const rows = await sql<Conversation[]>`
+    SELECT id, title, created_at, updated_at
+    FROM conversations
+    ORDER BY updated_at DESC
+    LIMIT ${limit}
+  `;
+  return rows;
+}
+
+export async function addMessage(params: { conversationId: string; role: ChatRole; content: string }): Promise<ChatMessage> {
+  await ensureChatSchema();
+  const id = nanoid();
+  const rows = await sql<ChatMessage[]>`
+    INSERT INTO messages (id, conversation_id, role, content)
+    VALUES (${id}, ${params.conversationId}, ${params.role}, ${params.content})
+    RETURNING id, conversation_id, role, content, created_at
+  `;
+  // Touch conversation updated_at
+  await touchConversation(params.conversationId);
+  return rows[0];
+}
+
+export async function getMessages(conversationId: string, limit = 200): Promise<ChatMessage[]> {
+  await ensureChatSchema();
+  const rows = await sql<ChatMessage[]>`
+    SELECT id, conversation_id, role, content, created_at
+    FROM messages
+    WHERE conversation_id = ${conversationId}
+    ORDER BY created_at ASC
+    LIMIT ${limit}
+  `;
+  return rows;
+}
+
+export async function getConversation(conversationId: string): Promise<Conversation | null> {
+  await ensureChatSchema();
+  const rows = await sql<Conversation[]>`
+    SELECT id, title, created_at, updated_at FROM conversations WHERE id = ${conversationId}
+  `;
+  return rows[0] ?? null;
+}

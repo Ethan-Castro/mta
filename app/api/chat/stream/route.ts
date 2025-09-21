@@ -1,6 +1,7 @@
 import { streamText } from "ai";
 import { z } from "zod";
 import { getViolationSummary } from "@/lib/data/violations";
+import { addMessage, upsertConversation } from "@/lib/chat";
 // no next/headers in route handlers; use req.headers
 
 export const runtime = "nodejs";
@@ -8,7 +9,14 @@ export const runtime = "nodejs";
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
-    const { routeId, start, end, question } = body || {};
+    const { routeId, start, end, question, model, conversationId: conversationIdInput, title } = body || {};
+
+    // Ensure conversation exists and persist the user message
+    const conversation = await upsertConversation(conversationIdInput ?? null, title ?? null);
+    const conversationId = conversation.id;
+    if (question) {
+      await addMessage({ conversationId, role: "user", content: String(question) });
+    }
 
     // Fallback if no AI Gateway key: return a simple non-streaming text summary
     if (!process.env.AI_GATEWAY_API_KEY) {
@@ -38,9 +46,9 @@ export async function POST(req: Request) {
           `- Exempt share: ${share}% (${totalExempt.toLocaleString()} exempt)`,
           months.length ? `- Coverage window: ${months[0]} → ${months[months.length - 1]}` : `- Coverage window: not available`,
         ].join("\n");
-        return new Response(text, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
+        return new Response(text, { headers: { "Content-Type": "text/plain; charset=utf-8", "x-conversation-id": conversationId } });
       } catch (e) {
-        return new Response("AI is unavailable. Please configure AI_GATEWAY_API_KEY.", { headers: { "Content-Type": "text/plain; charset=utf-8" } });
+        return new Response("AI is unavailable. Please configure AI_GATEWAY_API_KEY.", { headers: { "Content-Type": "text/plain; charset=utf-8", "x-conversation-id": conversationId } });
       }
     }
 
@@ -48,7 +56,7 @@ export async function POST(req: Request) {
     process.env.AI_GATEWAY_API_KEY = process.env.AI_GATEWAY_API_KEY || "vck_71Q1WAPSF8Hxrgs9wXw0k8sdl8oHndAnZch694sGbRkTa7aHuT46f1oo";
 
     const result = streamText({
-      model: "openai/gpt-5",
+      model: model || "openai/gpt-5",
       system: "You are a transit analytics assistant. Be concise and quantitative.",
       prompt: question
         ? `Answer the question using tools when needed. Question: ${question}`
@@ -79,22 +87,30 @@ export async function POST(req: Request) {
       temperature: 0.2,
     });
 
+    let assistantBuffer = "";
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
         const encoder = new TextEncoder();
         try {
           for await (const text of result.textStream) {
+            assistantBuffer += text;
             controller.enqueue(encoder.encode(text));
           }
         } catch (e) {
           controller.enqueue(encoder.encode("\n[stream error]\n"));
         } finally {
+          // Persist assistant message at the end of the stream
+          if (assistantBuffer.trim()) {
+            try {
+              await addMessage({ conversationId, role: "assistant", content: assistantBuffer });
+            } catch {}
+          }
           controller.close();
         }
       },
     });
 
-    return new Response(stream, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
+    return new Response(stream, { headers: { "Content-Type": "text/plain; charset=utf-8", "x-conversation-id": conversationId } });
   } catch (e) {
     return new Response("AI is temporarily unavailable.", { headers: { "Content-Type": "text/plain; charset=utf-8" } });
   }

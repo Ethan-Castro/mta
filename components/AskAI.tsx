@@ -328,7 +328,7 @@ function buildSummaryChain(
 
 export default function AskAI() {
   const [inputValue, setInputValue] = useState("");
-  const [model, setModel] = useState("gpt-4o-mini");
+  const [model, setModel] = useState("openai/gpt-5");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [status, setStatus] = useState<ChatStatus | undefined>();
   const [error, setError] = useState<string | null>(null);
@@ -426,7 +426,7 @@ export default function AskAI() {
         const response = await fetch("/api/chat/stream", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ question }),
+          body: JSON.stringify({ question, model }),
         });
 
         if (!response.ok || !response.body) {
