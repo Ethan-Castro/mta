@@ -64,6 +64,15 @@ function formatChange(value: number) {
 }
 
 export default function OperationsPage() {
+  function normalizeCampusType(type: string) {
+    const t = type.toLowerCase();
+    if (t.startsWith("senior")) return "Senior College";
+    if (t.startsWith("comprehensive")) return "Comprehensive College";
+    if (t.startsWith("community")) return "Community College";
+    if (t.startsWith("graduate")) return "Graduate College";
+    if (t.startsWith("honors")) return "Honors College";
+    return type;
+  }
   const [enabledRoutes, setEnabledRoutes] = useState<Record<string, boolean>>(() =>
     ROUTE_COMPARISONS.reduce<Record<string, boolean>>((acc, route) => {
       acc[route.routeId] = true;
@@ -183,7 +192,7 @@ export default function OperationsPage() {
 
   const campusMarkers = useMemo(
     () =>
-      CUNY_CAMPUSES.filter((campus) => selectedCampusType === "all" || campus.type === selectedCampusType).map((campus) => ({
+      CUNY_CAMPUSES.filter((campus) => selectedCampusType === "all" || normalizeCampusType(campus.type) === selectedCampusType).map((campus) => ({
         id: `campus-${campus.campus.replace(/\s+/g, "-").toLowerCase()}`,
         longitude: campus.longitude,
         latitude: campus.latitude,

@@ -140,7 +140,7 @@ const handler = createMcpHandler(
       "Query NYC Open Data portal datasets",
       {
         datasetId: z.string().describe("Dataset identifier"),
-        params: z.record(z.union([z.string(), z.number(), z.boolean()])).optional(),
+        params: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional().default({}),
       },
       async ({ datasetId, params = {} }) => {
         try {

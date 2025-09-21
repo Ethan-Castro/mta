@@ -70,10 +70,21 @@ export default function PolicyPage() {
       CUNY_CAMPUSES.filter((campus) => {
         if (selectedBorough === "all") return true;
         const boroughLower = selectedBorough.toLowerCase();
-        return (
-          campus.city.toLowerCase().includes(boroughLower) ||
-          campus.campus.toLowerCase().includes(boroughLower)
-        );
+        // Map borough label to campus.city values used in dataset
+        // Manhattan campuses are recorded as "New York"
+        const boroughToCity: Record<string, string[]> = {
+          manhattan: ["new york"],
+          bronx: ["bronx"],
+          brooklyn: ["brooklyn"],
+          queens: ["flushing", "long island city", "bayside", "jamaica"],
+          "bronx/manhattan": ["bronx", "new york"],
+          staten: ["staten island"],
+          "staten island": ["staten island"],
+        };
+        const cities = boroughToCity[boroughLower] || [boroughLower];
+        const cityMatch = cities.some((c) => campus.city.toLowerCase().includes(c));
+        const nameMatch = campus.campus.toLowerCase().includes(boroughLower);
+        return cityMatch || nameMatch;
       }).map((campus) => ({
         id: `campus-${campus.campus.replace(/\s+/g, '-').toLowerCase()}`,
         longitude: campus.longitude,

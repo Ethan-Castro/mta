@@ -1,6 +1,7 @@
 import { streamText } from "ai";
 import { z } from "zod";
 import { getViolationSummary } from "@/lib/data/violations";
+import { sql } from "@/lib/db";
 import { addMessage, upsertConversation } from "@/lib/chat";
 // no next/headers in route handlers; use req.headers
 
@@ -62,6 +63,21 @@ export async function POST(req: Request) {
         ? `Answer the question using tools when needed. Question: ${question}`
         : `Generate a concise summary of ACE violations for the selected window. Use tools.`,
       tools: {
+        runSql: {
+          description: "Execute a SQL query against Neon Postgres (server-side only).",
+          inputSchema: z.object({
+            sql: z.string().describe("Full SQL string to execute"),
+          }),
+          execute: async ({ sql: raw }) => {
+            const lowered = raw.trim().toLowerCase();
+            const forbidden = ["drop ", "truncate ", "alter ", "grant ", "revoke "];
+            if (forbidden.some((kw) => lowered.startsWith(kw))) {
+              return { error: "Statement not allowed." };
+            }
+            const rows = await sql(raw as any);
+            return { rows };
+          },
+        },
         getViolationsSummary: {
           description: "Fetch grouped violations and exempt counts per route per month",
           inputSchema: z.object({

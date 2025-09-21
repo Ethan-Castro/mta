@@ -709,8 +709,8 @@ Consider the following optimizations:
         expectedResultType: z.enum(["count", "aggregation", "time_series", "spatial"]).describe("Expected result type"),
       }),
       execute: async ({ sql, expectedResultType }) => {
-        const issues = [];
-        const suggestions = [];
+        const issues: string[] = [];
+        const suggestions: string[] = [];
 
         // Basic SQL validation
         const sqlLower = sql.toLowerCase();
@@ -821,10 +821,10 @@ export const workflowAgent = new Agent({
         workflowResults += `\n`;
 
         // Step 3: Forecasting (if requested)
-        if (includeForecasting) {
+        if (includeForecasting && mlPredictionAgent) {
           workflowResults += `3. VIOLATION FORECASTING (3 months)\n`;
           for (const route of associatedRoutes.slice(0, 2)) {
-            const forecast = await mlPredictionAgent.tools.forecast_violations.execute({
+            const forecast = await mlPredictionAgent!.tools.forecast_violations.execute({
               routeId: route.routeId,
               horizon: 3,
               includeSeasonality: true,
@@ -836,9 +836,9 @@ export const workflowAgent = new Agent({
         }
 
         // Step 4: Policy simulation (if requested)
-        if (includePolicySimulation) {
+        if (includePolicySimulation && mlPredictionAgent) {
           workflowResults += `4. POLICY IMPACT SIMULATION\n`;
-          const simulation = await mlPredictionAgent.tools.simulate_policy_impact.execute({
+          const simulation = await mlPredictionAgent!.tools.simulate_policy_impact.execute({
             routeId: associatedRoutes[0]?.routeId || "M15-SBS",
             policyType: "ace_expansion",
             scenario: "Expanding ACE coverage to additional campus routes",
@@ -890,7 +890,7 @@ export const workflowAgent = new Agent({
         analysis += `2. IMPACT SIMULATION\n`;
         const simulations = await Promise.all(
           affectedRoutes.slice(0, 3).map(routeId =>
-            mlPredictionAgent.tools.simulate_policy_impact.execute({
+            mlPredictionAgent!.tools.simulate_policy_impact.execute({
               routeId,
               policyType,
               scenario: `${policyType} implementation`,
@@ -1116,11 +1116,11 @@ This query will be processed by the ${agentType} agent with ${complexity} analys
       }),
       execute: async ({ query, parameters = {} }) => {
         // Route to ML prediction agent
-        if (query.includes("forecast")) {
+        if (query.includes("forecast") && mlPredictionAgent) {
           const routeMatch = query.match(/route\s*([A-Za-z0-9-]+)/i);
           const routeId = routeMatch ? routeMatch[1] : "M15-SBS";
 
-          return await mlPredictionAgent.tools.forecast_violations.execute({
+          return await mlPredictionAgent!.tools.forecast_violations.execute({
             routeId,
             horizon: parameters.horizon || 6,
             includeSeasonality: parameters.seasonality !== false,
@@ -1135,7 +1135,7 @@ This query will be processed by the ${agentType} agent with ${complexity} analys
                            query.includes("congestion") ? "congestion_pricing" :
                            query.includes("exempt") ? "exempt_reduction" : "ace_expansion";
 
-          return await mlPredictionAgent.tools.simulate_policy_impact.execute({
+          return await mlPredictionAgent!.tools.simulate_policy_impact.execute({
             routeId,
             policyType,
             scenario: query,
@@ -1143,7 +1143,7 @@ This query will be processed by the ${agentType} agent with ${complexity} analys
           });
         }
 
-        return await mlPredictionAgent.tools.comparative_analysis.execute({
+        return await mlPredictionAgent!.tools.comparative_analysis.execute({
           analysisType: "route_comparison",
           routeIds: parameters.routes || ["M15-SBS", "Bx12-SBS"],
           metrics: parameters.metrics || ["violations", "exempt_share"]
