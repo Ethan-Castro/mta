@@ -2,7 +2,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="min-h-screen grid grid-cols-[220px_1fr]">
       <aside className="hidden sm:block border-r border-foreground/10 p-6">
-        <div className="text-sm font-semibold mb-6 tracking-tight">ACE Dashboard</div>
+        <div className="text-sm font-semibold mb-6 tracking-tight">MTA ACE Insight Dashboard</div>
         <nav className="space-y-2">
           <a href="/executive" className="block text-sm text-foreground/80 hover:text-foreground">Executive</a>
           <a href="/operations" className="block text-sm text-foreground/80 hover:text-foreground">Operations</a>

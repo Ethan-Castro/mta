@@ -1,8 +1,8 @@
 "use client";
-
-import MapPanel from "@/components/MapPanel";
+import dynamic from "next/dynamic";
 import { CUNY_CAMPUSES } from "@/lib/data/cuny";
 import { useMemo, useState } from "react";
+import { Tool, ToolHeader, ToolContent, ToolInput, ToolOutput } from "@/components/ai-elements/tool";
 
 const typeColor: Record<string, string> = {
   "Community Colleges": "#22c55e",
@@ -35,6 +35,11 @@ export default function OperationsPage() {
         href: c.website,
       })),
     [enabledTypes]
+  );
+
+  const MapPanel = useMemo(
+    () => dynamic(() => import("@/components/MapPanel"), { ssr: false }),
+    []
   );
 
   return (
@@ -77,7 +82,13 @@ export default function OperationsPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="rounded-lg border border-foreground/10 p-5 min-h-[220px]">Route comparator (chart placeholder)</div>
+        <Tool defaultOpen className="bg-background/70">
+          <ToolHeader type="tool-getViolationsSummary" state="input-available" />
+          <ToolContent>
+            <ToolInput input={{ dataset: "ACE violations", params: { cluster: useClusters, types: Object.keys(enabledTypes).filter((k) => enabledTypes[k]) } }} />
+            <ToolOutput output={[{ note: "Sample output omitted in demo" }]} errorText={undefined} />
+          </ToolContent>
+        </Tool>
         <MapPanel height={260} center={[-73.95, 40.73]} zoom={10.4} markers={markers} cluster={useClusters} hoverPopups={!useClusters} />
       </div>
     </div>

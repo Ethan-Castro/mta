@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { openai } from "@ai-sdk/openai";
 import { generateText } from "ai";
 
 export const runtime = "nodejs";
@@ -26,10 +25,10 @@ export async function POST(req: Request) {
       // ignore and keep empty data
     }
 
-    const hasKey = !!process.env.OPENAI_API_KEY;
-    if (hasKey) {
+    const hasGatewayKey = !!process.env.AI_GATEWAY_API_KEY;
+    if (hasGatewayKey) {
       const { text } = await generateText({
-        model: openai("gpt-4o-mini"),
+        model: "openai/gpt-4o-mini",
         system: "You are a transit analytics assistant. Be concise and quantitative.",
         prompt: question
           ? `Answer the user's question using available context. If needed, reference the data below. Question: ${question}\nData: ${JSON.stringify(data).slice(0, 8000)}`

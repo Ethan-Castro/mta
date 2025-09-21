@@ -31,18 +31,18 @@ export default function ExecutiveKpis() {
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
       <div className="rounded-lg border border-foreground/10 p-5">
-        <div className="text-xs text-foreground/60">Violations (sample)</div>
+        <div className="text-xs text-foreground/60">ACE violations (sample)</div>
         <div className="text-2xl font-medium mt-1">{loading ? "—" : totalViolations.toLocaleString()}</div>
       </div>
       <div className="rounded-lg border border-foreground/10 p-5">
-        <div className="text-xs text-foreground/60">Exempt share</div>
+        <div className="text-xs text-foreground/60">Exempt share (%)</div>
         <div className="text-2xl font-medium mt-1">{loading ? "—%" : `${exemptShare}%`}</div>
       </div>
       <div className="rounded-lg border border-foreground/10 p-5">
-        <div className="text-xs text-foreground/60">Routes (observed)</div>
+        <div className="text-xs text-foreground/60">Routes observed</div>
         <div className="text-2xl font-medium mt-1">{loading ? "—" : new Set(rows.map(r => r.bus_route_id)).size}</div>
       </div>
-      {error && <div className="md:col-span-3 text-xs text-red-500">{error}</div>}
+      {error && <div className="md:col-span-3 text-xs text-red-500">Couldn&apos;t load KPIs. Refresh or try later.</div>}
     </div>
   );
 }

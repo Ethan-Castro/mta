@@ -1,4 +1,3 @@
-import { openai } from "@ai-sdk/openai";
 import { streamText } from "ai";
 import { z } from "zod";
 import { createSocrataFromEnv } from "@/lib/data/socrata";
@@ -11,8 +10,8 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}));
     const { routeId, start, end, question } = body || {};
 
-    // Fallback if no OpenAI key: return a simple non-streaming text summary
-    if (!process.env.OPENAI_API_KEY) {
+    // Fallback if no AI Gateway key: return a simple non-streaming text summary
+    if (!process.env.AI_GATEWAY_API_KEY) {
       try {
         const forwardedProto = req.headers.get("x-forwarded-proto") || "http";
         const forwardedHost = req.headers.get("x-forwarded-host") || req.headers.get("host") || "localhost:3000";
@@ -41,12 +40,12 @@ export async function POST(req: Request) {
         ].join("\n");
         return new Response(text, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
       } catch (e) {
-        return new Response("AI is unavailable. Please configure OPENAI_API_KEY.", { headers: { "Content-Type": "text/plain; charset=utf-8" } });
+        return new Response("AI is unavailable. Please configure AI_GATEWAY_API_KEY.", { headers: { "Content-Type": "text/plain; charset=utf-8" } });
       }
     }
 
     const result = streamText({
-      model: openai("gpt-4o-mini"),
+      model: "openai/gpt-4o-mini",
       system: "You are a transit analytics assistant. Be concise and quantitative.",
       prompt: question
         ? `Answer the question using tools when needed. Question: ${question}`

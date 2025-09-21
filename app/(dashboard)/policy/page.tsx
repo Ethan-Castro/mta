@@ -1,5 +1,6 @@
 "use client";
-import MapPanel from "@/components/MapPanel";
+import dynamic from "next/dynamic";
+import { Source, Sources, SourcesContent, SourcesTrigger } from "@/components/ai-elements/sources";
 import { CUNY_CAMPUSES } from "@/lib/data/cuny";
 import { useMemo, useState } from "react";
 
@@ -33,6 +34,11 @@ export default function PolicyPage() {
     description: `${c.address}, ${c.city}, ${c.state} ${c.zip}`,
     href: c.website,
     })), [enabledTypes]);
+  const MapPanel = useMemo(
+    () => dynamic(() => import("@/components/MapPanel"), { ssr: false }),
+    []
+  );
+
   return (
     <div className="space-y-6">
       <header>
@@ -73,6 +79,17 @@ export default function PolicyPage() {
 
       <MapPanel height={400} center={[-73.95, 40.73]} zoom={10.4} markers={markers} cluster={useClusters} hoverPopups={!useClusters} />
       <div className="rounded-lg border border-foreground/10 p-5 min-h-[220px]">Pre/Post trends (placeholder)</div>
+      <div className="rounded-lg border border-foreground/10 p-5">
+        <h2 className="text-sm font-medium mb-3">Sources</h2>
+        <Sources>
+          <SourcesTrigger count={3} />
+          <SourcesContent>
+            <Source href="https://data.ny.gov/Transportation/Automated-Bus-Lane-Enforcement-Violations/kh8p-hcbm" title="ACE Violations (NYC Open Data)" />
+            <Source href="https://new.mta.info/transparency/board-and-committee-meetings" title="MTA Board Materials" />
+            <Source href="https://www1.nyc.gov/site/finance/vehicles/bus-lane.page" title="NYC DOT Bus Lane Guidance" />
+          </SourcesContent>
+        </Sources>
+      </div>
     </div>
   );
 }

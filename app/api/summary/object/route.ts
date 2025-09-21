@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { openai } from "@ai-sdk/openai";
 import { generateObject } from "ai";
 import { z } from "zod";
 
@@ -20,7 +19,7 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}));
     const { data } = body || {};
     const { object } = await generateObject({
-      model: openai("gpt-4o-mini"),
+      model: "openai/gpt-4o-mini",
       schema: SummarySchema,
       system: "Extract concise KPIs and recommendations from ACE analytics.",
       prompt: `Summarize and structure this data for executives: ${JSON.stringify(data).slice(0, 8000)}`,

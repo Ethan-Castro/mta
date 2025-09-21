@@ -102,6 +102,9 @@ export default function MapPanel({ height = 300, center = [-73.9857, 40.7484], z
               {markers.map((m) => (
                 <Marker key={m.id} longitude={m.longitude} latitude={m.latitude} anchor="bottom">
                   <div
+                    role="button"
+                    tabIndex={0}
+                    aria-label={m.title ? `Open ${m.title}` : `Open ${m.id}`}
                     style={{
                       backgroundColor: m.color || "#2563eb",
                       width: 10,
@@ -115,6 +118,12 @@ export default function MapPanel({ height = 300, center = [-73.9857, 40.7484], z
                     onClick={(e) => {
                       e.stopPropagation();
                       setSelectedId(m.id);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setSelectedId(m.id);
+                      }
                     }}
                     onMouseEnter={() => hoverPopups && setHoveredId(m.id)}
                     onMouseLeave={() => hoverPopups && setHoveredId((curr) => (curr === m.id ? null : curr))}
@@ -197,7 +206,7 @@ export default function MapPanel({ height = 300, center = [-73.9857, 40.7484], z
           )}
         </Map>
       ) : (
-        <div className="h-full grid place-items-center text-sm text-foreground/60">Set NEXT_PUBLIC_MAPBOX_TOKEN to enable the map.</div>
+        <div className="h-full grid place-items-center text-sm text-foreground/60">Map is unavailable. Set a map token to enable maps.</div>
       )}
     </div>
   );

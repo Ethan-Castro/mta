@@ -34,15 +34,15 @@ export default function ExecutiveSummary() {
     <div className="rounded-lg border border-foreground/10 p-5 space-y-4">
       <div className="text-sm font-medium">Executive Summary (AI)</div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <input value={routeId} onChange={(e) => setRouteId(e.target.value)} placeholder="Route ID (e.g., M15)" className="rounded-md border border-foreground/10 bg-transparent px-3 py-2 text-sm outline-none" />
-        <input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} className="rounded-md border border-foreground/10 bg-transparent px-3 py-2 text-sm outline-none" />
-        <input type="datetime-local" value={end} onChange={(e) => setEnd(e.target.value)} className="rounded-md border border-foreground/10 bg-transparent px-3 py-2 text-sm outline-none" />
+        <input value={routeId} onChange={(e) => setRouteId(e.target.value)} placeholder="Route ID (e.g., M15) — optional" aria-label="Route ID" className="rounded-md border border-foreground/10 bg-transparent px-3 py-2 text-sm outline-none" />
+        <input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} aria-label="Start date and time" className="rounded-md border border-foreground/10 bg-transparent px-3 py-2 text-sm outline-none" />
+        <input type="datetime-local" value={end} onChange={(e) => setEnd(e.target.value)} aria-label="End date and time" className="rounded-md border border-foreground/10 bg-transparent px-3 py-2 text-sm outline-none" />
       </div>
       <div className="flex items-center gap-3">
         <button onClick={generate} disabled={loading} className="rounded-md border border-foreground/10 hover:border-foreground/20 px-3 py-2 text-sm transition-colors">
-          {loading ? "Generating…" : "Generate Summary"}
+          {loading ? "Generating…" : "Generate summary"}
         </button>
-        {error && <span className="text-xs text-red-500">{error}</span>}
+        {error && <span className="text-xs text-red-500">Couldn&apos;t generate summary. Try again.</span>}
       </div>
       {text && (
         <div className="text-sm whitespace-pre-wrap leading-relaxed text-foreground/90">{text}</div>

@@ -182,7 +182,15 @@ function formatPercent(value: number) {
 }
 
 function computeSummary(rows: Array<Record<string, unknown>>): SummaryStats {
-  const totals = rows.reduce(
+  type RouteBucket = { route: string; violations: number; exempt: number };
+  type Totals = {
+    totalViolations: number;
+    totalExempt: number;
+    routeMap: Map<string, RouteBucket>;
+    months: Set<string>;
+  };
+
+  const totals = rows.reduce<Totals>(
     (acc, row) => {
       const violations = Number(row?.violations ?? row?.count ?? 0);
       const exempt = Number(row?.exempt_count ?? 0);
@@ -210,7 +218,7 @@ function computeSummary(rows: Array<Record<string, unknown>>): SummaryStats {
     {
       totalViolations: 0,
       totalExempt: 0,
-      routeMap: new Map<string, { route: string; violations: number; exempt: number }>(),
+      routeMap: new Map<string, RouteBucket>(),
       months: new Set<string>(),
     }
   );
@@ -684,7 +692,7 @@ export default function AskAI() {
                                   language="json"
                                   showLineNumbers
                                 >
-                                  <CodeBlockCopyButton tooltip="Copy JSON" />
+                                  <CodeBlockCopyButton aria-label="Copy JSON" />
                                 </CodeBlock>
                               )}
                             </div>
@@ -733,7 +741,7 @@ export default function AskAI() {
                       {toolState && (
                         <Tool defaultOpen className="bg-background/70">
                           <ToolHeader
-                            type="getViolationsSummary"
+                            type="tool-getViolationsSummary"
                             state={toolState.state}
                           />
                           <ToolContent>
