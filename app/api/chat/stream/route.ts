@@ -34,9 +34,9 @@ export async function POST(req: Request) {
         const months = Array.from(new Set(rows.map((r) => r.date_trunc_ym).filter(Boolean))).sort();
         const share = totalViolations ? Math.round((totalExempt / totalViolations) * 1000) / 10 : 0;
         const text = [
-          `• Violations observed: ${totalViolations.toLocaleString()} across ${routes.length} routes`,
-          `• Exempt share: ${share}% (${totalExempt.toLocaleString()} exempt)`,
-          months.length ? `• Coverage window: ${months[0]} → ${months[months.length - 1]}` : `• Coverage window: not available`,
+          `- Violations observed: ${totalViolations.toLocaleString()} across ${routes.length} routes`,
+          `- Exempt share: ${share}% (${totalExempt.toLocaleString()} exempt)`,
+          months.length ? `- Coverage window: ${months[0]} → ${months[months.length - 1]}` : `- Coverage window: not available`,
         ].join("\n");
         return new Response(text, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
       } catch (e) {
@@ -110,5 +110,4 @@ export async function POST(req: Request) {
     return new Response("AI is temporarily unavailable.", { headers: { "Content-Type": "text/plain; charset=utf-8" } });
   }
 }
-
 

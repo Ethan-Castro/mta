@@ -6,7 +6,12 @@ export default function Home() {
       <div className="max-w-6xl mx-auto">
         <header className="mb-10">
           <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">MTA ACE Insight Dashboard</h1>
-          <p className="text-sm sm:text-base text-foreground/70 mt-2">Beautiful, minimal, and clear views for stakeholders.</p>
+          <p className="text-sm sm:text-base text-foreground/70 mt-2">Answer the datathon business questions with curated metrics, AI copilots, and spatial intelligence.</p>
+          <div className="mt-4 grid gap-2 text-xs sm:text-sm text-foreground/60">
+            <div>- Identify high-utilization CUNY corridors and compare ACE vs non-ACE performance.</div>
+            <div>- Surface exempt repeaters and map hotspot clusters for field intervention.</div>
+            <div>- Track CBD policy impacts alongside congestion pricing and prepare predictive scenarios.</div>
+          </div>
         </header>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <a href="/executive" className="block rounded-lg border border-foreground/10 hover:border-foreground/20 p-5 transition-colors">

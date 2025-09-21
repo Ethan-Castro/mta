@@ -45,14 +45,13 @@ export async function POST(req: Request) {
     const months = Array.from(new Set(rows.map((r) => r.date_trunc_ym).filter(Boolean))).sort();
     const share = totalViolations ? Math.round((totalExempt / totalViolations) * 1000) / 10 : 0;
     const fallbackText = [
-      `• Violations observed: ${totalViolations.toLocaleString()} across ${routes.length} routes`,
-      `• Exempt share: ${share}% (${totalExempt.toLocaleString()} exempt)`,
-      months.length ? `• Coverage window: ${months[0]} → ${months[months.length - 1]}` : `• Coverage window: not available`,
+      `- Violations observed: ${totalViolations.toLocaleString()} across ${routes.length} routes`,
+      `- Exempt share: ${share}% (${totalExempt.toLocaleString()} exempt)`,
+      months.length ? `- Coverage window: ${months[0]} → ${months[months.length - 1]}` : `- Coverage window: not available`,
     ].join("\n");
     return NextResponse.json({ ok: true, text: fallbackText });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message || String(e) }, { status: 500 });
   }
 }
-
 

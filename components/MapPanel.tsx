@@ -107,11 +107,11 @@ export default function MapPanel({ height = 300, center = [-73.9857, 40.7484], z
                     aria-label={m.title ? `Open ${m.title}` : `Open ${m.id}`}
                     style={{
                       backgroundColor: m.color || "#2563eb",
-                      width: 10,
-                      height: 10,
+                      width: m.id.startsWith('campus-') ? 14 : 10,
+                      height: m.id.startsWith('campus-') ? 14 : 10,
                       borderRadius: 9999,
-                      border: "2px solid white",
-                      boxShadow: "0 0 0 1px rgba(0,0,0,0.2)",
+                      border: `2px solid ${m.id.startsWith('campus-') ? '#ffffff' : 'white'}`,
+                      boxShadow: m.id.startsWith('campus-') ? "0 0 0 2px rgba(139, 92, 246, 0.3), 0 0 0 1px rgba(0,0,0,0.2)" : "0 0 0 1px rgba(0,0,0,0.2)",
                       cursor: "pointer",
                     }}
                     title={m.title}
@@ -172,7 +172,7 @@ export default function MapPanel({ height = 300, center = [-73.9857, 40.7484], z
                 filter={["!", ["has", "point_count"]] as any}
                 paint={{
                   "circle-color": ["get", "color"] as any,
-                  "circle-radius": 5,
+                  "circle-radius": ["match", ["get", "id"], ["prefix", "campus-"], 8, 5],
                   "circle-stroke-width": 2,
                   "circle-stroke-color": "#ffffff",
                 } as any}

@@ -283,7 +283,7 @@ function buildSummaryChain(
     },
     {
       label: "Aggregate KPIs",
-      description: `${formatNumber(summary.totalViolations)} violations • ${formatPercent(
+      description: `${formatNumber(summary.totalViolations)} violations | ${formatPercent(
         summary.exemptShare
       )} exempt share`,
       status: "complete",
