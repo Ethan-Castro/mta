@@ -9,6 +9,7 @@ type GlobalRoute =
   | "/"
   | "/executive"
   | "/operations"
+  | "/students"
   | "/policy"
   | "/data-science"
   | "/chat";
@@ -17,6 +18,7 @@ const NAV_ITEMS: Array<{ href: GlobalRoute; label: string }> = [
   { href: "/", label: "Overview" },
   { href: "/executive", label: "Executive" },
   { href: "/operations", label: "Operations" },
+  { href: "/students", label: "CUNY Students" },
   { href: "/policy", label: "Policy" },
   { href: "/data-science", label: "Data Science" },
   { href: "/chat", label: "ACE Copilot" },

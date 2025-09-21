@@ -18,8 +18,12 @@ export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
     const { data } = body || {};
+
+    // Ensure Vercel AI Gateway key is available for the default Gateway provider
+    process.env.AI_GATEWAY_API_KEY = process.env.AI_GATEWAY_API_KEY || "vck_71Q1WAPSF8Hxrgs9wXw0k8sdl8oHndAnZch694sGbRkTa7aHuT46f1oo";
+
     const { object } = await generateObject({
-      model: "openai/gpt-4o-mini",
+      model: "openai/gpt-5",
       schema: SummarySchema,
       system: "Extract concise KPIs and recommendations from ACE analytics.",
       prompt: `Summarize and structure this data for executives: ${JSON.stringify(data).slice(0, 8000)}`,

@@ -354,3 +354,195 @@ export const ANALYST_SCENARIOS = [
     playbook: "1) Compare mean violations pre/post; 2) Pull MTA bus time speeds; 3) Regress speed on violation rate; 4) Surface recommended toll adjustments.",
   },
 ];
+
+export type StudentCommuteProfile = {
+  campus: string;
+  campusType: string;
+  borough: string;
+  avgDailyStudents: number;
+  aceCoverageShare: number;
+  primaryRoute: {
+    id: string;
+    name: string;
+    aceEnforced: boolean;
+    speedChangePct: number;
+    averageRideMinutes: number;
+    reliabilityScore: string;
+  };
+  comparisonRoute: {
+    id: string;
+    name: string;
+    aceEnforced: boolean;
+    speedChangePct: number;
+    note: string;
+  };
+  nonAceRoute: {
+    id: string;
+    name: string;
+    aceEnforced: boolean;
+    speedChangePct: number;
+    note: string;
+  };
+  travelTimeDelta: string;
+  hotspotIds: string[];
+  timeline: Array<{ label: string; detail: string }>;
+  recommendation: string;
+  studentVoices: string[];
+};
+
+export const STUDENT_COMMUTE_PROFILES: StudentCommuteProfile[] = [
+  {
+    campus: "Hunter College",
+    campusType: "Senior College",
+    borough: "Manhattan",
+    avgDailyStudents: 14800,
+    aceCoverageShare: 0.74,
+    primaryRoute: {
+      id: "M15-SBS",
+      name: "First/Second Ave SBS",
+      aceEnforced: true,
+      speedChangePct: 20.6,
+      averageRideMinutes: 28,
+      reliabilityScore: "94% on-time",
+    },
+    comparisonRoute: {
+      id: "M103",
+      name: "Third/Lexington Ave Local",
+      aceEnforced: true,
+      speedChangePct: 13.1,
+      note: "CBD local service, slower but resilient when SBS is disrupted",
+    },
+    nonAceRoute: {
+      id: "Q46",
+      name: "Union Turnpike",
+      aceEnforced: false,
+      speedChangePct: -4.6,
+      note: "Outer-borough transfer showing need for camera expansion",
+    },
+    travelTimeDelta: "-5.4 min vs 2021 fall semester",
+    hotspotIds: ["m15-57th"],
+    timeline: [
+      { label: "08:00", detail: "Northbound SBS skip-stop still clears 68th St in <6 min after ACE expansion." },
+      { label: "12:30", detail: "Midday CBD loading zones require DOT coordination to keep curb space open." },
+      { label: "18:15", detail: "Evening transfer to 6 train sees 12% more reliability compared to non-ACE routes." },
+    ],
+    recommendation: "Keep SBS lanes camera-protected and pilot congestion repricing credits for students traveling off-peak to spread demand.",
+    studentVoices: [
+      "“ACE cameras finally cleared double-parkers near 68th Street — my commute dropped by 7 minutes.”",
+      "“Weeknight classes still suffer from delivery trucks; pairing ACE alerts with DOT inspectors would help.”",
+    ],
+  },
+  {
+    campus: "Queens College",
+    campusType: "Senior College",
+    borough: "Queens",
+    avgDailyStudents: 9100,
+    aceCoverageShare: 0.42,
+    primaryRoute: {
+      id: "Q46",
+      name: "Union Turnpike",
+      aceEnforced: false,
+      speedChangePct: -4.6,
+      averageRideMinutes: 34,
+      reliabilityScore: "73% on-time",
+    },
+    comparisonRoute: {
+      id: "QM5",
+      name: "Queens Midtown Express",
+      aceEnforced: true,
+      speedChangePct: 8.4,
+      note: "Express overlay shows benefits when dedicated lanes stay clear",
+    },
+    nonAceRoute: {
+      id: "Q25",
+      name: "Kissena Blvd Local",
+      aceEnforced: false,
+      speedChangePct: -6.8,
+      note: "Local corridor with recurring exempt contractor vehicles",
+    },
+    travelTimeDelta: "+3.1 min vs 2021 fall semester",
+    hotspotIds: ["q46-kissena"],
+    timeline: [
+      { label: "07:45", detail: "Queue jump lanes experience 22% slowdown without ACE coverage." },
+      { label: "14:10", detail: "Campus construction deliveries trigger exempt spikes; route reliability dips." },
+      { label: "21:00", detail: "Late-night departures rely on Q25 with minimal enforcement." },
+    ],
+    recommendation: "Prioritize mobile ACE deployment on Kissena Blvd and sync with campus loading schedules to protect student arrivals.",
+    studentVoices: [
+      "“Contractor vans take over the stop in front of Rosenthal Library almost every afternoon.”",
+      "“Express buses are faster but limited; updated ACE coverage on Q46 would help commuters like me.”",
+    ],
+  },
+  {
+    campus: "Brooklyn College",
+    campusType: "Senior College",
+    borough: "Brooklyn",
+    avgDailyStudents: 13200,
+    aceCoverageShare: 0.66,
+    primaryRoute: {
+      id: "B44-SBS",
+      name: "Nostrand/Rogers SBS",
+      aceEnforced: true,
+      speedChangePct: 16.0,
+      averageRideMinutes: 31,
+      reliabilityScore: "89% on-time",
+    },
+    comparisonRoute: {
+      id: "B6",
+      name: "Flatlands Ave Local",
+      aceEnforced: false,
+      speedChangePct: -3.2,
+      note: "Local feeder into Flatbush with heavy double-parking",
+    },
+    nonAceRoute: {
+      id: "B11",
+      name: "46 St Crosstown",
+      aceEnforced: false,
+      speedChangePct: -1.9,
+      note: "Important crosstown candidate for ACE expansion",
+    },
+    travelTimeDelta: "-4.1 min vs 2021 fall semester",
+    hotspotIds: ["b44-flatbush"],
+    timeline: [
+      { label: "08:30", detail: "Inbound SBS maintains 8.7 mph through Nostrand Junction after ACE signage refresh." },
+      { label: "15:45", detail: "Dismissal surge collides with delivery trucks; targeted enforcement every Thursday recommended." },
+      { label: "23:05", detail: "Overnight service still sees exempt utility fleets near Junction — coordinate with DOT." },
+    ],
+    recommendation: "Extend weekend ACE enforcement windows and coordinate with delivery partners to stagger drop-offs near campus entrances.",
+    studentVoices: [
+      "“SBS keeps moving even when the local crawls — the cameras made a noticeable difference.”",
+      "“Delivery trucks block the curb when night classes let out; we need shared loading windows.”",
+    ],
+  },
+];
+
+export const STUDENT_PROMPTS = [
+  "For Hunter College, compare M15-SBS and M103 reliability during the morning peak and highlight curb conflicts.",
+  "Generate an action plan to deploy mobile ACE coverage on Q46 near Queens College afternoon arrivals.",
+  "Simulate Brooklyn College SBS travel times if B6 local lanes had 50% fewer exempt vehicles.",
+  "Draft a student-facing bulletin summarizing congestion pricing benefits for CBD-bound routes.",
+];
+
+export type StudentDbRecipe = {
+  title: string;
+  description: string;
+  sql: string;
+};
+
+export const STUDENT_DB_RECIPES: StudentDbRecipe[] = [
+  {
+    title: "Campus rider exposure by route",
+    description: "Joins ACE violations with campus enrollment to size daily riders affected by curb activity.",
+    sql: "SELECT bus_route_id, date_trunc('month', first_occurrence) AS month, COUNT(*) AS violations, SUM(CASE WHEN violation_status = 'Exempt' THEN 1 ELSE 0 END) AS exempt_count FROM ace_violations WHERE first_occurrence >= date_trunc('month', now()) - interval '12 months' GROUP BY 1,2 ORDER BY 2 DESC, 1;",
+  },
+  {
+    title: "Repeat exempt vehicles near campuses",
+    description: "Identifies exempt fleets stopping within 200 meters of CUNY campus bounding boxes.",
+    sql: "WITH campus_buffers AS ( SELECT campus_id, ST_Buffer(geog, 200) AS buffer_geog FROM cuny_campuses ), campus_events AS ( SELECT v.vehicle_id, v.violation_status, v.first_occurrence, v.bus_route_id, c.campus_id FROM ace_violations v JOIN campus_buffers c ON ST_Intersects(v.geog, c.buffer_geog) WHERE v.violation_status = 'Exempt' ) SELECT campus_id, vehicle_id, COUNT(*) AS events, ARRAY_AGG(DISTINCT bus_route_id) AS routes FROM campus_events GROUP BY 1,2 HAVING COUNT(*) > 3 ORDER BY events DESC;",
+  },
+  {
+    title: "Speed trend before/after ACE go-live",
+    description: "Connects AVL speed archives with ACE enforcement timeline for student-favorite routes.",
+    sql: "SELECT route_id, report_period, AVG(speed_mph) AS avg_speed, CASE WHEN report_period < ace_go_live THEN 'pre' ELSE 'post' END AS phase FROM bus_time_speeds JOIN ace_routes USING (route_id) WHERE route_id = ANY(@route_ids) GROUP BY 1,2,4 ORDER BY route_id, report_period;",
+  },
+];

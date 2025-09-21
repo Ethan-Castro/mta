@@ -9,6 +9,13 @@ import {
 } from "@/lib/data/insights";
 import { CUNY_CAMPUSES } from "@/lib/data/cuny";
 import { Source, Sources, SourcesContent, SourcesTrigger } from "@/components/ai-elements/sources";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const percent = new Intl.NumberFormat("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const integer = new Intl.NumberFormat("en-US");
@@ -25,15 +32,29 @@ function formatChange(value: number) {
 export default function PolicyPage() {
   const [showExplain, setShowExplain] = useState(false);
   const [showAllRoutes, setShowAllRoutes] = useState(false);
+  const [selectedBorough, setSelectedBorough] = useState<string>("all");
 
   const MapPanel = useMemo(
     () => dynamic(() => import("@/components/MapPanel"), { ssr: false }),
     []
   );
 
+  const boroughOptions = useMemo(() => {
+    const unique = Array.from(new Set(CBD_ROUTE_TRENDS.map((route) => route.boroughs))).sort();
+    return [
+      { value: "all", label: "All boroughs" },
+      ...unique.map((borough) => ({ value: borough, label: borough })),
+    ];
+  }, []);
+
   const policyRoutes = useMemo(
-    () => CBD_ROUTE_TRENDS.filter((route) => showAllRoutes || route.crossesCbd),
-    [showAllRoutes]
+    () =>
+      CBD_ROUTE_TRENDS.filter((route) => {
+        const include = showAllRoutes || route.crossesCbd;
+        const matchesBorough = selectedBorough === "all" || route.boroughs.toLowerCase().includes(selectedBorough.toLowerCase());
+        return include && matchesBorough;
+      }),
+    [showAllRoutes, selectedBorough]
   );
 
   const avgViolationChange = policyRoutes.length
@@ -43,10 +64,17 @@ export default function PolicyPage() {
     ? policyRoutes.reduce((acc, route) => acc + route.speedChangePct, 0) / policyRoutes.length
     : 0;
   const routesNeedingAce = ROUTE_COMPARISONS.filter((route) => !route.aceEnforced);
-  const cbdRoutes = CBD_ROUTE_TRENDS.filter((route) => route.crossesCbd);
+  const cbdRoutes = policyRoutes.filter((route) => route.crossesCbd);
   const campusMarkers = useMemo(
     () =>
-      CUNY_CAMPUSES.map((campus) => ({
+      CUNY_CAMPUSES.filter((campus) => {
+        if (selectedBorough === "all") return true;
+        const boroughLower = selectedBorough.toLowerCase();
+        return (
+          campus.city.toLowerCase().includes(boroughLower) ||
+          campus.campus.toLowerCase().includes(boroughLower)
+        );
+      }).map((campus) => ({
         id: `campus-${campus.campus.replace(/\s+/g, '-').toLowerCase()}`,
         longitude: campus.longitude,
         latitude: campus.latitude,
@@ -55,7 +83,7 @@ export default function PolicyPage() {
         description: `${campus.type} | ${campus.address}, ${campus.city}, ${campus.state}`,
         href: campus.website,
       })),
-    []
+    [selectedBorough]
   );
 
   const markers = useMemo(
@@ -84,6 +112,41 @@ export default function PolicyPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Policy View</h1>
         <p className="text-sm text-foreground/70">Quantify ACE and congestion pricing impact.</p>
       </header>
+      <section aria-labelledby="policy-brief" className="rounded-xl border border-border/60 bg-card/70 p-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="space-y-2">
+            <h2 id="policy-brief" className="text-sm font-semibold text-foreground">Connect to Question 3</h2>
+            <p className="text-xs text-muted-foreground">
+              Compare ACE corridors that cross the CBD against congestion pricing milestones and assemble policy-ready narratives.
+            </p>
+            <ul className="grid gap-2 text-xs text-muted-foreground md:grid-cols-2">
+              <li>• Track violation deltas and speed gains since tolling went live.</li>
+              <li>• Surface which campuses benefit most from faster CBD lanes.</li>
+              <li>• Attach documentation so every insight is citation-ready.</li>
+              <li>• Flag non-CBD comparators to justify ACE expansion priorities.</li>
+            </ul>
+          </div>
+          <div className="flex min-w-[210px] flex-col gap-2 text-xs text-muted-foreground">
+            <label htmlFor="policy-borough-filter" className="font-medium uppercase tracking-wide">
+              Filter by borough
+            </label>
+            <Select value={selectedBorough} onValueChange={setSelectedBorough}>
+              <SelectTrigger id="policy-borough-filter" className="text-sm">
+                <SelectValue>
+                  {boroughOptions.find((option) => option.value === selectedBorough)?.label ?? "All boroughs"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent align="end">
+                {boroughOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </section>
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <InsightCard
           title="Violation change"

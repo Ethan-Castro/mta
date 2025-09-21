@@ -15,7 +15,7 @@ export default function ExecutiveSummary() {
     setError("");
     setText("");
     try {
-      const res = await fetch("/api/chat", {
+      const res = await fetch("/api/agents/summarize", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ routeId: routeId || undefined, start: start || undefined, end: end || undefined }),
@@ -50,5 +50,4 @@ export default function ExecutiveSummary() {
     </div>
   );
 }
-
 

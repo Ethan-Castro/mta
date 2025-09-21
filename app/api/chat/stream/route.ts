@@ -1,6 +1,6 @@
 import { streamText } from "ai";
 import { z } from "zod";
-import { createSocrataFromEnv } from "@/lib/data/socrata";
+import { getViolationSummary } from "@/lib/data/violations";
 // no next/headers in route handlers; use req.headers
 
 export const runtime = "nodejs";
@@ -44,8 +44,11 @@ export async function POST(req: Request) {
       }
     }
 
+    // Ensure Vercel AI Gateway key is available for the default Gateway provider
+    process.env.AI_GATEWAY_API_KEY = process.env.AI_GATEWAY_API_KEY || "vck_71Q1WAPSF8Hxrgs9wXw0k8sdl8oHndAnZch694sGbRkTa7aHuT46f1oo";
+
     const result = streamText({
-      model: "openai/gpt-4o-mini",
+      model: "openai/gpt-5",
       system: "You are a transit analytics assistant. Be concise and quantitative.",
       prompt: question
         ? `Answer the question using tools when needed. Question: ${question}`
@@ -60,29 +63,15 @@ export async function POST(req: Request) {
             limit: z.number().optional().default(5000),
           }),
           execute: async ({ routeId, start, end, limit }) => {
-            const datasetId = process.env.NY_ACE_DATASET_ID || "";
-            if (!datasetId) {
-              return { rows: [] };
-            }
-            const soda = createSocrataFromEnv();
-            const filters: string[] = [];
-            if (routeId) filters.push(`bus_route_id = '${routeId}'`);
-            if (start) filters.push(`last_occurrence >= '${start}'`);
-            if (end) filters.push(`last_occurrence < '${end}'`);
-            const where = filters.length ? filters.join(" AND ") : undefined;
-            const rows = await soda.get(datasetId, {
-              $select: [
-                "bus_route_id",
-                "date_trunc_ym := date_trunc_ym(last_occurrence)",
-                "count(*) as violations",
-                "count_if(violation_status = 'EXEMPT') as exempt_count",
-              ].join(", "),
-              $where: where,
-              $group: "bus_route_id, date_trunc_ym",
-              $order: "bus_route_id, date_trunc_ym",
-              $limit: limit ?? 5000,
-            });
-            return { rows };
+            const rows = await getViolationSummary({ routeId, start, end, limit });
+            return {
+              rows: rows.map((row) => ({
+                bus_route_id: row.busRouteId,
+                date_trunc_ym: row.month,
+                violations: row.violations,
+                exempt_count: row.exemptCount,
+              })),
+            };
           },
         },
       },
@@ -110,4 +99,3 @@ export async function POST(req: Request) {
     return new Response("AI is temporarily unavailable.", { headers: { "Content-Type": "text/plain; charset=utf-8" } });
   }
 }
-

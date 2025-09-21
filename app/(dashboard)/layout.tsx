@@ -9,11 +9,12 @@ import {
   ROUTE_COMPARISONS,
 } from "@/lib/data/insights";
 
-type DashboardRoute = "/executive" | "/operations" | "/policy" | "/data-science";
+type DashboardRoute = "/executive" | "/operations" | "/students" | "/policy" | "/data-science";
 
 const NAV_ITEMS: Array<{ href: DashboardRoute; label: string }> = [
   { href: "/executive", label: "Executive" },
   { href: "/operations", label: "Operations" },
+  { href: "/students", label: "CUNY Students" },
   { href: "/policy", label: "Policy" },
   { href: "/data-science", label: "Data Science" },
 ];

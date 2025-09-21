@@ -9,9 +9,25 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useThemeSelector, themeOptions } from "@/components/ThemeProvider";
+import { useEffect, useState } from "react";
 
 export default function ThemeToggle() {
   const { theme, setTheme } = useThemeSelector();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Show fallback until client-side hydration is complete
+  if (!mounted) {
+    return (
+      <div className="flex items-center gap-2 rounded-full border border-foreground/10 bg-background/80 px-3 py-1.5 text-xs shadow-sm">
+        <PaletteIcon className="size-4 text-foreground/60" aria-hidden="true" />
+        <div className="text-xs font-medium text-foreground">Theme</div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center gap-2 rounded-full border border-foreground/10 bg-background/80 px-3 py-1.5 text-xs shadow-sm">

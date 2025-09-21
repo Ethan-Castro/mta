@@ -22,11 +22,12 @@ import {
   ANALYST_SCENARIOS,
   DOCUMENTATION_LINKS,
 } from "@/lib/data/insights";
+import { InsightAgentUIMessage } from "@/lib/agents/insightAgent";
 
 export default function ChatPage() {
   const [input, setInput] = useState("");
-  const { messages, sendMessage, status } = useChat({
-    transport: new DefaultChatTransport({ api: "/api/chat/ui" }),
+  const { messages, sendMessage, status } = useChat<InsightAgentUIMessage>({
+    transport: new DefaultChatTransport({ api: "/api/chat" }),
   });
 
   const starterPrompts = useMemo(() => AI_STARTER_PROMPTS.slice(0, 4), []);
@@ -51,6 +52,9 @@ export default function ChatPage() {
           <div className="px-5 pt-5 pb-3 border-b border-foreground/10">
             <h1 className="text-lg font-semibold tracking-tight">ACE copilot</h1>
             <p className="text-xs text-foreground/60">Ask for insights, code, SQL, or visualizations across ACE, congestion pricing, and campus routes.</p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Tip: state the campus, route, time window, and whether you need SQL, Python, or a visualization. The assistant will soon plug into Neon Postgres for live data.
+            </p>
           </div>
           <Conversation className="relative w-full flex-1">
             <ConversationContent>
@@ -96,6 +100,14 @@ export default function ChatPage() {
           </div>
         </div>
         <aside className="space-y-4">
+          <div className="rounded-lg border border-border/60 bg-card/70 p-4 text-xs text-muted-foreground">
+            <p className="font-medium text-foreground">Suggested workflow</p>
+            <ol className="mt-2 space-y-2 list-decimal pl-4">
+              <li>Start with a precise route or campus question.</li>
+              <li>Let the copilot draft SQL or Python snippets — validate once Neon is connected.</li>
+              <li>Ask for a visualization summary (map, chart) to share with stakeholders.</li>
+            </ol>
+          </div>
           <div className="rounded-lg border border-foreground/10 p-4 space-y-3">
             <h2 className="text-sm font-medium">Quick prompts</h2>
             <div className="space-y-2 text-sm">
@@ -147,4 +159,3 @@ export default function ChatPage() {
     </div>
   );
 }
-

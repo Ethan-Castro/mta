@@ -126,6 +126,7 @@ import {
   SquarePenIcon,
   BarChart3Icon,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const DATASET_URL =
   "https://data.ny.gov/Transportation/Automated-Bus-Lane-Enforcement-Violations/kh8p-hcbm";
@@ -133,12 +134,41 @@ const ASSISTANT_AVATAR = "https://avatar.vercel.sh/assistant?text=AI";
 const USER_AVATAR = "https://avatar.vercel.sh/user?text=ME";
 const NUMBER_FORMAT = new Intl.NumberFormat("en-US");
 
-const promptSuggestions = [
-  "Summarize ACE violations for the last six months",
-  "Which bus routes have the highest exempt share this quarter?",
-  "Compare violations before and after congestion pricing",
-  "Suggest enforcement actions for chronic offenders",
-];
+const personaPromptMap = {
+  executive: [
+    "Generate a board-ready ACE summary for M15-SBS vs Q46 over the last 6 months",
+    "Highlight the three biggest risks for ACE performance this quarter",
+    "Draft talking points comparing ACE and non-ACE reliability for campus riders",
+  ],
+  operations: [
+    "Provide an action plan for reducing exempt repeaters on B44-SBS",
+    "List the top 5 hotspots for Queens College routes with coordinates",
+    "Suggest curb coordination tactics for routes with rising violations",
+  ],
+  policy: [
+    "Compare CBD ACE routes pre vs post congestion pricing with key metrics",
+    "Identify which routes should be next for ACE expansion based on exempt share",
+    "Summarize evidence for keeping congestion pricing aligned with ACE goals",
+  ],
+  dataScience: [
+    "Produce SQL to calculate monthly violations and exempt share for top student routes",
+    "Forecast M15-SBS violations for the next 3 months using recent data",
+    "Outline a Monte Carlo simulation approach for next month's ticket volume",
+  ],
+  student: [
+    "Explain how ACE has improved commute times for Brooklyn College riders",
+    "Map hotspots impacting Queens College students after 6pm",
+    "Draft a student bulletin celebrating ACE gains and asking for curb compliance",
+  ],
+} as const;
+
+const personaOptions = [
+  { value: "executive", label: "Executive" },
+  { value: "operations", label: "Operations" },
+  { value: "policy", label: "Policy" },
+  { value: "dataScience", label: "Data Science" },
+  { value: "student", label: "CUNY" },
+] as const;
 
 type ChatMessage = {
   id: string;
@@ -309,6 +339,8 @@ export default function AskAI() {
   const [activeQuestion, setActiveQuestion] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [activeAssistantId, setActiveAssistantId] = useState<string | null>(null);
+  const [activePersona, setActivePersona] = useState<(typeof personaOptions)[number]["value"]>("executive");
+  const activePrompts = useMemo(() => personaPromptMap[activePersona], [activePersona]);
 
   const submitQuestion = useCallback(
     async (text: string, files: FileUIPart[] = []) => {
@@ -794,11 +826,33 @@ export default function AskAI() {
       </Conversation>
 
       <div className="space-y-3">
-        <p className="text-muted-foreground text-xs uppercase tracking-wide">
-          Quick suggestions
-        </p>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-muted-foreground text-xs uppercase tracking-wide">
+            Quick suggestions
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {personaOptions.map((option) => {
+              const isActive = activePersona === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setActivePersona(option.value)}
+                  className={cn(
+                    "rounded-full border px-3 py-1 text-xs transition-colors",
+                    isActive
+                      ? "border-primary/60 bg-primary/10 text-primary"
+                      : "border-border/60 text-muted-foreground hover:border-primary/40 hover:text-primary"
+                  )}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
         <Suggestions>
-          {promptSuggestions.map((suggestion) => (
+          {activePrompts.map((suggestion) => (
             <Suggestion
               key={suggestion}
               suggestion={suggestion}

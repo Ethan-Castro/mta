@@ -57,6 +57,22 @@ export default function DataSciencePage() {
         <h1 className="text-2xl font-semibold tracking-tight">Data Science</h1>
         <p className="text-sm text-foreground/70">Trigger predictions and simulations via API stubs.</p>
       </header>
+      <section aria-labelledby="datascience-brief" className="rounded-xl border border-border/60 bg-card/70 p-4">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 id="datascience-brief" className="text-sm font-semibold text-foreground">Pipeline checklist</h2>
+            <p className="text-xs text-muted-foreground">
+              Prepare to connect the Neon Postgres warehouse so the copilot can tap live ACE violations, speed archives, and campus datasets.
+            </p>
+          </div>
+          <ul className="grid gap-2 text-xs text-muted-foreground md:grid-cols-2">
+            <li>• Map Neon schemas to ACE, AVL speed, and CUNY enrollment tables.</li>
+            <li>• Promote the supplied SQL recipes to views for quick analyst queries.</li>
+            <li>• Register SQL, Python, and visualization tool endpoints with the copilot.</li>
+            <li>• Capture outputs in the Ask AI workspace for shareable runbooks.</li>
+          </ul>
+        </div>
+      </section>
       <div className="text-xs">
         <button onClick={() => setShowExplain((s) => !s)} className="rounded-md border border-foreground/10 hover:border-foreground/20 px-2 py-1 transition-colors">
           {showExplain ? "Hide explanation" : "Explain this view"}
@@ -152,4 +168,3 @@ export default function DataSciencePage() {
     </div>
   );
 }
-

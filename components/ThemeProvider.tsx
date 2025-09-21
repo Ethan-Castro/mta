@@ -62,17 +62,19 @@ function applyTheme(theme: ThemeName) {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<ThemeName>(() => getPreferredTheme());
+  const [theme, setThemeState] = useState<ThemeName>("light");
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    applyTheme(theme);
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(THEME_STORAGE_KEY, theme);
-    }
-  }, [theme]);
+    // Only run on client side
+    const preferredTheme = getPreferredTheme();
+    setThemeState(preferredTheme);
+    applyTheme(preferredTheme);
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (!mounted || typeof window === "undefined") return;
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
     const handleSystemChange = () => {
       const stored = getStoredTheme();
@@ -94,7 +96,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       mediaQuery.removeEventListener("change", handleSystemChange);
       window.removeEventListener("storage", handleStorage);
     };
-  }, []);
+  }, [mounted]);
 
   const value = useMemo<ThemeContextValue>(
     () => ({
@@ -108,7 +110,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         }
       },
     }),
-    [theme]
+    [theme, mounted]
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
