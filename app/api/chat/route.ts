@@ -1,7 +1,7 @@
 import { streamText, UIMessage, convertToModelMessages, tool, stepCountIs } from "ai";
 import { z } from "zod";
 import { SYSTEM_PROMPTS } from "@/lib/ai/system-prompts";
-import Exa from "exa-js";
+import { getExa } from "@/lib/ai/exa";
 import {
   ALLOWED_TABLES,
   ensureSelectAllowed,
@@ -12,10 +12,8 @@ import {
 } from "@/lib/ai/sql-tools";
 import { getViolationSummary } from "@/lib/data/violations";
 
-export const runtime = "nodejs";
 export const maxDuration = 30;
-
-const exa = new Exa(process.env.EXA_API_KEY);
+export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({} as any));
@@ -50,6 +48,7 @@ export async function POST(req: Request) {
           return { error: "EXA_API_KEY is not configured." };
         }
         try {
+          const exa = getExa();
           const { results } = await exa.searchAndContents(query, {
             type: "auto",
             text: true,

@@ -4,7 +4,7 @@ import { addMessage, upsertConversation } from "@/lib/chat";
 import { getViolationSummary } from "@/lib/data/violations";
 import { sql } from "@/lib/db";
 import { SYSTEM_PROMPTS } from "@/lib/ai/system-prompts";
-import Exa from "exa-js";
+import { getExa } from "@/lib/ai/exa";
 import {
   ALLOWED_TABLES,
   ensureSelectAllowed,
@@ -14,10 +14,8 @@ import {
   SqlToolError,
 } from "@/lib/ai/sql-tools";
 
-export const runtime = "nodejs";
 export const maxDuration = 30;
-
-const exa = new Exa(process.env.EXA_API_KEY);
+export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   const { messages, model, conversationId: conversationIdInput, title }: { messages: UIMessage[]; model?: string; conversationId?: string; title?: string } =
@@ -68,6 +66,7 @@ export async function POST(req: Request) {
           return { error: "EXA_API_KEY is not configured." };
         }
         try {
+          const exa = getExa();
           const { results } = await exa.searchAndContents(query, {
             type: "auto",
             text: true,

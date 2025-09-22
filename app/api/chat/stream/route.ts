@@ -10,13 +10,11 @@ import {
   extractSummaryRows,
   type ToolLogEntry,
 } from "@/lib/ai/assistant-utils";
-import Exa from "exa-js";
+import { getExa } from "@/lib/ai/exa";
 // no next/headers in route handlers; use req.headers
 
 export const runtime = "nodejs";
 const TOOL_META_SENTINEL = "[[AI_TOOL_META]]";
-
-const exa = new Exa(process.env.EXA_API_KEY);
 
 function stripSqlComments(sqlText: string) {
   return sqlText.replace(/--.*?$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
@@ -173,6 +171,7 @@ export async function POST(req: Request) {
               return { error: "EXA_API_KEY is not configured." };
             }
             try {
+              const exa = getExa();
               const { results } = await exa.searchAndContents(query, {
                 type: "auto",
                 text: true,
