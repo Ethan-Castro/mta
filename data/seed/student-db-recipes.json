@@ -1,0 +1,17 @@
+[
+  {
+    "title": "Campus rider exposure by route",
+    "description": "Joins ACE violations with campus enrollment to size daily riders affected by curb activity.",
+    "sql": "SELECT bus_route_id, date_trunc('month', first_occurrence) AS month, COUNT(*) AS violations, SUM(CASE WHEN violation_status = 'Exempt' THEN 1 ELSE 0 END) AS exempt_count FROM ace_violations WHERE first_occurrence >= date_trunc('month', now()) - interval '12 months' GROUP BY 1,2 ORDER BY 2 DESC, 1;"
+  },
+  {
+    "title": "Repeat exempt vehicles near campuses",
+    "description": "Identifies exempt fleets stopping within 200 meters of CUNY campus bounding boxes.",
+    "sql": "WITH campus_buffers AS ( SELECT campus_id, ST_Buffer(geog, 200) AS buffer_geog FROM cuny_campuses ), campus_events AS ( SELECT v.vehicle_id, v.violation_status, v.first_occurrence, v.bus_route_id, c.campus_id FROM ace_violations v JOIN campus_buffers c ON ST_Intersects(v.geog, c.buffer_geog) WHERE v.violation_status = 'Exempt' ) SELECT campus_id, vehicle_id, COUNT(*) AS events, ARRAY_AGG(DISTINCT bus_route_id) AS routes FROM campus_events GROUP BY 1,2 HAVING COUNT(*) > 3 ORDER BY events DESC;"
+  },
+  {
+    "title": "Speed trend before/after ACE go-live",
+    "description": "Connects AVL speed archives with ACE enforcement timeline for student-favorite routes.",
+    "sql": "SELECT route_id, report_period, AVG(speed_mph) AS avg_speed, CASE WHEN report_period < ace_go_live THEN 'pre' ELSE 'post' END AS phase FROM bus_time_speeds JOIN ace_routes USING (route_id) WHERE route_id = ANY(@route_ids) GROUP BY 1,2,4 ORDER BY route_id, report_period;"
+  }
+]

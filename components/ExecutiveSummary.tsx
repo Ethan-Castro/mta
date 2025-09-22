@@ -31,14 +31,14 @@ export default function ExecutiveSummary() {
   }
 
   return (
-    <div className="rounded-lg border border-foreground/10 p-5 space-y-4">
+    <div className="rounded-lg border border-foreground/10 p-4 space-y-4 sm:p-5">
       <div className="text-sm font-medium">Executive Summary (AI)</div>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <input value={routeId} onChange={(e) => setRouteId(e.target.value)} placeholder="Route ID (e.g., M15) — optional" aria-label="Route ID" className="rounded-md border border-foreground/10 bg-transparent px-3 py-2 text-sm outline-none" />
         <input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} aria-label="Start date and time" className="rounded-md border border-foreground/10 bg-transparent px-3 py-2 text-sm outline-none" />
         <input type="datetime-local" value={end} onChange={(e) => setEnd(e.target.value)} aria-label="End date and time" className="rounded-md border border-foreground/10 bg-transparent px-3 py-2 text-sm outline-none" />
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
         <button onClick={generate} disabled={loading} className="rounded-md border border-foreground/10 hover:border-foreground/20 px-3 py-2 text-sm transition-colors">
           {loading ? "Generating…" : "Generate summary"}
         </button>

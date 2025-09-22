@@ -223,4 +223,35 @@
   body {
     @apply bg-background text-foreground;
   }
+  
+  /* Improve touch targets on mobile */
+  @media (max-width: 768px) {
+    button, 
+    [role="button"], 
+    input[type="submit"], 
+    input[type="button"] {
+      min-height: 44px;
+      min-width: 44px;
+    }
+  }
+  
+  /* Prevent horizontal scroll and ensure proper centering */
+  html, body {
+    overflow-x: hidden;
+    width: 100%;
+  }
+  
+  /* Ensure containers are properly centered */
+  .mx-auto {
+    margin-left: auto;
+    margin-right: auto;
+  }
+  
+  /* Improve text rendering on mobile */
+  @media (max-width: 768px) {
+    body {
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
+    }
+  }
 }

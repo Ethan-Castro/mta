@@ -1,0 +1,29 @@
+[
+  {
+    "vehicleId": "6F1C-FA7",
+    "company": "Metro Logistics",
+    "primaryReason": "Essential deliveries",
+    "violations": 128,
+    "routes": ["M15-SBS", "Bx12-SBS"],
+    "hotspots": ["E 57 St & 3rd Ave", "Fordham Rd & Jerome Ave"],
+    "nextAction": "Schedule curb coordination meeting; pilot timed loading permits tied to ACE alerts."
+  },
+  {
+    "vehicleId": "8BD2-9C3",
+    "company": "Campus Facilities Vendor",
+    "primaryReason": "City contract",
+    "violations": 76,
+    "routes": ["Q46"],
+    "hotspots": ["Kissena Blvd & Melbourne Ave"],
+    "nextAction": "Require alternate staging area on Reeves Ave; trigger enforcement blitz during finals week."
+  },
+  {
+    "vehicleId": "44A1-1DX",
+    "company": "Cable Utility Fleet",
+    "primaryReason": "Utility work",
+    "violations": 69,
+    "routes": ["B44-SBS", "S79-SBS"],
+    "hotspots": ["Flatbush Ave & Nostrand Junction", "Hylan Blvd & Bay St"],
+    "nextAction": "Integrate work orders with ACE geofences to auto-approve limited windows and flag overages."
+  }
+]

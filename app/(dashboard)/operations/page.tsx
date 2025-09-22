@@ -3,8 +3,8 @@
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import InsightCard from "@/components/InsightCard";
-import { ANALYST_SCENARIOS, EXEMPT_REPEATERS, ROUTE_COMPARISONS } from "@/lib/data/insights";
-import { CUNY_CAMPUSES } from "@/lib/data/cuny";
+import type { AnalystScenario, ExemptRepeater, RouteComparison } from "@/lib/data/insights";
+import type { Campus } from "@/lib/data/cuny";
 import {
   Select,
   SelectContent,
@@ -73,12 +73,13 @@ export default function OperationsPage() {
     if (t.startsWith("honors")) return "Honors College";
     return type;
   }
-  const [enabledRoutes, setEnabledRoutes] = useState<Record<string, boolean>>(() =>
-    ROUTE_COMPARISONS.reduce<Record<string, boolean>>((acc, route) => {
-      acc[route.routeId] = true;
-      return acc;
-    }, {})
-  );
+  const [routeComparisons, setRouteComparisons] = useState<RouteComparison[]>([]);
+  const [analystScenarios, setAnalystScenarios] = useState<AnalystScenario[]>([]);
+  const [curatedRepeaters, setCuratedRepeaters] = useState<ExemptRepeater[]>([]);
+  const [campuses, setCampuses] = useState<Campus[]>([]);
+  const [curatedError, setCuratedError] = useState<string | null>(null);
+  const [campusError, setCampusError] = useState<string | null>(null);
+  const [enabledRoutes, setEnabledRoutes] = useState<Record<string, boolean>>({});
   const [useClusters, setUseClusters] = useState(true);
   const [showExplain, setShowExplain] = useState(false);
   const [selectedCampusType, setSelectedCampusType] = useState<string>("all");
@@ -93,6 +94,79 @@ export default function OperationsPage() {
     () => dynamic(() => import("@/components/MapPanel"), { ssr: false }),
     []
   );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadCurated() {
+      try {
+        const res = await fetch("/api/insights/curated?include=routes,repeaters,analystScenarios", { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        if (!json?.ok) throw new Error(json?.error || "Failed to load curated insights");
+        const data = json?.data || {};
+        if (!cancelled) {
+          setRouteComparisons(Array.isArray(data.routes) ? (data.routes as RouteComparison[]) : []);
+          setCuratedRepeaters(Array.isArray(data.repeaters) ? (data.repeaters as ExemptRepeater[]) : []);
+          setAnalystScenarios(Array.isArray(data.analystScenarios) ? (data.analystScenarios as AnalystScenario[]) : []);
+          setCuratedError(null);
+        }
+      } catch (error) {
+        console.error("Unable to load operations curated data", error);
+        if (!cancelled) {
+          setRouteComparisons([]);
+          setCuratedRepeaters([]);
+          setAnalystScenarios([]);
+          setCuratedError("Unable to load curated insights. Some context cards may be empty.");
+        }
+      }
+    }
+
+    loadCurated();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadCampuses() {
+      try {
+        const res = await fetch("/api/cuny/campuses", { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        if (!json?.ok) throw new Error(json?.error || "Failed to load campuses");
+        if (!cancelled) {
+          setCampuses(Array.isArray(json?.campuses) ? (json.campuses as Campus[]) : []);
+          setCampusError(null);
+        }
+      } catch (error) {
+        console.error("Unable to load campus data", error);
+        if (!cancelled) {
+          setCampuses([]);
+          setCampusError("Unable to load campus reference data.");
+        }
+      }
+    }
+
+    loadCampuses();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!routeComparisons.length) return;
+    setEnabledRoutes((prev) => {
+      if (Object.keys(prev).length) return prev;
+      const next: Record<string, boolean> = {};
+      routeComparisons.forEach((route) => {
+        next[route.routeId] = true;
+      });
+      return next;
+    });
+  }, [routeComparisons]);
 
   useEffect(() => {
     (async () => {
@@ -126,41 +200,47 @@ export default function OperationsPage() {
     })();
   }, []);
 
-  const routeLookup = useMemo(() => new Map(ROUTE_COMPARISONS.map((route) => [route.routeId, route])), []);
+  const routeLookup = useMemo(() => new Map(routeComparisons.map((route) => [route.routeId, route])), [routeComparisons]);
 
   const campusTypeOptions = useMemo(() => {
-    const unique = Array.from(new Set(ROUTE_COMPARISONS.map((route) => route.campusType))).sort();
+    const unique = Array.from(new Set(routeComparisons.map((route) => route.campusType))).sort();
     return [
       { value: "all", label: "All campus types" },
       ...unique.map((type) => ({ value: type, label: type })),
     ];
-  }, []);
+  }, [routeComparisons]);
 
   const campusRouteIds = useMemo(() => {
     if (selectedCampusType === "all") {
-      return new Set(ROUTE_COMPARISONS.map((route) => route.routeId));
+      return new Set(routeComparisons.map((route) => route.routeId));
     }
     return new Set(
-      ROUTE_COMPARISONS.filter((route) => route.campusType === selectedCampusType).map((route) => route.routeId)
+      routeComparisons.filter((route) => route.campusType === selectedCampusType).map((route) => route.routeId)
     );
-  }, [selectedCampusType]);
+  }, [routeComparisons, selectedCampusType]);
 
   const routeMetricsMap = useMemo(() => new Map(routeMetrics.map((row) => [row.busRouteId, row])), [routeMetrics]);
 
   const filteredRoutes = useMemo(
-    () => ROUTE_COMPARISONS.filter((route) => enabledRoutes[route.routeId] && campusRouteIds.has(route.routeId)),
-    [enabledRoutes, campusRouteIds]
+    () =>
+      routeComparisons.filter(
+        (route) => enabledRoutes[route.routeId] !== false && campusRouteIds.has(route.routeId)
+      ),
+    [routeComparisons, enabledRoutes, campusRouteIds]
   );
 
   const filteredRouteMetrics = useMemo(
-    () => routeMetrics.filter((row) => enabledRoutes[row.busRouteId] && campusRouteIds.has(row.busRouteId)),
+    () =>
+      routeMetrics.filter(
+        (row) => enabledRoutes[row.busRouteId] !== false && campusRouteIds.has(row.busRouteId)
+      ),
     [routeMetrics, enabledRoutes, campusRouteIds]
   );
 
   const filteredHotspots = useMemo(
     () =>
       hotspotMetrics
-        .filter((row) => enabledRoutes[row.busRouteId] && campusRouteIds.has(row.busRouteId))
+        .filter((row) => enabledRoutes[row.busRouteId] !== false && campusRouteIds.has(row.busRouteId))
         .map((row) => ({
           ...row,
           campus: routeLookup.get(row.busRouteId)?.campus ?? "Unknown campus",
@@ -169,14 +249,14 @@ export default function OperationsPage() {
   );
 
   const filteredRepeaters = useMemo(() => {
-    const staticRepeaters = new Map(EXEMPT_REPEATERS.map((row) => [row.vehicleId, row]));
+    const staticRepeaters = new Map(curatedRepeaters.map((row) => [row.vehicleId, row]));
     return repeaterMetrics
-      .filter((row) => row.routes.some((routeId) => enabledRoutes[routeId] && campusRouteIds.has(routeId)))
+      .filter((row) => row.routes.some((routeId) => enabledRoutes[routeId] !== false && campusRouteIds.has(routeId)))
       .map((row) => ({
         ...row,
         staticContext: staticRepeaters.get(row.vehicleId),
       }));
-  }, [repeaterMetrics, enabledRoutes, campusRouteIds]);
+  }, [repeaterMetrics, enabledRoutes, campusRouteIds, curatedRepeaters]);
 
   const aceShare = filteredRoutes.length
     ? filteredRoutes.filter((route) => route.aceEnforced).length / filteredRoutes.length
@@ -192,16 +272,22 @@ export default function OperationsPage() {
 
   const campusMarkers = useMemo(
     () =>
-      CUNY_CAMPUSES.filter((campus) => selectedCampusType === "all" || normalizeCampusType(campus.type) === selectedCampusType).map((campus) => ({
-        id: `campus-${campus.campus.replace(/\s+/g, "-").toLowerCase()}`,
-        longitude: campus.longitude,
-        latitude: campus.latitude,
-        color: "#8b5cf6",
-        title: campus.campus,
-        description: `${campus.type} | ${campus.address}, ${campus.city}, ${campus.state}`,
-        href: campus.website,
-      })),
-    [selectedCampusType]
+      campuses
+        .filter((campus) => {
+          if (campus.latitude == null || campus.longitude == null) return false;
+          if (selectedCampusType === "all") return true;
+          return normalizeCampusType(campus.type ?? "") === selectedCampusType;
+        })
+        .map((campus) => ({
+          id: `campus-${campus.campus.replace(/\s+/g, "-").toLowerCase()}`,
+          longitude: Number(campus.longitude),
+          latitude: Number(campus.latitude),
+          color: "#8b5cf6",
+          title: campus.campus,
+          description: `${campus.type ?? "Campus"} | ${campus.address ?? ""}${campus.city ? `, ${campus.city}` : ""}${campus.state ? `, ${campus.state}` : ""}`,
+          href: campus.website ?? undefined,
+        })),
+    [campuses, selectedCampusType]
   );
 
   const markerData = useMemo(
@@ -231,7 +317,7 @@ export default function OperationsPage() {
     return filteredRoutes
       .map((route) => {
         const metrics = routeMetricsMap.get(route.routeId);
-        let averageMonthly = route.averageMonthlyViolations;
+        let averageMonthly = Number(route.averageMonthlyViolations ?? 0);
         if (metrics?.violations && metrics.firstSeen && metrics.lastSeen) {
           const start = new Date(metrics.firstSeen);
           const end = new Date(metrics.lastSeen);
@@ -245,14 +331,16 @@ export default function OperationsPage() {
         }
         const dynamicExemptShare = metrics?.violations
           ? (metrics.exemptCount / metrics.violations) * 100
-          : route.exemptSharePct;
+          : Number(route.exemptSharePct ?? 0);
         return {
           ...route,
           dynamicAverageMonthlyViolations: averageMonthly,
           dynamicExemptSharePct: dynamicExemptShare,
         };
       })
-      .sort((a, b) => b.averageWeekdayStudents - a.averageWeekdayStudents);
+      .sort(
+        (a, b) => Number(b.averageWeekdayStudents ?? 0) - Number(a.averageWeekdayStudents ?? 0)
+      );
   }, [filteredRoutes, routeMetricsMap]);
 
   const comparisonData = useMemo(() => {
@@ -268,11 +356,17 @@ export default function OperationsPage() {
   }, [filteredRouteMetrics, comparisonLimit]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold tracking-tight">Operations</h1>
+        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Operations</h1>
         <p className="text-sm text-foreground/70">Compare routes, speeds, and violations.</p>
       </header>
+      {(curatedError || campusError) && (
+        <div className="rounded-lg border border-destructive/60 bg-destructive/10 p-3 text-xs text-destructive space-y-1">
+          {curatedError && <div>{curatedError}</div>}
+          {campusError && <div>{campusError}</div>}
+        </div>
+      )}
       <section aria-labelledby="operations-brief" className="rounded-xl border border-border/60 bg-card/70 p-4">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
@@ -282,7 +376,7 @@ export default function OperationsPage() {
               field deployments.
             </p>
           </div>
-          <ul className="grid gap-2 text-xs text-muted-foreground md:grid-cols-2">
+          <ul className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
             <li>• Filter campus routes and compare ACE vs non-ACE speeds.</li>
             <li>• Map hotspots for on-street teams and document DOT coordination needs.</li>
             <li>• Use scenario playbooks to script SQL + visualization steps for the copilot.</li>
@@ -295,7 +389,7 @@ export default function OperationsPage() {
           {dataError}
         </div>
       )}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <InsightCard
           title="Avg speed delta"
           value={formatChange(avgSpeedDelta)}
@@ -396,33 +490,36 @@ export default function OperationsPage() {
             </Select>
           </div>
           <div className="flex flex-wrap gap-3">
-            {ROUTE_COMPARISONS.filter((route) => campusRouteIds.has(route.routeId)).map((route) => (
-              <label key={route.routeId} className="inline-flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={!!enabledRoutes[route.routeId]}
-                  onChange={(e) =>
-                    setEnabledRoutes((prev) => ({
-                      ...prev,
-                      [route.routeId]: e.target.checked,
-                    }))
-                  }
-                />
-                <span className="inline-flex items-center gap-2">
-                  <span style={{ backgroundColor: ROUTE_COLORS[route.routeId] || "#2563eb", width: 10, height: 10, borderRadius: 9999 }} />
-                  {route.routeId} | {route.routeName}
-                </span>
-              </label>
-            ))}
+            {routeComparisons.filter((route) => campusRouteIds.has(route.routeId)).map((route) => {
+              const isEnabled = enabledRoutes[route.routeId] !== false;
+              return (
+                <label key={route.routeId} className="inline-flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={isEnabled}
+                    onChange={(e) =>
+                      setEnabledRoutes((prev) => ({
+                        ...prev,
+                        [route.routeId]: e.target.checked,
+                      }))
+                    }
+                  />
+                  <span className="inline-flex items-center gap-2">
+                    <span style={{ backgroundColor: ROUTE_COLORS[route.routeId] || "#2563eb", width: 10, height: 10, borderRadius: 9999 }} />
+                    {route.routeId} | {route.routeName}
+                  </span>
+                </label>
+              );
+            })}
             {campusRouteIds.size === 0 && (
               <span className="text-muted-foreground">No routes available for this campus filter.</span>
             )}
           </div>
         </div>
       </div>
-      <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
-        <div className="space-y-4 xl:col-span-3">
-          <MapPanel height={320} center={[-73.95, 40.73]} zoom={10.2} markers={markerData} cluster={useClusters} hoverPopups={!useClusters} />
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+        <div className="space-y-4 lg:col-span-3">
+          <MapPanel height={280} center={[-73.95, 40.73]} zoom={10.2} markers={markerData} cluster={useClusters} hoverPopups={!useClusters} />
           <div className="rounded-xl border border-foreground/10 p-4 space-y-3">
             <h2 className="text-sm font-medium">Top pressure points</h2>
             {loadingData && !filteredHotspots.length ? (
@@ -433,7 +530,7 @@ export default function OperationsPage() {
                   const share = point.violations ? (point.exemptCount / point.violations) * 100 : 0;
                   return (
                     <li key={`${point.busRouteId}-${point.latitude}-${point.longitude}`} className="rounded-lg border border-foreground/10 p-3">
-                      <div className="flex items-center justify-between text-xs text-foreground/60">
+                      <div className="flex flex-col gap-1 text-xs text-foreground/60 sm:flex-row sm:items-center sm:justify-between">
                         <span>
                           #{index + 1} · {point.busRouteId} | {point.campus}
                         </span>
@@ -457,7 +554,7 @@ export default function OperationsPage() {
             )}
           </div>
         </div>
-        <div className="space-y-4 xl:col-span-2">
+        <div className="space-y-4 lg:col-span-2">
           <div className="rounded-xl border border-foreground/10 p-4 space-y-3">
             <h2 className="text-sm font-medium">Repeat exempt vehicles</h2>
             <ul className="space-y-3 text-sm text-foreground/80">
@@ -486,7 +583,7 @@ export default function OperationsPage() {
           <div className="rounded-xl border border-foreground/10 p-4 space-y-3">
             <h2 className="text-sm font-medium">Scenario playbooks</h2>
             <ul className="space-y-3 text-sm text-foreground/80">
-              {ANALYST_SCENARIOS.map((scenario) => (
+              {analystScenarios.map((scenario) => (
                 <li key={scenario.title} className="rounded-lg border border-foreground/10 p-3">
                   <div className="font-medium text-foreground/90">{scenario.title}</div>
                   <div className="mt-1 text-xs text-foreground/60">Inputs: {scenario.expectedInputs}</div>

@@ -1,0 +1,22 @@
+[
+  {
+    "topic": "route_performance",
+    "sql": "-- Route performance over time\nSELECT\n  bus_route_id,\n  date_trunc('month', last_occurrence) AS month,\n  COUNT(*) AS violations,\n  SUM(CASE WHEN violation_status = 'EXEMPT' THEN 1 ELSE 0 END) AS exempt_count\nFROM violations\nWHERE bus_route_id = 'M15-SBS'\n  AND last_occurrence >= date_trunc('month', now()) - interval '12 months'\nGROUP BY 1, 2\nORDER BY 2;"
+  },
+  {
+    "topic": "campus_exposure",
+    "sql": "-- Campus exposure (violations within 0.1° bounding box)\nWITH campus AS (\n  SELECT 40.7738 AS lat, -73.9802 AS lng -- replace with campus coordinates\n), filtered AS (\n  SELECT *\n  FROM violations, campus\n  WHERE violation_latitude BETWEEN campus.lat - 0.1 AND campus.lat + 0.1\n    AND violation_longitude BETWEEN campus.lng - 0.1 AND campus.lng + 0.1\n)\nSELECT\n  bus_route_id,\n  COUNT(*) AS violations,\n  SUM(CASE WHEN violation_status = 'EXEMPT' THEN 1 ELSE 0 END) AS exempt_count\nFROM filtered\nGROUP BY 1\nORDER BY violations DESC;"
+  },
+  {
+    "topic": "hotspots",
+    "sql": "-- Top hotspots\nSELECT\n  bus_route_id,\n  stop_name,\n  round(violation_latitude::numeric, 6) AS lat,\n  round(violation_longitude::numeric, 6) AS lng,\n  COUNT(*) AS violations\nFROM violations\nWHERE last_occurrence >= date_trunc('month', now()) - interval '3 months'\nGROUP BY 1,2,3,4\nHAVING COUNT(*) > 25\nORDER BY violations DESC\nLIMIT 25;"
+  },
+  {
+    "topic": "exempt_repeaters",
+    "sql": "-- Repeat exempt vehicles\nSELECT\n  vehicle_id,\n  COUNT(*) AS exemptions,\n  ARRAY_AGG(DISTINCT bus_route_id) AS routes\nFROM violations\nWHERE violation_status = 'EXEMPT'\nGROUP BY vehicle_id\nHAVING COUNT(*) >= 5\nORDER BY exemptions DESC;"
+  },
+  {
+    "topic": "cbd_trend",
+    "sql": "-- CBD congestion pricing impact\nSELECT\n  bus_route_id,\n  CASE WHEN last_occurrence < DATE '2024-06-30' THEN 'pre' ELSE 'post' END AS period,\n  COUNT(*) AS violations,\n  AVG(speed_mph) AS avg_speed -- requires joined AVL speeds table\nFROM violations v\nLEFT JOIN bus_time_speeds s USING (violation_id)\nWHERE bus_route_id IN ('M15-SBS','M103','BxM1')\nGROUP BY 1,2\nORDER BY 1,2;"
+  }
+]

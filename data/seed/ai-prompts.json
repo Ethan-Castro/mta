@@ -1,0 +1,11 @@
+[
+  { "category": "starter", "prompt": "Compare ACE speed gains for M15-SBS vs Q46 and flag confidence intervals" },
+  { "category": "starter", "prompt": "List exempt vehicles with more than 20 violations near Queens College in the last quarter" },
+  { "category": "starter", "prompt": "Generate congestion pricing before/after charts for routes crossing 60th Street" },
+  { "category": "starter", "prompt": "Simulate violation volume on B44-SBS if exempt share falls below 10%" },
+  { "category": "starter", "prompt": "Draft daily briefing template for ACE operations analysts" },
+  { "category": "student", "prompt": "For Hunter College, compare M15-SBS and M103 reliability during the morning peak and highlight curb conflicts." },
+  { "category": "student", "prompt": "Generate an action plan to deploy mobile ACE coverage on Q46 near Queens College afternoon arrivals." },
+  { "category": "student", "prompt": "Simulate Brooklyn College SBS travel times if B6 local lanes had 50% fewer exempt vehicles." },
+  { "category": "student", "prompt": "Draft a student-facing bulletin summarizing congestion pricing benefits for CBD-bound routes." }
+]

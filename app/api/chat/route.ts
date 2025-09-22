@@ -13,6 +13,8 @@ export async function POST(req: Request) {
   const { messages = [], model, system }: { messages?: UIMessage[]; model?: string; system?: string } = body || {};
 
 
+  // Require AI Gateway key to be provided by environment (no hardcoded fallback)
+
   // Load Neon MCP tools (allowed set only). Best-effort; continue without if unavailable
   let mcpBundle: Awaited<ReturnType<typeof getNeonMCPTools>> | null = null;
   try {

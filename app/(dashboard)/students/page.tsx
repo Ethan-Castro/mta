@@ -1,14 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import InsightCard from "@/components/InsightCard";
-import {
-  STUDENT_COMMUTE_PROFILES,
-  STUDENT_DB_RECIPES,
-  STUDENT_PROMPTS,
-  VIOLATION_HOTSPOTS,
-} from "@/lib/data/insights";
+import type { StudentCommuteProfile, StudentDbRecipe, ViolationHotspot } from "@/lib/data/insights";
 import {
   Select,
   SelectContent,
@@ -28,24 +23,90 @@ const integerFormatter = new Intl.NumberFormat("en-US");
 const MapPanel = dynamic(() => import("@/components/MapPanel"), { ssr: false });
 
 export default function StudentsPage() {
-  const [campus, setCampus] = useState(STUDENT_COMMUTE_PROFILES[0]?.campus ?? "");
+  const [profiles, setProfiles] = useState<StudentCommuteProfile[]>([]);
+  const [selectedCampus, setSelectedCampus] = useState<string>("");
+  const [studentPrompts, setStudentPrompts] = useState<string[]>([]);
+  const [recipes, setRecipes] = useState<StudentDbRecipe[]>([]);
+  const [hotspots, setHotspots] = useState<ViolationHotspot[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
 
-  const profile = useMemo(
-    () => STUDENT_COMMUTE_PROFILES.find((item) => item.campus === campus) ?? STUDENT_COMMUTE_PROFILES[0],
-    [campus]
-  );
+  useEffect(() => {
+    let cancelled = false;
 
-  const hotspotDetails = useMemo(
-    () =>
-      VIOLATION_HOTSPOTS.filter((hotspot) => profile?.hotspotIds.includes(hotspot.id)).map((hotspot) => ({
+    async function loadStudentData() {
+      setLoading(true);
+      try {
+        const res = await fetch(
+          "/api/insights/curated?include=studentProfiles,studentDbRecipes,studentPrompts,hotspots",
+          { cache: "no-store" }
+        );
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        if (!json?.ok) throw new Error(json?.error || "Failed to load student insights");
+        const data = json?.data || {};
+        if (!cancelled) {
+          setProfiles(Array.isArray(data.studentProfiles) ? (data.studentProfiles as StudentCommuteProfile[]) : []);
+          setRecipes(Array.isArray(data.studentDbRecipes) ? (data.studentDbRecipes as StudentDbRecipe[]) : []);
+          setStudentPrompts(
+            Array.isArray(data.studentPrompts)
+              ? (data.studentPrompts as Array<{ prompt: string }>).map((item) => item.prompt)
+              : []
+          );
+          setHotspots(Array.isArray(data.hotspots) ? (data.hotspots as ViolationHotspot[]) : []);
+          setError(null);
+        }
+      } catch (err) {
+        console.error("Unable to load student commute data", err);
+        if (!cancelled) {
+          setProfiles([]);
+          setRecipes([]);
+          setStudentPrompts([]);
+          setHotspots([]);
+          setError("Unable to load curated student insights. Showing empty view.");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadStudentData();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (selectedCampus || !profiles.length) return;
+    setSelectedCampus(profiles[0].campus);
+  }, [profiles, selectedCampus]);
+
+  const profile = useMemo(() => {
+    if (!profiles.length) return null;
+    return profiles.find((item) => item.campus === selectedCampus) ?? profiles[0];
+  }, [profiles, selectedCampus]);
+
+  const hotspotDetails = useMemo(() => {
+    if (!profile) return [] as Array<ViolationHotspot & { campusMatch: boolean }>;
+    return hotspots
+      .filter((hotspot) => profile.hotspotIds.includes(hotspot.id))
+      .map((hotspot) => ({
         ...hotspot,
-        campusMatch: hotspot.campus === profile?.campus,
-      })),
-    [profile]
-  );
+        campusMatch: hotspot.campus === profile.campus,
+      }));
+  }, [profile, hotspots]);
 
   const coveragePercent = profile ? profile.aceCoverageShare : 0;
-  const promptSuggestions = useMemo(() => STUDENT_PROMPTS.slice(0, 4), []);
+  const promptSuggestions = useMemo(() => studentPrompts.slice(0, 4), [studentPrompts]);
+  const mapCenter = useMemo<[number, number]>(() => {
+    const first = hotspotDetails[0];
+    if (first && first.longitude != null && first.latitude != null) {
+      return [Number(first.longitude), Number(first.latitude)];
+    }
+    return [-73.95, 40.75];
+  }, [hotspotDetails]);
 
   return (
     <div className="space-y-6 lg:space-y-8">
@@ -64,12 +125,12 @@ export default function StudentsPage() {
             <label htmlFor="campus-select" className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Focus campus
             </label>
-            <Select value={profile?.campus ?? campus} onValueChange={setCampus}>
+            <Select value={profile?.campus ?? selectedCampus} onValueChange={setSelectedCampus}>
               <SelectTrigger id="campus-select" className="min-w-[220px]">
                 <SelectValue placeholder="Select campus" />
               </SelectTrigger>
               <SelectContent align="end">
-                {STUDENT_COMMUTE_PROFILES.map((item) => (
+                {profiles.map((item) => (
                   <SelectItem key={item.campus} value={item.campus}>
                     {item.campus}
                   </SelectItem>
@@ -85,6 +146,17 @@ export default function StudentsPage() {
           </p>
         </div>
       </header>
+
+      {error && (
+        <div className="rounded-lg border border-destructive/60 bg-destructive/10 p-3 text-xs text-destructive">
+          {error}
+        </div>
+      )}
+      {loading && !profiles.length && (
+        <div className="rounded-lg border border-border/60 bg-card/40 p-3 text-xs text-muted-foreground">
+          Loading curated student insights…
+        </div>
+      )}
 
       {profile && (
         <section aria-labelledby="student-metrics" className="space-y-4">
@@ -261,17 +333,21 @@ export default function StudentsPage() {
         </div>
         <MapPanel
           height={320}
-          markers={hotspotDetails.map((hotspot) => ({
-            id: hotspot.id,
-            longitude: hotspot.longitude,
-            latitude: hotspot.latitude,
-            color: hotspot.campusMatch ? "#0039a6" : "#f97316",
-            title: `${hotspot.location} | ${hotspot.routeId}`,
-            description: `${integerFormatter.format(hotspot.averageDailyViolations)} violations/day | ${hotspot.exemptSharePct}% exempt | ${hotspot.campus}`,
-          }))}
+          markers={hotspotDetails.map((hotspot) => {
+            const violations = Number(hotspot.averageDailyViolations ?? 0);
+            const exemptPct = Number(hotspot.exemptSharePct ?? 0);
+            return {
+              id: hotspot.id,
+              longitude: Number(hotspot.longitude ?? 0),
+              latitude: Number(hotspot.latitude ?? 0),
+              color: hotspot.campusMatch ? "#0039a6" : "#f97316",
+              title: `${hotspot.location ?? "Unknown stop"} | ${hotspot.routeId}`,
+              description: `${integerFormatter.format(violations)} violations/day | ${exemptPct.toFixed(1)}% exempt | ${hotspot.campus ?? "Unknown campus"}`,
+            };
+          })}
           cluster={false}
           hoverPopups
-          center={hotspotDetails.length ? [hotspotDetails[0].longitude, hotspotDetails[0].latitude] : [-73.95, 40.75]}
+          center={mapCenter}
           zoom={hotspotDetails.length ? 11.5 : 10.5}
         />
         {profile && (
@@ -280,10 +356,10 @@ export default function StudentsPage() {
               <li key={hotspot.id} className="rounded-xl border border-border/60 bg-card/70 p-4">
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <span>{hotspot.routeId}</span>
-                  <span>{hotspot.averageDailyViolations} per day</span>
+                  <span>{integerFormatter.format(Number(hotspot.averageDailyViolations ?? 0))} per day</span>
                 </div>
-                <p className="mt-2 font-medium text-foreground">{hotspot.location}</p>
-                <p className="mt-2 text-xs text-muted-foreground">{hotspot.highlight}</p>
+                <p className="mt-2 font-medium text-foreground">{hotspot.location ?? "Unknown stop"}</p>
+                <p className="mt-2 text-xs text-muted-foreground">{hotspot.highlight ?? "Additional context forthcoming once Neon feeds go live."}</p>
               </li>
             ))}
             {hotspotDetails.length === 0 && (
@@ -329,7 +405,7 @@ export default function StudentsPage() {
           </p>
         </div>
         <div className="grid gap-4 lg:grid-cols-3">
-          {STUDENT_DB_RECIPES.map((recipe) => (
+          {recipes.map((recipe) => (
             <article key={recipe.title} className="flex h-full flex-col rounded-xl border border-border/60 bg-card/70 p-4">
               <h3 className="text-sm font-semibold text-foreground">{recipe.title}</h3>
               <p className="mt-1 text-xs text-muted-foreground">{recipe.description}</p>
@@ -338,6 +414,11 @@ export default function StudentsPage() {
               </pre>
             </article>
           ))}
+          {!recipes.length && !loading && (
+            <article className="flex h-full flex-col items-center justify-center rounded-xl border border-dashed border-border/60 bg-card/40 p-4 text-xs text-muted-foreground">
+              Curated SQL templates will appear here once the dataset is connected.
+            </article>
+          )}
         </div>
         <div className="rounded-xl border border-border/60 bg-card/70 p-4 text-xs text-muted-foreground">
           <p>

@@ -14,9 +14,83 @@ import {
   getViolationSummary,
   getViolationTotals,
 } from "@/lib/data/violations";
-import { ROUTE_COMPARISONS, STUDENT_COMMUTE_PROFILES, CBD_ROUTE_TRENDS, VIOLATION_HOTSPOTS } from "@/lib/data/insights";
-import { CUNY_CAMPUSES } from "@/lib/data/cuny";
+import {
+  getRouteComparisons,
+  getStudentCommuteProfiles,
+  getCbdRouteTrends,
+  getCuratedHotspots,
+  getSqlToolRecipes,
+} from "@/lib/data/insights";
+import { getCampuses } from "@/lib/data/cuny";
+import type { RouteComparison, StudentCommuteProfile, CbdRouteTrend, ViolationHotspot, SqlToolRecipe } from "@/lib/data/insights";
+import type { Campus } from "@/lib/data/cuny";
 import { createSocrataFromEnv } from "@/lib/data/socrata";
+
+let routeComparisonsPromise: Promise<RouteComparison[]> | null = null;
+function getRouteComparisonsCached() {
+  if (!routeComparisonsPromise) {
+    routeComparisonsPromise = getRouteComparisons().catch((error) => {
+      routeComparisonsPromise = null;
+      throw error;
+    });
+  }
+  return routeComparisonsPromise;
+}
+
+let studentProfilesPromise: Promise<StudentCommuteProfile[]> | null = null;
+function getStudentProfilesCached() {
+  if (!studentProfilesPromise) {
+    studentProfilesPromise = getStudentCommuteProfiles().catch((error) => {
+      studentProfilesPromise = null;
+      throw error;
+    });
+  }
+  return studentProfilesPromise;
+}
+
+let cbdRouteTrendsPromise: Promise<CbdRouteTrend[]> | null = null;
+function getCbdRouteTrendsCached() {
+  if (!cbdRouteTrendsPromise) {
+    cbdRouteTrendsPromise = getCbdRouteTrends().catch((error) => {
+      cbdRouteTrendsPromise = null;
+      throw error;
+    });
+  }
+  return cbdRouteTrendsPromise;
+}
+
+let hotspotsPromise: Promise<ViolationHotspot[]> | null = null;
+function getCuratedHotspotsCached() {
+  if (!hotspotsPromise) {
+    hotspotsPromise = getCuratedHotspots().catch((error) => {
+      hotspotsPromise = null;
+      throw error;
+    });
+  }
+  return hotspotsPromise;
+}
+
+let campusesPromise: Promise<Campus[]> | null = null;
+function getCampusesCached() {
+  if (!campusesPromise) {
+    campusesPromise = getCampuses().catch((error) => {
+      campusesPromise = null;
+      throw error;
+    });
+  }
+  return campusesPromise;
+}
+
+let sqlToolRecipesPromise: Promise<SqlToolRecipe[]> | null = null;
+function getSqlToolRecipesCached() {
+  if (!sqlToolRecipesPromise) {
+    sqlToolRecipesPromise = getSqlToolRecipes().catch((error) => {
+      sqlToolRecipesPromise = null;
+      throw error;
+    });
+  }
+  return sqlToolRecipesPromise;
+}
 
 const numberFormatter = new Intl.NumberFormat("en-US");
 
@@ -168,10 +242,16 @@ export const insightAgent = new Agent({
         campus: z.string().optional(),
       }),
       execute: async ({ routeId, campus }) => {
-        const routeMatch = routeId ? ROUTE_COMPARISONS.find((r) => r.routeId.toLowerCase() === routeId.toLowerCase()) : undefined;
-        const campusMatch = campus
-          ? STUDENT_COMMUTE_PROFILES.find((profile) => profile.campus.toLowerCase() === campus.toLowerCase())
-          : undefined;
+        let routeMatch: RouteComparison | undefined;
+        if (routeId) {
+          const routes = await getRouteComparisonsCached();
+          routeMatch = routes.find((r) => r.routeId.toLowerCase() === routeId.toLowerCase());
+        }
+        let campusMatch: StudentCommuteProfile | undefined;
+        if (campus) {
+          const profiles = await getStudentProfilesCached();
+          campusMatch = profiles.find((profile) => profile.campus.toLowerCase() === campus.toLowerCase());
+        }
         const snippets = [] as string[];
         if (routeMatch) {
           snippets.push(`Route ${routeMatch.routeId} narrative: ${routeMatch.narrative}`);
@@ -199,19 +279,26 @@ export const insightAgent = new Agent({
           .default("route_performance"),
       }),
       execute: async ({ topic }) => {
-        const snippets: Record<string, string> = {
-          route_performance: `-- Route performance over time\nSELECT\n  bus_route_id,\n  date_trunc('month', last_occurrence) AS month,\n  COUNT(*) AS violations,\n  SUM(CASE WHEN violation_status = 'EXEMPT' THEN 1 ELSE 0 END) AS exempt_count\nFROM violations\nWHERE bus_route_id = 'M15-SBS'\n  AND last_occurrence >= date_trunc('month', now()) - interval '12 months'\nGROUP BY 1, 2\nORDER BY 2;`,
-          campus_exposure: `-- Campus exposure (violations within 0.1° bounding box)\nWITH campus AS (\n  SELECT 40.7738 AS lat, -73.9802 AS lng -- replace with campus coordinates\n), filtered AS (\n  SELECT *\n  FROM violations, campus\n  WHERE violation_latitude BETWEEN campus.lat - 0.1 AND campus.lat + 0.1\n    AND violation_longitude BETWEEN campus.lng - 0.1 AND campus.lng + 0.1\n)\nSELECT\n  bus_route_id,\n  COUNT(*) AS violations,\n  SUM(CASE WHEN violation_status = 'EXEMPT' THEN 1 ELSE 0 END) AS exempt_count\nFROM filtered\nGROUP BY 1\nORDER BY violations DESC;`,
-          hotspots: `-- Top hotspots\nSELECT\n  bus_route_id,\n  stop_name,\n  round(violation_latitude::numeric, 6) AS lat,\n  round(violation_longitude::numeric, 6) AS lng,\n  COUNT(*) AS violations\nFROM violations\nWHERE last_occurrence >= date_trunc('month', now()) - interval '3 months'\nGROUP BY 1,2,3,4\nHAVING COUNT(*) > 25\nORDER BY violations DESC\nLIMIT 25;`,
-          exempt_repeaters: `-- Repeat exempt vehicles\nSELECT\n  vehicle_id,\n  COUNT(*) AS exemptions,\n  ARRAY_AGG(DISTINCT bus_route_id) AS routes\nFROM violations\nWHERE violation_status = 'EXEMPT'\nGROUP BY vehicle_id\nHAVING COUNT(*) >= 5\nORDER BY exemptions DESC;`,
-          cbd_trend: `-- CBD congestion pricing impact\nSELECT\n  bus_route_id,\n  CASE WHEN last_occurrence < DATE '2024-06-30' THEN 'pre' ELSE 'post' END AS period,\n  COUNT(*) AS violations,\n  AVG(speed_mph) AS avg_speed -- requires joined AVL speeds table\nFROM violations v\nLEFT JOIN bus_time_speeds s USING (violation_id)\nWHERE bus_route_id IN ('M15-SBS','M103','BxM1')\nGROUP BY 1,2\nORDER BY 1,2;`,
-        };
-        const sql = snippets[topic] || snippets.route_performance;
+        const recipes = await getSqlToolRecipesCached();
+        const recipe = recipes.find((entry) => entry.topic === topic);
+
+        if (!recipe) {
+          const available = recipes.map((entry) => entry.topic).join(", ");
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `No SQL recipe found for ${topic}. Available topics: ${available || 'none available yet.'}`,
+              },
+            ],
+          };
+        }
+
         return {
           content: [
             {
               type: "text" as const,
-              text: `Here is a Neon SQL recipe for ${topic.replace(/_/g, " ")} analysis:\n\n${sql}`,
+              text: `Here is a Neon SQL recipe for ${topic.replace(/_/g, " ")} analysis:\n\n${recipe.sql}`,
             },
           ],
         };
@@ -472,6 +559,7 @@ Assumptions:
         let analysis = `Comparative Analysis: ${analysisType}\n\n`;
 
         if (analysisType === "route_comparison") {
+          const routeComparisons = await getRouteComparisonsCached();
           const routeData = await Promise.all(
             routeIds.map(routeId => getViolationSummary({ routeId, limit: 12 }))
           );
@@ -485,7 +573,7 @@ Assumptions:
               return sum + (r.violations > 0 ? r.exemptCount / r.violations : 0);
             }, 0) / data.length;
 
-            const route = ROUTE_COMPARISONS.find(r => r.routeId === routeId);
+            const route = routeComparisons.find((r) => r.routeId === routeId);
             analysis += `${routeId}:\n`;
             analysis += `- Average monthly violations: ${Math.round(avgViolations)}\n`;
             analysis += `- Average exempt share: ${(avgExemptShare * 100).toFixed(1)}%\n`;
@@ -574,7 +662,8 @@ export const nlQueryAgent = new Agent({
         const campusMatch = query.match(/campus\s*([A-Za-z\s]+)/i);
         if (campusMatch) {
           const campus = campusMatch[1].trim();
-          const campusData = CUNY_CAMPUSES.find(c =>
+          const campusList = await getCampusesCached();
+          const campusData = campusList.find((c) =>
             c.campus.toLowerCase().includes(campus.toLowerCase())
           );
           if (campusData) {
@@ -797,7 +886,8 @@ export const workflowAgent = new Agent({
       }),
       execute: async ({ campusName, timeRange, includeForecasting, includePolicySimulation }) => {
         // Find campus data
-        const campus = CUNY_CAMPUSES.find(c =>
+        const campuses = await getCampusesCached();
+        const campus = campuses.find((c) =>
           c.campus.toLowerCase().includes(campusName.toLowerCase())
         );
 
@@ -808,9 +898,11 @@ export const workflowAgent = new Agent({
         }
 
         // Find associated routes
-        const associatedRoutes = ROUTE_COMPARISONS.filter(r =>
+        const routeComparisons = await getRouteComparisonsCached();
+        const associatedRoutes = routeComparisons.filter((r) =>
           r.campus.toLowerCase().includes(campusName.toLowerCase())
         );
+        const curatedHotspots = await getCuratedHotspotsCached();
 
         let workflowResults = `Campus Impact Study: ${campus.campus}\n\n`;
 
@@ -824,8 +916,9 @@ export const workflowAgent = new Agent({
         workflowResults += `2. ROUTE PERFORMANCE\n`;
         for (const route of associatedRoutes.slice(0, 3)) {
           const violations = await getViolationSummary({ routeId: route.routeId, limit: 6 });
-          const avgViolations = violations.reduce((sum, v) => sum + v.violations, 0) / violations.length;
-          workflowResults += `- ${route.routeId}: ${Math.round(avgViolations)} avg monthly violations, ${route.speedChangePct > 0 ? '+' : ''}${route.speedChangePct}% speed change\n`;
+          const avgViolations = violations.reduce((sum, v) => sum + v.violations, 0) / Math.max(1, violations.length);
+          const speedChange = Number(route.speedChangePct ?? 0);
+          workflowResults += `- ${route.routeId}: ${Math.round(avgViolations)} avg monthly violations, ${speedChange > 0 ? '+' : ''}${speedChange}% speed change\n`;
         }
         workflowResults += `\n`;
 
@@ -861,7 +954,9 @@ export const workflowAgent = new Agent({
         // Step 5: Recommendations
         workflowResults += `5. RECOMMENDATIONS\n`;
         workflowResults += `- Priority: ${associatedRoutes.some(r => !r.aceEnforced) ? "Expand ACE coverage" : "Optimize existing enforcement"}\n`;
-        workflowResults += `- Focus areas: ${VIOLATION_HOTSPOTS.filter(h => associatedRoutes.some(r => r.routeId === h.routeId)).map(h => h.location).join(", ")}\n`;
+        const focusHotspots = curatedHotspots.filter((h) => associatedRoutes.some((r) => r.routeId === h.routeId));
+        const hotspotLabels = focusHotspots.map((h) => h.location ?? h.id);
+        workflowResults += `- Focus areas: ${hotspotLabels.length ? hotspotLabels.join(", ") : "None"}\n`;
         workflowResults += `- Student impact: High priority due to campus proximity\n`;
         workflowResults += `- Next steps: Coordinate with DOT for curb regulation review\n`;
 
@@ -892,7 +987,7 @@ export const workflowAgent = new Agent({
 
         baselineData.forEach((data, idx) => {
           const routeId = affectedRoutes[idx];
-          const avgViolations = data.reduce((sum, v) => sum + v.violations, 0) / data.length;
+          const avgViolations = data.reduce((sum, v) => sum + v.violations, 0) / Math.max(1, data.length);
           analysis += `- ${routeId}: ${Math.round(avgViolations)} baseline violations/month\n`;
         });
         analysis += `\n`;
@@ -922,7 +1017,8 @@ export const workflowAgent = new Agent({
         if (includeStakeholderImpact) {
           analysis += `3. STAKEHOLDER IMPACT ANALYSIS\n`;
 
-          const studentProfiles = STUDENT_COMMUTE_PROFILES.filter(profile =>
+          const profiles = await getStudentProfilesCached();
+          const studentProfiles = profiles.filter((profile) =>
             affectedRoutes.some(routeId =>
               profile.primaryRoute.id === routeId ||
               profile.comparisonRoute.id === routeId ||
@@ -932,19 +1028,19 @@ export const workflowAgent = new Agent({
 
           if (studentProfiles.length > 0) {
             analysis += `Student Impact:\n`;
-            studentProfiles.forEach(profile => {
+            studentProfiles.forEach((profile) => {
               analysis += `- ${profile.campus}: ${profile.avgDailyStudents.toLocaleString()} daily riders, ${profile.travelTimeDelta} change\n`;
             });
           }
 
-          const cbdRoutes = CBD_ROUTE_TRENDS.filter(route =>
-            affectedRoutes.includes(route.routeId)
-          );
+          const cbdTrendData = await getCbdRouteTrendsCached();
+          const cbdRoutes = cbdTrendData.filter((route) => affectedRoutes.includes(route.routeId));
 
           if (cbdRoutes.length > 0) {
             analysis += `CBD Impact:\n`;
-            cbdRoutes.forEach(route => {
-              analysis += `- ${route.routeName}: ${route.violationChangePct > 0 ? '+' : ''}${route.violationChangePct}% violation change\n`;
+            cbdRoutes.forEach((route) => {
+              const change = Number(route.violationChangePct ?? 0);
+              analysis += `- ${route.routeName}: ${change > 0 ? '+' : ''}${change}% violation change\n`;
             });
           }
 
@@ -989,7 +1085,8 @@ export const workflowAgent = new Agent({
         response += `2. IMPACT ANALYSIS\n`;
 
         // Find affected routes
-        const affectedRoutes = ROUTE_COMPARISONS.filter(route =>
+        const routeComparisons = await getRouteComparisonsCached();
+        const affectedRoutes = routeComparisons.filter((route) =>
           route.routeName.toLowerCase().includes(affectedArea.toLowerCase()) ||
           route.campus.toLowerCase().includes(affectedArea.toLowerCase())
         );
@@ -997,7 +1094,8 @@ export const workflowAgent = new Agent({
         if (affectedRoutes.length > 0) {
           response += `Affected Routes:\n`;
           for (const route of affectedRoutes.slice(0, 3)) {
-            response += `- ${route.routeId}: ${route.studentShare * 100}% student ridership, ${route.aceEnforced ? "ACE protected" : "No ACE coverage"}\n`;
+            const studentSharePct = Number(route.studentShare ?? 0) * 100;
+            response += `- ${route.routeId}: ${studentSharePct.toFixed(1)}% student ridership, ${route.aceEnforced ? "ACE protected" : "No ACE coverage"}\n`;
           }
           response += `\n`;
         }

@@ -22,9 +22,9 @@ export default function InsightCard({
   align = "start",
 }: Props) {
   return (
-    <div className="rounded-lg border border-foreground/10 bg-background/70 p-5 space-y-2">
+    <div className="rounded-lg border border-foreground/10 bg-background/70 p-4 space-y-2 sm:p-5">
       <div className="text-xs uppercase tracking-wide text-foreground/60">{title}</div>
-      <div className={`text-2xl font-semibold leading-tight ${align === "center" ? "text-center" : "text-left"}`}>
+      <div className={`text-xl font-semibold leading-tight sm:text-2xl ${align === "center" ? "text-center" : "text-left"}`}>
         {value}
       </div>
       {subline && <div className={`text-sm text-foreground/70 ${align === "center" ? "text-center" : "text-left"}`}>{subline}</div>}

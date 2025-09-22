@@ -19,6 +19,11 @@ export const metadata: Metadata = {
   description: "Clear insights on ACE violations, speeds, and policy impact",
 };
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -30,7 +35,7 @@ export default function RootLayout({
         <ThemeProvider>
           <div className="flex min-h-screen flex-col bg-background text-foreground">
             <GlobalHeader />
-            <main className="flex-1 pb-12 pt-6 sm:pt-8">{children}</main>
+            <main className="flex-1 pb-8 pt-4 sm:pb-12 sm:pt-6 lg:pt-8 overflow-x-hidden">{children}</main>
           </div>
         </ThemeProvider>
       </body>

@@ -1,0 +1,27 @@
+[
+  {
+    "title": "ACE Program Overview",
+    "href": "https://new.mta.info/project/ace",
+    "summary": "What automated camera enforcement covers, deployment schedule, and enforcement criteria."
+  },
+  {
+    "title": "Bus Lane Rules (NYC DOT)",
+    "href": "https://www.nyc.gov/html/dot/html/motorist/bus-lane.shtml",
+    "summary": "City rules governing curb access, violations, and exemptions for bus lanes."
+  },
+  {
+    "title": "Congestion Pricing Final Rule",
+    "href": "https://congestion-pricing-plan-nyc.com",
+    "summary": "Pricing boundaries, implementation timeline, and metrics to track in the CBD."
+  },
+  {
+    "title": "ACE Violations Dataset",
+    "href": "https://data.ny.gov/Transportation/Automated-Bus-Lane-Enforcement-Violations/kh8p-hcbm",
+    "summary": "Primary dataset powering violation analysis and repeat offender tracking."
+  },
+  {
+    "title": "CUNY Enrollment by Campus",
+    "href": "https://www.cuny.edu/about/administration/offices/oira/institutional/data/book/current-student-data-book/",
+    "summary": "Student counts to estimate campus demand across routes."
+  }
+]

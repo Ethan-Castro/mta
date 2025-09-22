@@ -2,13 +2,65 @@ import { z } from "zod";
 import { createMcpHandler } from "mcp-handler";
 import { getRouteTotals, getHotspots, getViolationSummary, getExemptRepeaters } from "@/lib/data/violations";
 import { createSocrataFromEnv, SocrataClient } from "@/lib/data/socrata";
-import { CUNY_CAMPUSES } from "@/lib/data/cuny";
-import {
-  ROUTE_COMPARISONS,
-  STUDENT_COMMUTE_PROFILES,
-  CBD_ROUTE_TRENDS,
-  VIOLATION_HOTSPOTS
-} from "@/lib/data/insights";
+import { getCampuses } from "@/lib/data/cuny";
+import { getRouteComparisons, getStudentCommuteProfiles, getCbdRouteTrends, getCuratedHotspots } from "@/lib/data/insights";
+import type { RouteComparison, StudentCommuteProfile, CbdRouteTrend, ViolationHotspot } from "@/lib/data/insights";
+import type { Campus } from "@/lib/data/cuny";
+
+let routeComparisonsPromise: Promise<RouteComparison[]> | null = null;
+function getRouteComparisonsCached() {
+  if (!routeComparisonsPromise) {
+    routeComparisonsPromise = getRouteComparisons().catch((error) => {
+      routeComparisonsPromise = null;
+      throw error;
+    });
+  }
+  return routeComparisonsPromise;
+}
+
+let studentProfilesPromise: Promise<StudentCommuteProfile[]> | null = null;
+function getStudentProfilesCached() {
+  if (!studentProfilesPromise) {
+    studentProfilesPromise = getStudentCommuteProfiles().catch((error) => {
+      studentProfilesPromise = null;
+      throw error;
+    });
+  }
+  return studentProfilesPromise;
+}
+
+let cbdRouteTrendsPromise: Promise<CbdRouteTrend[]> | null = null;
+function getCbdRouteTrendsCached() {
+  if (!cbdRouteTrendsPromise) {
+    cbdRouteTrendsPromise = getCbdRouteTrends().catch((error) => {
+      cbdRouteTrendsPromise = null;
+      throw error;
+    });
+  }
+  return cbdRouteTrendsPromise;
+}
+
+let curatedHotspotsPromise: Promise<ViolationHotspot[]> | null = null;
+function getCuratedHotspotsCached() {
+  if (!curatedHotspotsPromise) {
+    curatedHotspotsPromise = getCuratedHotspots().catch((error) => {
+      curatedHotspotsPromise = null;
+      throw error;
+    });
+  }
+  return curatedHotspotsPromise;
+}
+
+let campusesPromise: Promise<Campus[]> | null = null;
+function getCampusesCached() {
+  if (!campusesPromise) {
+    campusesPromise = getCampuses().catch((error) => {
+      campusesPromise = null;
+      throw error;
+    });
+  }
+  return campusesPromise;
+}
 
 const handler = createMcpHandler(
   (server) => {
@@ -97,13 +149,14 @@ const handler = createMcpHandler(
       "List all CUNY campuses with location and type information",
       { campusType: z.string().optional() },
       async ({ campusType }) => {
-        const campuses = campusType
-          ? CUNY_CAMPUSES.filter(c => c.type === campusType)
-          : CUNY_CAMPUSES;
+        const campuses = await getCampusesCached();
+        const filtered = campusType
+          ? campuses.filter((c) => (c.type ?? "").toLowerCase() === campusType.toLowerCase())
+          : campuses;
 
-        const formatted = campuses
+        const formatted = filtered
           .map((campus, idx) =>
-            `${idx + 1}. ${campus.campus} (${campus.type}) - ${campus.city}, ${campus.state} @ (${campus.latitude}, ${campus.longitude})`
+            `${idx + 1}. ${campus.campus} (${campus.type ?? "Unknown"}) - ${campus.city ?? "Unknown"}, ${campus.state ?? ""} @ (${campus.latitude ?? "n/a"}, ${campus.longitude ?? "n/a"})`
           )
           .join("\n");
         return {
@@ -117,11 +170,14 @@ const handler = createMcpHandler(
       "Find CUNY campuses near specific bus routes",
       { routeId: z.string() },
       async ({ routeId }) => {
-        const nearbyCampuses = CUNY_CAMPUSES.filter(campus => {
-          // Simple proximity check - can be enhanced with proper geospatial queries
-          const routeMatch = ROUTE_COMPARISONS.find(r => r.routeId === routeId);
-          return routeMatch && routeMatch.campus === campus.campus;
-        });
+        const [campuses, routes] = await Promise.all([
+          getCampusesCached(),
+          getRouteComparisonsCached(),
+        ]);
+        const routeMatch = routes.find((r) => r.routeId === routeId);
+        const nearbyCampuses = routeMatch
+          ? campuses.filter((campus) => campus.campus === routeMatch.campus)
+          : [];
 
         const formatted = nearbyCampuses
           .map((campus, idx) =>
@@ -169,11 +225,12 @@ const handler = createMcpHandler(
       "Compare ACE and non-ACE routes with performance metrics",
       { campusType: z.string().optional() },
       async ({ campusType }) => {
-        const routes = campusType
-          ? ROUTE_COMPARISONS.filter(r => r.campusType === campusType)
-          : ROUTE_COMPARISONS;
+        const routes = await getRouteComparisonsCached();
+        const filtered = campusType
+          ? routes.filter((r) => r.campusType === campusType)
+          : routes;
 
-        const formatted = routes
+        const formatted = filtered
           .map((route, idx) => {
             const aceStatus = route.aceEnforced ? "ACE Enforced" : "No ACE";
             const speedChange = route.speedChangePct > 0 ? `+${route.speedChangePct}%` : `${route.speedChangePct}%`;
@@ -191,9 +248,10 @@ const handler = createMcpHandler(
       "Analyze student commute patterns and recommendations",
       { campus: z.string().optional() },
       async ({ campus }) => {
+        const profilesData = await getStudentProfilesCached();
         const profiles = campus
-          ? STUDENT_COMMUTE_PROFILES.filter(p => p.campus.toLowerCase().includes(campus.toLowerCase()))
-          : STUDENT_COMMUTE_PROFILES;
+          ? profilesData.filter((p) => p.campus.toLowerCase().includes(campus.toLowerCase()))
+          : profilesData;
 
         const formatted = profiles
           .map((profile, idx) => {
@@ -215,13 +273,16 @@ const handler = createMcpHandler(
       "Analyze congestion pricing impact on CBD routes",
       {},
       async () => {
-        const formatted = CBD_ROUTE_TRENDS
+        const trends = await getCbdRouteTrendsCached();
+        const formatted = trends
           .map((route, idx) => {
-            const change = route.violationChangePct > 0 ? `+${route.violationChangePct}%` : `${route.violationChangePct}%`;
-            const speedChange = route.speedChangePct > 0 ? `+${route.speedChangePct}%` : `${route.speedChangePct}%`;
+            const violationChange = Number(route.violationChangePct ?? 0);
+            const speedChange = Number(route.speedChangePct ?? 0);
+            const violationText = `${violationChange > 0 ? '+' : ''}${violationChange}%`;
+            const speedText = `${speedChange > 0 ? '+' : ''}${speedChange}%`;
             return `${idx + 1}. ${route.routeName} (${route.crossesCbd ? 'CBD' : 'Non-CBD'}):
-- Violations: ${change} post-pricing
-- Speed: ${speedChange}
+- Violations: ${violationText} post-pricing
+- Speed: ${speedText}
 - Highlight: ${route.highlight}`;
           })
           .join("\n");
@@ -246,22 +307,26 @@ const handler = createMcpHandler(
         switch (focus) {
           case "campus_impact":
             if (campus) {
-              const campusProfile = STUDENT_COMMUTE_PROFILES.find(p =>
+              const [profiles, routes] = await Promise.all([
+                getStudentProfilesCached(),
+                getRouteComparisonsCached(),
+              ]);
+              const campusProfile = profiles.find((p) =>
                 p.campus.toLowerCase().includes(campus.toLowerCase())
               );
-              const relatedRoutes = ROUTE_COMPARISONS.filter(r =>
+              const relatedRoutes = routes.filter((r) =>
                 r.campus.toLowerCase().includes(campus.toLowerCase())
               );
 
               analysis = `Campus Impact Analysis for ${campus}:
 
 Student Profile:
-- ${campusProfile?.avgDailyStudents.toLocaleString()} daily students
-- Primary route: ${campusProfile?.primaryRoute.name} (${campusProfile?.primaryRoute.reliabilityScore})
-- Travel time change: ${campusProfile?.travelTimeDelta}
+- ${campusProfile?.avgDailyStudents?.toLocaleString() ?? 'n/a'} daily students
+- Primary route: ${campusProfile?.primaryRoute.id ?? 'n/a'} (${campusProfile?.primaryRoute.reliabilityScore ?? 'n/a'})
+- Travel time change: ${campusProfile?.travelTimeDelta ?? 'n/a'}
 
 Route Performance:
-${relatedRoutes.map(r => `- ${r.routeId}: ${r.speedChangePct > 0 ? '+' : ''}${r.speedChangePct}% speed change, ${r.averageMonthlyViolations} monthly violations`).join('\n')}
+${relatedRoutes.map((r) => `- ${r.routeId}: ${Number(r.speedChangePct ?? 0) > 0 ? '+' : ''}${Number(r.speedChangePct ?? 0)}% speed change, ${r.averageMonthlyViolations ?? 'n/a'} monthly violations`).join('\n')}
 
 Key Insights:
 ${campusProfile?.recommendation || 'No specific recommendations available'}`;
@@ -270,18 +335,19 @@ ${campusProfile?.recommendation || 'No specific recommendations available'}`;
 
           case "route_efficiency":
             if (routeId) {
-              const route = ROUTE_COMPARISONS.find(r => r.routeId === routeId);
+              const routes = await getRouteComparisonsCached();
+              const route = routes.find((r) => r.routeId === routeId);
               const violations = await getViolationSummary({ routeId, limit: 6 });
 
               analysis = `Route Efficiency Analysis for ${routeId}:
 
 Performance Metrics:
-- Speed change: ${route ? (route.speedChangePct > 0 ? '+' : '') + route.speedChangePct + '%' : 'N/A'}
-- Monthly violations: ${route?.averageMonthlyViolations || 'N/A'}
-- Exempt share: ${route?.exemptSharePct + '%' || 'N/A'}
+- Speed change: ${route ? (Number(route.speedChangePct ?? 0) > 0 ? '+' : '') + Number(route.speedChangePct ?? 0) + '%' : 'N/A'}
+- Monthly violations: ${route?.averageMonthlyViolations ?? 'N/A'}
+- Exempt share: ${route?.exemptSharePct !== undefined ? route.exemptSharePct + '%' : 'N/A'}
 
 Recent Trends:
-${violations.slice(-3).map(v => `${v.month}: ${v.violations} violations`).join('\n')}
+${violations.slice(-3).map((v) => `${v.month}: ${v.violations} violations`).join('\n')}
 
 Context: ${route?.narrative || 'No additional context available'}`;
             }
@@ -305,21 +371,44 @@ Recommendations:
 - Consider expanding ACE coverage to high-violation areas`;
             break;
 
-          case "policy_recommendations":
-            const aceRoutes = ROUTE_COMPARISONS.filter(r => r.aceEnforced);
-            const nonAceRoutes = ROUTE_COMPARISONS.filter(r => !r.aceEnforced);
+          case "policy_recommendations": {
+            const [routes, hotspots, cbdTrends] = await Promise.all([
+              getRouteComparisonsCached(),
+              getCuratedHotspotsCached(),
+              getCbdRouteTrendsCached(),
+            ]);
+            const aceRoutes = routes.filter((r) => r.aceEnforced);
+            const nonAceRoutes = routes.filter((r) => !r.aceEnforced);
+            const aceSpeedAvg = aceRoutes.length
+              ? aceRoutes.reduce((acc, r) => acc + Number(r.speedChangePct ?? 0), 0) / aceRoutes.length
+              : 0;
+            const nonAceSpeedAvg = nonAceRoutes.length
+              ? nonAceRoutes.reduce((acc, r) => acc + Number(r.speedChangePct ?? 0), 0) / nonAceRoutes.length
+              : 0;
+
+            const highImpactRoutes = nonAceRoutes
+              .filter((r) => Number(r.studentShare ?? 0) > 0.4)
+              .map((r) => r.routeId)
+              .join(', ');
+            const hotspotNames = hotspots.slice(0, 3).map((h) => h.location ?? h.id).join(', ');
+            const cbdFocus = cbdTrends
+              .filter((r) => r.crossesCbd)
+              .slice(0, 3)
+              .map((r) => r.routeName)
+              .join(', ');
 
             analysis = `Policy Recommendations:
 
 ACE Performance:
-- ${aceRoutes.length} routes with ACE coverage show average ${(aceRoutes.reduce((acc, r) => acc + r.speedChangePct, 0) / aceRoutes.length).toFixed(1)}% speed improvement
-- ${nonAceRoutes.length} routes without ACE show average ${(nonAceRoutes.reduce((acc, r) => acc + r.speedChangePct, 0) / nonAceRoutes.length).toFixed(1)}% speed change
+- ${aceRoutes.length} routes with ACE coverage show average ${aceSpeedAvg.toFixed(1)}% speed improvement
+- ${nonAceRoutes.length} routes without ACE show average ${nonAceSpeedAvg.toFixed(1)}% speed change
 
 Priority Actions:
-1. Expand ACE to ${nonAceRoutes.filter(r => r.studentShare > 0.4).map(r => r.routeId).join(', ')} (high student impact routes)
-2. Address exempt vehicle patterns in ${VIOLATION_HOTSPOTS.slice(0, 3).map(h => h.location).join(', ')}
-3. Monitor congestion pricing impact on CBD routes: ${CBD_ROUTE_TRENDS.filter(r => r.crossesCbd).slice(0, 3).map(r => r.routeName).join(', ')}`;
+1. Expand ACE to ${highImpactRoutes || 'identified high-impact routes'} (high student impact routes)
+2. Address exempt vehicle patterns in ${hotspotNames || 'key hotspots to be identified'}
+3. Monitor congestion pricing impact on CBD routes: ${cbdFocus || 'designated CBD corridors'}`;
             break;
+          }
         }
 
         return {

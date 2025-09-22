@@ -31,7 +31,7 @@ export async function POST(req: Request) {
     }
   }
 
-  // Ensure Vercel AI Gateway key is provided by environment only (no hardcoded fallback)
+  // Require AI Gateway key to be provided by environment (no hardcoded fallback)
 
   // Load Neon MCP tools (allowed set only). Best-effort; continue without if unavailable
   let mcpBundle: Awaited<ReturnType<typeof getNeonMCPTools>> | null = null;

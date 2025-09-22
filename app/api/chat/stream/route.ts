@@ -5,6 +5,12 @@ import { getViolationSummary } from "@/lib/data/violations";
 import { sql } from "@/lib/db";
 import { addMessage, getMessages, upsertConversation } from "@/lib/chat";
 import { getNeonMCPTools } from "@/lib/mcp/neon";
+import {
+  buildAssistantFallback,
+  computeSummary,
+  extractSummaryRows,
+  type ToolLogEntry,
+} from "@/lib/ai/assistant-utils";
 import { Composio } from "@composio/core";
 import { VercelProvider } from "@composio/vercel";
 // no next/headers in route handlers; use req.headers
@@ -63,14 +69,6 @@ function ensureReadOnlySql(sqlText: string):
   return { ok: true, statement: single };
 }
 
-type ToolLogEntry = {
-  id: string;
-  name: string;
-  input?: unknown;
-  output?: unknown;
-  error?: string;
-};
-
 function toSerializable(value: unknown): unknown {
   if (value === undefined) {
     return null;
@@ -97,6 +95,8 @@ export async function POST(req: Request) {
     if (question) {
       await addMessage({ conversationId, role: "user", content: String(question) });
     }
+
+    // Require AI Gateway key to be provided by environment (no hardcoded fallback)
 
     // Offline mode: explicit model "offline" or missing AI gateway key
     if (model === "offline" || !process.env.AI_GATEWAY_API_KEY) {
@@ -210,7 +210,6 @@ export async function POST(req: Request) {
         ...(composioTools ?? {}),
       },
       toolChoice: "auto",
-      temperature: 0.2,
       onStepFinish({ toolCalls, toolResults }) {
         toolCalls?.forEach((call) => {
           toolCallMap.set(call.toolCallId, {
@@ -248,10 +247,23 @@ export async function POST(req: Request) {
         } catch (e) {
           controller.enqueue(encoder.encode("\n[stream error]\n"));
         } finally {
+          if (!assistantBuffer.trim()) {
+            try {
+              const summaryRows = extractSummaryRows(toolLogs);
+              const summary = summaryRows ? computeSummary(summaryRows) : null;
+              const fallbackText =
+                buildAssistantFallback(summary, toolLogs, typeof question === "string" ? question : "") ??
+                "I wasn't able to generate an answer this time.";
+              controller.enqueue(encoder.encode(fallbackText));
+              assistantBuffer = fallbackText;
+            } catch {}
+          }
+
           try {
             const metaPayload = JSON.stringify({ toolLogs });
             controller.enqueue(encoder.encode(`\n${TOOL_META_SENTINEL}${metaPayload}`));
           } catch {}
+
           // Persist assistant message at the end of the stream
           if (assistantBuffer.trim()) {
             try {

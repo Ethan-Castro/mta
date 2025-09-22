@@ -121,12 +121,20 @@ import {
   BarChart3Icon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  buildAssistantFallback,
+  computeSummary,
+  extractSummaryRows,
+  formatNumber,
+  formatPercent,
+  type SummaryStats,
+  type ToolLogEntry,
+} from "@/lib/ai/assistant-utils";
 
 const DATASET_URL =
   "https://data.ny.gov/Transportation/Automated-Bus-Lane-Enforcement-Violations/kh8p-hcbm";
 const ASSISTANT_AVATAR = "https://avatar.vercel.sh/assistant?text=AI";
 const USER_AVATAR = "https://avatar.vercel.sh/user?text=ME";
-const NUMBER_FORMAT = new Intl.NumberFormat("en-US");
 const TOOL_META_SENTINEL = "[[AI_TOOL_META]]";
 
 const personaPromptMap = {
@@ -171,16 +179,6 @@ type ChatMessage = {
   content: string;
 };
 
-type SummaryStats = {
-  rows: Array<Record<string, unknown>>;
-  totalViolations: number;
-  totalExempt: number;
-  routeCount: number;
-  months: string[];
-  exemptShare: number;
-  topRoutes: Array<{ route: string; violations: number; exempt: number }>;
-};
-
 type ToolState = {
   input: Record<string, unknown>;
   output?: unknown;
@@ -196,14 +194,6 @@ type ChainStep = {
   detail?: string;
 };
 
-type ToolLogEntry = {
-  id: string;
-  name: string;
-  input?: unknown;
-  output?: unknown;
-  error?: string;
-};
-
 type AssistantMetadata = {
   prompt: string;
   summary: SummaryStats | null;
@@ -212,79 +202,6 @@ type AssistantMetadata = {
   toolState: ToolState | null;
   toolLogs: ToolLogEntry[];
 };
-
-function formatNumber(value: number) {
-  return NUMBER_FORMAT.format(value);
-}
-
-function formatPercent(value: number) {
-  if (!Number.isFinite(value)) {
-    return "0%";
-  }
-  return `${(value * 100).toFixed(1)}%`;
-}
-
-function computeSummary(rows: Array<Record<string, unknown>>): SummaryStats {
-  type RouteBucket = { route: string; violations: number; exempt: number };
-  type Totals = {
-    totalViolations: number;
-    totalExempt: number;
-    routeMap: Map<string, RouteBucket>;
-    months: Set<string>;
-  };
-
-  const totals = rows.reduce<Totals>(
-    (acc, row) => {
-      const violations = Number(row?.violations ?? row?.count ?? 0);
-      const exempt = Number(row?.exempt_count ?? 0);
-      const route = String(row?.bus_route_id ?? "unknown");
-      const month = String(row?.date_trunc_ym ?? "");
-
-      acc.totalViolations += Number.isFinite(violations) ? violations : 0;
-      acc.totalExempt += Number.isFinite(exempt) ? exempt : 0;
-
-      const routeBucket = acc.routeMap.get(route) ?? {
-        route,
-        violations: 0,
-        exempt: 0,
-      };
-      routeBucket.violations += Number.isFinite(violations) ? violations : 0;
-      routeBucket.exempt += Number.isFinite(exempt) ? exempt : 0;
-      acc.routeMap.set(route, routeBucket);
-
-      if (month) {
-        acc.months.add(month);
-      }
-
-      return acc;
-    },
-    {
-      totalViolations: 0,
-      totalExempt: 0,
-      routeMap: new Map<string, RouteBucket>(),
-      months: new Set<string>(),
-    }
-  );
-
-  const topRoutes = Array.from(totals.routeMap.values())
-    .sort((a, b) => b.violations - a.violations)
-    .slice(0, 3);
-
-  const months = Array.from(totals.months).sort();
-
-  return {
-    rows,
-    totalViolations: totals.totalViolations,
-    totalExempt: totals.totalExempt,
-    routeCount: totals.routeMap.size,
-    months,
-    exemptShare:
-      totals.totalViolations > 0
-        ? totals.totalExempt / totals.totalViolations
-        : 0,
-    topRoutes,
-  };
-}
 
 function buildSummaryChain(
   summary: SummaryStats | null,
@@ -363,21 +280,6 @@ function buildSummaryChain(
   ];
 }
 
-function extractSummaryRows(toolLogs: ToolLogEntry[]): Array<Record<string, unknown>> | null {
-  for (let index = toolLogs.length - 1; index >= 0; index -= 1) {
-    const log = toolLogs[index];
-    const output = log?.output as Record<string, unknown> | undefined;
-    if (!output || typeof output !== "object") {
-      continue;
-    }
-    const rows = (output as { rows?: unknown }).rows;
-    if (Array.isArray(rows)) {
-      return rows as Array<Record<string, unknown>>;
-    }
-  }
-  return null;
-}
-
 function buildReasoningFromToolLogs(
   toolLogs: ToolLogEntry[],
   summary: SummaryStats | null,
@@ -447,6 +349,7 @@ export default function AskAI() {
   const [assistantMeta, setAssistantMeta] = useState<Record<string, AssistantMetadata>>({});
   const [activePersona, setActivePersona] = useState<(typeof personaOptions)[number]["value"]>("executive");
   const activePrompts = useMemo(() => personaPromptMap[activePersona], [activePersona]);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const submitQuestion = useCallback(
     async (text: string) => {
@@ -488,7 +391,7 @@ export default function AskAI() {
         summary: null,
         chainSteps: buildSummaryChain(null, question, true, []),
         reasoningText: "",
-        toolState: baseToolState,
+        toolState: null,
         toolLogs: [],
       };
 
@@ -546,18 +449,6 @@ export default function AskAI() {
           }
         }
 
-        if (!latestDisplay.trim()) {
-          const fallback = "I wasn't able to generate an answer this time.";
-          latestDisplay = fallback;
-          setMessages((prev) =>
-            prev.map((message) =>
-              message.id === assistantId
-                ? { ...message, content: fallback }
-                : message
-            )
-          );
-        }
-
         try {
           const headerId = response.headers.get("x-conversation-id");
           if (headerId) setConversationId(headerId);
@@ -581,6 +472,19 @@ export default function AskAI() {
         const reasoningText = buildReasoningFromToolLogs(toolLogs, summary, question);
         const toolState = deriveToolState(toolLogs, baseToolState.input);
 
+        if (!latestDisplay.trim()) {
+          const fallbackAnswer =
+            buildAssistantFallback(summary, toolLogs, question) ?? "I wasn't able to generate an answer this time.";
+          latestDisplay = fallbackAnswer;
+          setMessages((prev) =>
+            prev.map((message) =>
+              message.id === assistantId
+                ? { ...message, content: fallbackAnswer }
+                : message
+            )
+          );
+        }
+
         setAssistantMeta((prev) => {
           const current = prev[assistantId] ?? initialMeta;
           const nextMeta: AssistantMetadata = {
@@ -588,7 +492,7 @@ export default function AskAI() {
             summary,
             chainSteps: buildSummaryChain(summary, question, false, toolLogs),
             reasoningText,
-            toolState: toolState ?? null,
+            toolState: toolLogs.length > 0 ? toolState ?? null : null,
             toolLogs,
           };
           return {
@@ -700,12 +604,25 @@ export default function AskAI() {
             elements powered by Vercel AI Elements.
           </p>
         </div>
-        {error && (
-          <span className="text-destructive text-sm">{error}</span>
-        )}
+        <div className="flex items-center gap-4">
+          <label className="inline-flex items-center gap-2 text-xs" htmlFor="askai-advanced-toggle">
+            <input
+              id="askai-advanced-toggle"
+              type="checkbox"
+              className="accent-primary"
+              checked={showAdvanced}
+              onChange={(e) => setShowAdvanced(e.currentTarget.checked)}
+              aria-checked={showAdvanced}
+            />
+            Show advanced details
+          </label>
+          {error && (
+            <span className="text-destructive text-sm" role="alert" aria-live="polite">{error}</span>
+          )}
+        </div>
       </div>
 
-      <Conversation className="min-h-0 flex-1 rounded-xl border border-border/50 bg-background/80">
+      <Conversation className="min-h-0 flex-1 rounded-xl border border-border/50 bg-background/80" aria-label="Chat messages" role="log">
         <ConversationContent>
           {messages.length === 0 ? (
             <ConversationEmptyState
@@ -720,7 +637,7 @@ export default function AskAI() {
                   ? assistantMeta[message.id]
                   : undefined;
               const summaryRows = meta?.summary?.rows.slice(0, 5) ?? null;
-              const summaryCard = meta?.summary ? (
+              const summaryCard = meta?.summary && showAdvanced ? (
                 <Artifact className="bg-background/80">
                   <ArtifactHeader>
                     <ArtifactTitle>ACE enforcement snapshot</ArtifactTitle>
@@ -832,7 +749,7 @@ export default function AskAI() {
                             <BranchMessages>
                               <div className="grid gap-4">
                                 <Response>{message.content}</Response>
-                                {meta?.summary && (
+                                {meta?.summary && showAdvanced && (
                                   <InlineCitation className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                                     <InlineCitationText>
                                       Source: NYC Open Data
@@ -866,7 +783,7 @@ export default function AskAI() {
                               </div>
                               <div className="grid gap-4">
                                 {summaryCard}
-                                {summaryRows && (
+                                {summaryRows && showAdvanced && (
                                   <CodeBlock
                                     code={JSON.stringify(summaryRows, null, 2)}
                                     language="json"
@@ -877,49 +794,55 @@ export default function AskAI() {
                                 )}
                               </div>
                             </BranchMessages>
-                            <BranchSelector from="assistant">
-                              <BranchPrevious />
-                              <BranchPage />
-                              <BranchNext />
-                            </BranchSelector>
+                            {showAdvanced && (
+                              <BranchSelector from="assistant">
+                                <BranchPrevious />
+                                <BranchPage />
+                                <BranchNext />
+                              </BranchSelector>
+                            )}
                           </Branch>
                         )}
 
-                        <ChainOfThought defaultOpen={false}>
-                          <ChainOfThoughtHeader />
-                          <ChainOfThoughtContent>
-                            <ChainOfThoughtSearchResults>
-                              <ChainOfThoughtSearchResult>
-                                {meta?.summary
-                                  ? `${meta.summary.routeCount} routes analysed`
-                                  : meta?.toolLogs?.length
-                                  ? `${meta.toolLogs.length} tool ${meta.toolLogs.length === 1 ? "call" : "calls"}`
-                                  : "No tool calls"}
-                              </ChainOfThoughtSearchResult>
-                            </ChainOfThoughtSearchResults>
-                            {(meta?.chainSteps ?? []).map((step) => (
-                              <ChainOfThoughtStep
-                                key={step.label}
-                                label={step.label}
-                                description={step.description}
-                                status={step.status}
-                              />
-                            ))}
-                          </ChainOfThoughtContent>
-                        </ChainOfThought>
+                        {showAdvanced && (
+                          <ChainOfThought defaultOpen={false}>
+                            <ChainOfThoughtHeader />
+                            <ChainOfThoughtContent>
+                              <ChainOfThoughtSearchResults>
+                                <ChainOfThoughtSearchResult>
+                                  {meta?.summary
+                                    ? `${meta.summary.routeCount} routes analysed`
+                                    : meta?.toolLogs?.length
+                                    ? `${meta.toolLogs.length} tool ${meta.toolLogs.length === 1 ? "call" : "calls"}`
+                                    : "No tool calls"}
+                                </ChainOfThoughtSearchResult>
+                              </ChainOfThoughtSearchResults>
+                              {(meta?.chainSteps ?? []).map((step) => (
+                                <ChainOfThoughtStep
+                                  key={step.label}
+                                  label={step.label}
+                                  description={step.description}
+                                  status={step.status}
+                                />
+                              ))}
+                            </ChainOfThoughtContent>
+                          </ChainOfThought>
+                        )}
 
-                        <Reasoning
-                          isStreaming={isStreaming && activeAssistantId === message.id}
-                          defaultOpen
-                          duration={meta?.summary ? Math.max(1, Math.round(meta.summary.rows.length / 40)) : undefined}
-                        >
-                          <ReasoningTrigger />
-                          <ReasoningContent>
-                            {meta?.reasoningText || "Reasoning unavailable for this turn."}
-                          </ReasoningContent>
-                        </Reasoning>
+                        {showAdvanced && (
+                          <Reasoning
+                            isStreaming={isStreaming && activeAssistantId === message.id}
+                            defaultOpen
+                            duration={meta?.summary ? Math.max(1, Math.round(meta.summary.rows.length / 40)) : undefined}
+                          >
+                            <ReasoningTrigger />
+                            <ReasoningContent>
+                              {meta?.reasoningText || "Reasoning unavailable for this turn."}
+                            </ReasoningContent>
+                          </Reasoning>
+                        )}
 
-                        {meta?.toolState && (
+                        {meta?.toolState && showAdvanced && (
                           <Tool defaultOpen className="bg-background/70">
                             <ToolHeader
                               type={toolHeaderType}
@@ -935,7 +858,7 @@ export default function AskAI() {
                           </Tool>
                         )}
 
-                        {meta?.summary && (
+                        {meta?.summary && showAdvanced && (
                           <Sources>
                             <SourcesTrigger count={1} />
                             <SourcesContent>
@@ -946,18 +869,20 @@ export default function AskAI() {
                           </Sources>
                         )}
 
-                        <OpenIn query={meta?.prompt || message.content || ""}>
-                          <OpenInTrigger />
-                          <OpenInContent>
-                            <OpenInLabel>Continue in another chat</OpenInLabel>
-                            <OpenInChatGPT />
-                            <OpenInClaude />
-                            <OpenInT3 />
-                            <OpenInSeparator />
-                            <OpenInScira />
-                            <OpenInv0 />
-                          </OpenInContent>
-                        </OpenIn>
+                        {showAdvanced && (
+                          <OpenIn query={meta?.prompt || message.content || ""}>
+                            <OpenInTrigger />
+                            <OpenInContent>
+                              <OpenInLabel>Continue in another chat</OpenInLabel>
+                              <OpenInChatGPT />
+                              <OpenInClaude />
+                              <OpenInT3 />
+                              <OpenInSeparator />
+                              <OpenInScira />
+                              <OpenInv0 />
+                            </OpenInContent>
+                          </OpenIn>
+                        )}
                       </div>
                     ) : (
                       <div className="grid gap-2">
@@ -1017,12 +942,15 @@ export default function AskAI() {
       <PromptInput
         onSubmit={handleSubmit}
         className="rounded-xl border border-border/60 bg-background/90"
+        aria-busy={status === "submitted" || status === "streaming"}
+        aria-label="Message input form"
       >
         <PromptInputBody>
           <PromptInputTextarea
             value={inputValue}
             onChange={(event) => setInputValue(event.target.value)}
             placeholder="Ask about ACE violations, exemptions, trends, or tooling…"
+            aria-label="Message"
           />
         </PromptInputBody>
         <PromptInputToolbar>

@@ -42,24 +42,26 @@ export default function ToolsChat() {
   );
 
   return (
-    <div className="rounded-2xl border border-border/60 bg-card/70 p-4">
-      <div className="mb-3 flex items-center justify-between gap-2">
+    <div className="rounded-2xl border border-border/60 bg-card/70 p-3 sm:p-4" role="region" aria-label="Tool-enabled chat">
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h3 className="text-base font-semibold">Tool-enabled streaming chat</h3>
-          <p className="text-xs text-muted-foreground">{helpText}</p>
+          <h3 className="text-sm font-semibold sm:text-base">Tool-enabled streaming chat</h3>
+          <p className="text-xs text-muted-foreground" id="toolschat-helptext">{helpText}</p>
         </div>
-        <label className="inline-flex items-center gap-2 text-xs">
+        <label className="inline-flex items-center gap-2 text-xs" htmlFor="toggle-show-tools">
           <input
+            id="toggle-show-tools"
             type="checkbox"
             className="accent-primary"
             checked={showTools}
             onChange={(e) => setShowTools(e.target.checked)}
+            aria-describedby="toolschat-helptext"
           />
           Show tools
         </label>
       </div>
 
-      <div className="mb-3 max-h-[22rem] space-y-3 overflow-y-auto rounded-xl border border-border/60 bg-background/80 p-4">
+      <div className="mb-3 max-h-[18rem] space-y-3 overflow-y-auto rounded-xl border border-border/60 bg-background/80 p-3 sm:max-h-[22rem] sm:p-4" role="log" aria-label="Messages">
         {messages.length === 0 && (
           <div className="text-sm text-muted-foreground">
             Try: "What's the weather in New York?" or "What's the weather in New York in celsius?"
@@ -124,7 +126,7 @@ export default function ToolsChat() {
       </div>
 
       <form
-        className="flex items-center gap-2"
+        className="flex flex-col gap-2 sm:flex-row sm:items-center"
         onSubmit={(e) => {
           e.preventDefault();
           const text = input.trim();
@@ -142,18 +144,20 @@ export default function ToolsChat() {
               : "Ask about the weather, e.g., New York in celsius"
           }
           onChange={(e) => setInput(e.currentTarget.value)}
+          aria-label="Message"
         />
         <button
           type="submit"
-          className="rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+          className="rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground hover:bg-primary/90 sm:flex-shrink-0"
           disabled={status === "streaming"}
+          aria-label="Send"
         >
           Send
         </button>
       </form>
 
       {error && (
-        <div className="mt-2 text-xs text-destructive">{String(error)}</div>
+        <div className="mt-2 text-xs text-destructive" role="alert" aria-live="polite">{String(error)}</div>
       )}
     </div>
   );

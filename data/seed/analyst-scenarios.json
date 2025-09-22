@@ -1,0 +1,20 @@
+[
+  {
+    "title": "Campus Route Health Check",
+    "description": "Summarize utilization, speed change, and violation pressure for a selected campus shuttle corridor.",
+    "expectedInputs": "route_id, start_ts, end_ts",
+    "playbook": "1) Pull ACE violations grouped by month; 2) Join to AVL speed data; 3) Compare against enrollment peaks; 4) Recommend curb interventions."
+  },
+  {
+    "title": "Exempt Vehicle Audit",
+    "description": "Find repeat exempt fleets and quantify dwell time hotspots.",
+    "expectedInputs": "vehicle_id, reason_code, route_id",
+    "playbook": "1) Filter ACE violations where violation_status='Exempt'; 2) Rank vehicles by occurrences; 3) Map hotspots; 4) Output escalation memo."
+  },
+  {
+    "title": "CBD Congestion Pulse",
+    "description": "Measure violation shifts for CBD routes post pricing go-live and estimate speed elasticity.",
+    "expectedInputs": "route_id[], date_range",
+    "playbook": "1) Compare mean violations pre/post; 2) Pull MTA bus time speeds; 3) Regress speed on violation rate; 4) Surface recommended toll adjustments."
+  }
+]

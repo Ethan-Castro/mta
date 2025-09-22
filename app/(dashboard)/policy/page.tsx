@@ -1,13 +1,9 @@
 "use client";
 import dynamic from "next/dynamic";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import InsightCard from "@/components/InsightCard";
-import {
-  CBD_ROUTE_TRENDS,
-  DOCUMENTATION_LINKS,
-  ROUTE_COMPARISONS,
-} from "@/lib/data/insights";
-import { CUNY_CAMPUSES } from "@/lib/data/cuny";
+import type { RouteComparison, CbdRouteTrend, DocumentationLink } from "@/lib/data/insights";
+import type { Campus } from "@/lib/data/cuny";
 import { Source, Sources, SourcesContent, SourcesTrigger } from "@/components/ai-elements/sources";
 import {
   Select,
@@ -33,88 +29,162 @@ export default function PolicyPage() {
   const [showExplain, setShowExplain] = useState(false);
   const [showAllRoutes, setShowAllRoutes] = useState(false);
   const [selectedBorough, setSelectedBorough] = useState<string>("all");
+  const [routeComparisons, setRouteComparisons] = useState<RouteComparison[]>([]);
+  const [cbdRouteTrends, setCbdRouteTrends] = useState<CbdRouteTrend[]>([]);
+  const [documents, setDocuments] = useState<DocumentationLink[]>([]);
+  const [campuses, setCampuses] = useState<Campus[]>([]);
+  const [curatedError, setCuratedError] = useState<string | null>(null);
+  const [campusError, setCampusError] = useState<string | null>(null);
 
   const MapPanel = useMemo(
     () => dynamic(() => import("@/components/MapPanel"), { ssr: false }),
     []
   );
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadCurated() {
+      try {
+        const res = await fetch("/api/insights/curated?include=routes,cbdRoutes,documents", { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        if (!json?.ok) throw new Error(json?.error || "Failed to load policy insights");
+        const data = json?.data || {};
+        if (!cancelled) {
+          setRouteComparisons(Array.isArray(data.routes) ? (data.routes as RouteComparison[]) : []);
+          setCbdRouteTrends(Array.isArray(data.cbdRoutes) ? (data.cbdRoutes as CbdRouteTrend[]) : []);
+          setDocuments(Array.isArray(data.documents) ? (data.documents as DocumentationLink[]) : []);
+          setCuratedError(null);
+        }
+      } catch (error) {
+        console.error("Unable to load policy curated data", error);
+        if (!cancelled) {
+          setRouteComparisons([]);
+          setCbdRouteTrends([]);
+          setDocuments([]);
+          setCuratedError("Unable to load curated policy insights. Some cards may be empty.");
+        }
+      }
+    }
+
+    loadCurated();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadCampuses() {
+      try {
+        const res = await fetch("/api/cuny/campuses", { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        if (!json?.ok) throw new Error(json?.error || "Failed to load campuses");
+        if (!cancelled) {
+          setCampuses(Array.isArray(json?.campuses) ? (json.campuses as Campus[]) : []);
+          setCampusError(null);
+        }
+      } catch (error) {
+        console.error("Unable to load campuses", error);
+        if (!cancelled) {
+          setCampuses([]);
+          setCampusError("Unable to load campus reference data.");
+        }
+      }
+    }
+
+    loadCampuses();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const boroughOptions = useMemo(() => {
-    const unique = Array.from(new Set(CBD_ROUTE_TRENDS.map((route) => route.boroughs))).sort();
+    const unique = Array.from(new Set(cbdRouteTrends.map((route) => route.boroughs))).sort();
     return [
       { value: "all", label: "All boroughs" },
       ...unique.map((borough) => ({ value: borough, label: borough })),
     ];
-  }, []);
+  }, [cbdRouteTrends]);
 
   const policyRoutes = useMemo(
     () =>
-      CBD_ROUTE_TRENDS.filter((route) => {
+      cbdRouteTrends.filter((route) => {
         const include = showAllRoutes || route.crossesCbd;
         const matchesBorough = selectedBorough === "all" || route.boroughs.toLowerCase().includes(selectedBorough.toLowerCase());
         return include && matchesBorough;
       }),
-    [showAllRoutes, selectedBorough]
+    [cbdRouteTrends, showAllRoutes, selectedBorough]
   );
 
   const avgViolationChange = policyRoutes.length
-    ? policyRoutes.reduce((acc, route) => acc + route.violationChangePct, 0) / policyRoutes.length
+    ? policyRoutes.reduce((acc, route) => acc + Number(route.violationChangePct ?? 0), 0) / policyRoutes.length
     : 0;
   const avgSpeedDelta = policyRoutes.length
-    ? policyRoutes.reduce((acc, route) => acc + route.speedChangePct, 0) / policyRoutes.length
+    ? policyRoutes.reduce((acc, route) => acc + Number(route.speedChangePct ?? 0), 0) / policyRoutes.length
     : 0;
-  const routesNeedingAce = ROUTE_COMPARISONS.filter((route) => !route.aceEnforced);
+  const routesNeedingAce = routeComparisons.filter((route) => !route.aceEnforced);
   const cbdRoutes = policyRoutes.filter((route) => route.crossesCbd);
   const campusMarkers = useMemo(
     () =>
-      CUNY_CAMPUSES.filter((campus) => {
-        if (selectedBorough === "all") return true;
-        const boroughLower = selectedBorough.toLowerCase();
-        // Map borough label to campus.city values used in dataset
-        // Manhattan campuses are recorded as "New York"
-        const boroughToCity: Record<string, string[]> = {
-          manhattan: ["new york"],
-          bronx: ["bronx"],
-          brooklyn: ["brooklyn"],
-          queens: ["flushing", "long island city", "bayside", "jamaica"],
-          "bronx/manhattan": ["bronx", "new york"],
-          staten: ["staten island"],
-          "staten island": ["staten island"],
-        };
-        const cities = boroughToCity[boroughLower] || [boroughLower];
-        const cityMatch = cities.some((c) => campus.city.toLowerCase().includes(c));
-        const nameMatch = campus.campus.toLowerCase().includes(boroughLower);
-        return cityMatch || nameMatch;
-      }).map((campus) => ({
-        id: `campus-${campus.campus.replace(/\s+/g, '-').toLowerCase()}`,
-        longitude: campus.longitude,
-        latitude: campus.latitude,
-        color: "#8b5cf6", // Purple for campuses
-        title: campus.campus,
-        description: `${campus.type} | ${campus.address}, ${campus.city}, ${campus.state}`,
-        href: campus.website,
-      })),
-    [selectedBorough]
+      campuses
+        .filter((campus) => {
+          if (campus.latitude == null || campus.longitude == null) return false;
+          if (selectedBorough === "all") return true;
+          const boroughLower = selectedBorough.toLowerCase();
+          const boroughToCity: Record<string, string[]> = {
+            manhattan: ["new york"],
+            bronx: ["bronx"],
+            brooklyn: ["brooklyn"],
+            queens: ["flushing", "long island city", "bayside", "jamaica"],
+            "bronx/manhattan": ["bronx", "new york"],
+            staten: ["staten island"],
+            "staten island": ["staten island"],
+          };
+          const cities = boroughToCity[boroughLower] || [boroughLower];
+          const city = (campus.city || "").toLowerCase();
+          const cityMatch = cities.some((c) => city.includes(c));
+          const nameMatch = campus.campus.toLowerCase().includes(boroughLower);
+          return cityMatch || nameMatch;
+        })
+        .map((campus) => ({
+          id: `campus-${campus.campus.replace(/\s+/g, '-').toLowerCase()}`,
+          longitude: Number(campus.longitude),
+          latitude: Number(campus.latitude),
+          color: "#8b5cf6", // Purple for campuses
+          title: campus.campus,
+          description: `${campus.type ?? "Campus"} | ${campus.address ?? ""}${campus.city ? `, ${campus.city}` : ""}${campus.state ? `, ${campus.state}` : ""}`,
+          href: campus.website ?? undefined,
+        })),
+    [campuses, selectedBorough]
   );
 
   const markers = useMemo(
     () => [
-      ...policyRoutes.map((route) => ({
-        id: route.routeId,
-        longitude: route.longitude,
-        latitude: route.latitude,
-        color: route.crossesCbd ? "#2563eb" : "#f97316",
-        title: `${route.routeId} | ${route.routeName}`,
-        description: `${formatChange(route.speedChangePct)} speed | ${formatChange(route.violationChangePct)} violations | ${route.boroughs}`,
-      })),
+      ...policyRoutes
+        .filter((route) => route.longitude != null && route.latitude != null)
+        .map((route) => ({
+          id: route.routeId,
+          longitude: Number(route.longitude),
+          latitude: Number(route.latitude),
+          color: route.crossesCbd ? "#2563eb" : "#f97316",
+          title: `${route.routeId} | ${route.routeName}`,
+          description: `${formatChange(Number(route.speedChangePct ?? 0))} speed | ${formatChange(Number(route.violationChangePct ?? 0))} violations | ${route.boroughs}`,
+        })),
       ...campusMarkers,
     ],
     [policyRoutes, campusMarkers]
   );
 
   const topOpportunities = useMemo(
-    () => [...CBD_ROUTE_TRENDS].sort((a, b) => a.violationChangePct - b.violationChangePct).slice(0, 3),
-    []
+    () =>
+      [...cbdRouteTrends]
+        .sort((a, b) => Number(a.violationChangePct ?? 0) - Number(b.violationChangePct ?? 0))
+        .slice(0, 3),
+    [cbdRouteTrends]
   );
 
   return (
@@ -123,6 +193,12 @@ export default function PolicyPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Policy View</h1>
         <p className="text-sm text-foreground/70">Quantify ACE and congestion pricing impact.</p>
       </header>
+      {(curatedError || campusError) && (
+        <div className="rounded-lg border border-destructive/60 bg-destructive/10 p-3 text-xs text-destructive space-y-1">
+          {curatedError && <div>{curatedError}</div>}
+          {campusError && <div>{campusError}</div>}
+        </div>
+      )}
       <section aria-labelledby="policy-brief" className="rounded-xl border border-border/60 bg-card/70 p-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-2">
@@ -185,7 +261,7 @@ export default function PolicyPage() {
         />
         <InsightCard
           title="Docs tracked"
-          value={`${DOCUMENTATION_LINKS.length}`}
+          value={`${documents.length}`}
           subline="Linked regulations & datasets"
           trendLabel="Toggle non-CBD"
           trendDelta={showAllRoutes ? "On" : "Off"}
@@ -272,7 +348,7 @@ export default function PolicyPage() {
       <div className="rounded-xl border border-foreground/10 p-4 space-y-3">
         <h2 className="text-sm font-medium">Documentation to cite</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-          {DOCUMENTATION_LINKS.map((doc) => (
+          {documents.map((doc) => (
             <a key={doc.href} href={doc.href} target="_blank" rel="noopener noreferrer" className="rounded-lg border border-foreground/10 px-3 py-2 hover:border-foreground/30 transition-colors">
               <div className="font-medium text-foreground/90">{doc.title}</div>
               <p className="mt-1 text-xs text-foreground/60 leading-relaxed">{doc.summary}</p>
@@ -283,9 +359,9 @@ export default function PolicyPage() {
       <div className="rounded-xl border border-foreground/10 p-4">
         <h2 className="text-sm font-medium mb-3">Sources</h2>
         <Sources>
-          <SourcesTrigger count={DOCUMENTATION_LINKS.length} />
+          <SourcesTrigger count={documents.length} />
           <SourcesContent>
-            {DOCUMENTATION_LINKS.map((doc) => (
+            {documents.map((doc) => (
               <Source key={doc.href} href={doc.href} title={doc.title} />
             ))}
           </SourcesContent>

@@ -1,0 +1,62 @@
+[
+  {
+    "id": "m15-57th",
+    "routeId": "M15-SBS",
+    "campus": "Hunter College",
+    "location": "E 57 St & 3rd Ave",
+    "latitude": 40.759094,
+    "longitude": -73.969559,
+    "averageDailyViolations": 64,
+    "exemptSharePct": 27.0,
+    "recurringVehicles": 19,
+    "highlight": "High exempt share from commercial loading zones overlapping with SBS stop; monitor curb regulation compliance."
+  },
+  {
+    "id": "bx12-fordham",
+    "routeId": "Bx12-SBS",
+    "campus": "Lehman College",
+    "location": "Fordham Rd & Jerome Ave",
+    "latitude": 40.862767,
+    "longitude": -73.901118,
+    "averageDailyViolations": 41,
+    "exemptSharePct": 33.0,
+    "recurringVehicles": 11,
+    "highlight": "Repeat exempt utility vans hold curb during evening class dismissals; coordinate with NYPD traffic agents."
+  },
+  {
+    "id": "q46-kissena",
+    "routeId": "Q46",
+    "campus": "Queens College",
+    "location": "Kissena Blvd & Melbourne Ave",
+    "latitude": 40.736968,
+    "longitude": -73.819412,
+    "averageDailyViolations": 28,
+    "exemptSharePct": 12.0,
+    "recurringVehicles": 7,
+    "highlight": "No ACE coverage; consider mobile camera pilot tied to evening shuttle arrivals."
+  },
+  {
+    "id": "b44-flatbush",
+    "routeId": "B44-SBS",
+    "campus": "Brooklyn College",
+    "location": "Flatbush Ave & Nostrand Junction",
+    "latitude": 40.632881,
+    "longitude": -73.947632,
+    "averageDailyViolations": 46,
+    "exemptSharePct": 17.0,
+    "recurringVehicles": 13,
+    "highlight": "Bus-only left turns conflict with delivery vehicles; align traffic signal priority with enforcement cadence."
+  },
+  {
+    "id": "s79-bay",
+    "routeId": "S79-SBS",
+    "campus": "College of Staten Island",
+    "location": "Hylan Blvd & Bay St",
+    "latitude": 40.643045,
+    "longitude": -74.074094,
+    "averageDailyViolations": 22,
+    "exemptSharePct": 38.0,
+    "recurringVehicles": 9,
+    "highlight": "Exempt ferry vendor vehicles spike during PM peak; explore shared loading windows with DOT curb team."
+  }
+]

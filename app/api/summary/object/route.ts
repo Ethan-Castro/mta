@@ -27,7 +27,6 @@ export async function POST(req: Request) {
       schema: SummarySchema,
       system: "Extract concise KPIs and recommendations from ACE analytics.",
       prompt: `Summarize and structure this data for executives: ${JSON.stringify(data).slice(0, 8000)}`,
-      temperature: 0.2,
     });
     return NextResponse.json({ ok: true, object });
   } catch (e: any) {

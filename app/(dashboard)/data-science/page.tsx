@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -34,13 +34,7 @@ import {
   Zap,
   Target
 } from "lucide-react";
-import {
-  AI_STARTER_PROMPTS,
-  ANALYST_SCENARIOS,
-  DOCUMENTATION_LINKS,
-  STUDENT_PROMPTS,
-  STUDENT_DB_RECIPES,
-} from "@/lib/data/insights";
+import type { AnalystScenario, DocumentationLink, StudentDbRecipe } from "@/lib/data/insights";
 const AskAI = dynamic(() => import("@/components/AskAI"), { ssr: false });
 
 const systemPrompt = `You are the ACE Transit Intelligence Copilot. Your charter:
@@ -54,9 +48,69 @@ export default function DataSciencePage() {
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<null | { ok: boolean; jobId?: string }>(null);
   const [showExplain, setShowExplain] = useState(false);
+  const [starterPrompts, setStarterPrompts] = useState<string[]>([]);
+  const [studentPrompts, setStudentPrompts] = useState<string[]>([]);
+  const [analystScenarios, setAnalystScenarios] = useState<AnalystScenario[]>([]);
+  const [documents, setDocuments] = useState<DocumentationLink[]>([]);
+  const [recipes, setRecipes] = useState<StudentDbRecipe[]>([]);
+  const [curatedError, setCuratedError] = useState<string | null>(null);
+  const [curatedLoading, setCuratedLoading] = useState<boolean>(true);
 
-  const prompts = useMemo(() => AI_STARTER_PROMPTS.slice(0, 5), []);
-  const studentPrompts = useMemo(() => STUDENT_PROMPTS.slice(0, 4), []);
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadCurated() {
+      setCuratedLoading(true);
+      try {
+        const res = await fetch(
+          "/api/insights/curated?include=starterPrompts,studentPrompts,analystScenarios,studentDbRecipes,documents",
+          { cache: "no-store" }
+        );
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        if (!json?.ok) throw new Error(json?.error || "Failed to load curated AI assets");
+        const data = json?.data || {};
+        if (!cancelled) {
+          setStarterPrompts(
+            Array.isArray(data.starterPrompts)
+              ? (data.starterPrompts as Array<{ prompt: string }>).map((item) => item.prompt)
+              : []
+          );
+          setStudentPrompts(
+            Array.isArray(data.studentPrompts)
+              ? (data.studentPrompts as Array<{ prompt: string }>).map((item) => item.prompt)
+              : []
+          );
+          setAnalystScenarios(Array.isArray(data.analystScenarios) ? (data.analystScenarios as AnalystScenario[]) : []);
+          setRecipes(Array.isArray(data.studentDbRecipes) ? (data.studentDbRecipes as StudentDbRecipe[]) : []);
+          setDocuments(Array.isArray(data.documents) ? (data.documents as DocumentationLink[]) : []);
+          setCuratedError(null);
+        }
+      } catch (error) {
+        console.error("Unable to load AI curated datasets", error);
+        if (!cancelled) {
+          setStarterPrompts([]);
+          setStudentPrompts([]);
+          setAnalystScenarios([]);
+          setRecipes([]);
+          setDocuments([]);
+          setCuratedError("Unable to load curated AI references. Some panels below may be empty.");
+        }
+      } finally {
+        if (!cancelled) {
+          setCuratedLoading(false);
+        }
+      }
+    }
+
+    loadCurated();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const prompts = useMemo(() => starterPrompts.slice(0, 5), [starterPrompts]);
+  const studentPromptSuggestions = useMemo(() => studentPrompts.slice(0, 4), [studentPrompts]);
 
   async function onPredict() {
     setRunning(true);
@@ -107,6 +161,11 @@ export default function DataSciencePage() {
         <h1 className="text-2xl font-semibold tracking-tight">Data Science & AI</h1>
         <p className="text-sm text-foreground/70">Advanced analytics, ML predictions, and intelligent workflow orchestration.</p>
       </header>
+      {curatedError && (
+        <div className="rounded-lg border border-destructive/60 bg-destructive/10 p-3 text-xs text-destructive">
+          {curatedError}
+        </div>
+      )}
       <section aria-labelledby="datascience-brief" className="rounded-xl border border-border/60 bg-card/70 p-4">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
@@ -377,7 +436,7 @@ export default function DataSciencePage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3 text-sm">
-                  {studentPrompts.map((prompt, idx) => (
+                  {studentPromptSuggestions.map((prompt, idx) => (
                     <button
                       key={idx}
                       onClick={() => setResult({ ok: true, jobId: prompt })}
@@ -397,7 +456,7 @@ export default function DataSciencePage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3 text-sm">
-                  {STUDENT_DB_RECIPES.map((recipe, idx) => (
+                  {recipes.map((recipe, idx) => (
                     <div key={idx} className="rounded-lg border border-foreground/10 p-3">
                       <div className="font-medium text-foreground/90">{recipe.title}</div>
                       <p className="mt-1 text-xs text-foreground/60">{recipe.description}</p>
@@ -459,7 +518,7 @@ export default function DataSciencePage() {
       <div className="rounded-xl border border-foreground/10 p-4 space-y-3">
         <h2 className="text-sm font-medium">Scenario blueprints</h2>
         <ul className="space-y-3 text-sm text-foreground/80">
-          {ANALYST_SCENARIOS.map((scenario) => (
+          {analystScenarios.map((scenario) => (
             <li key={scenario.title} className="rounded-lg border border-foreground/10 p-3">
               <div className="font-medium text-foreground/90">{scenario.title}</div>
               <div className="mt-1 text-xs text-foreground/60">Expected inputs: {scenario.expectedInputs}</div>
@@ -472,7 +531,7 @@ export default function DataSciencePage() {
       <div className="rounded-xl border border-foreground/10 p-4 space-y-3">
         <h2 className="text-sm font-medium">Reference material</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-          {DOCUMENTATION_LINKS.map((doc) => (
+          {documents.map((doc) => (
             <a key={doc.href} href={doc.href} target="_blank" rel="noopener noreferrer" className="rounded-lg border border-foreground/10 px-3 py-2 hover:border-foreground/30 transition-colors">
               <div className="font-medium text-foreground/90">{doc.title}</div>
               <p className="mt-1 text-xs text-foreground/60 leading-relaxed">{doc.summary}</p>

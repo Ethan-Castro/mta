@@ -93,11 +93,11 @@ const readinessChecklist = [
 export default function Home() {
   return (
     <main className="min-h-screen bg-background">
-      <div className="mx-auto flex max-w-6xl flex-col gap-16 px-6 py-12 sm:gap-20 sm:py-16">
-        <header className="space-y-6 rounded-3xl border border-primary/20 bg-primary/5 p-8 shadow-sm">
+      <div className="mx-auto flex max-w-6xl flex-col gap-12 px-4 py-8 sm:gap-16 sm:px-6 sm:py-12 lg:gap-20 lg:py-16">
+        <header className="space-y-4 rounded-3xl border border-primary/20 bg-primary/5 p-6 shadow-sm sm:space-y-6 sm:p-8">
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-widest text-primary">MTA Datathon 2025</p>
-            <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl lg:text-4xl">
               ACE Insight Studio for Executives, Analysts, and Campus Advocates
             </h1>
             <p className="max-w-2xl text-sm text-foreground/70 sm:text-base">
@@ -119,26 +119,26 @@ export default function Home() {
               <p className="mt-1 text-primary/80">Quantify congestion pricing impacts on ACE corridors and prepare policy-ready reporting.</p>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-3 text-sm">
+          <div className="flex flex-col gap-3 text-sm sm:flex-row sm:items-center">
             <a
               href="/chat"
-              className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+              className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-4 py-2 font-medium text-primary-foreground transition-colors hover:bg-primary/90"
             >
               Launch ACE Copilot
             </a>
             <a
               href="/executive"
-              className="inline-flex items-center gap-1 rounded-full border border-primary/40 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-primary hover:border-primary/60"
+              className="inline-flex items-center justify-center gap-1 rounded-full border border-primary/40 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-primary hover:border-primary/60"
             >
               Explore dashboards
             </a>
           </div>
         </header>
 
-        <section aria-labelledby="personas" className="space-y-6">
+        <section aria-labelledby="personas" className="space-y-4 sm:space-y-6">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h2 id="personas" className="text-2xl font-semibold tracking-tight text-foreground">Workspace navigation</h2>
+              <h2 id="personas" className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">Workspace navigation</h2>
               <p className="text-sm text-foreground/70">Each view is tuned to a stakeholder persona and datathon deliverable.</p>
             </div>
             <p className="text-xs text-foreground/50">Tip: bookmark the views your teammates use most.</p>
@@ -148,11 +148,11 @@ export default function Home() {
               <a
                 key={persona.href}
                 href={persona.href}
-                className="flex h-full flex-col rounded-2xl border border-border/60 bg-card/70 p-5 transition-colors hover:border-primary/40 hover:bg-primary/5"
+                className="flex h-full flex-col rounded-2xl border border-border/60 bg-card/70 p-4 transition-colors hover:border-primary/40 hover:bg-primary/5 sm:p-5"
               >
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-lg font-semibold text-foreground">{persona.title}</h3>
+                    <h3 className="text-base font-semibold text-foreground sm:text-lg">{persona.title}</h3>
                     <p className="text-xs uppercase tracking-wide text-primary/80">{persona.subtitle}</p>
                   </div>
                   <span className="text-primary">→</span>
@@ -165,12 +165,12 @@ export default function Home() {
 
         <section aria-labelledby="questions" className="space-y-4">
           <div className="flex flex-col gap-2">
-            <h2 id="questions" className="text-2xl font-semibold tracking-tight text-foreground">Business questions in scope</h2>
+            <h2 id="questions" className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">Business questions in scope</h2>
             <p className="text-sm text-foreground/70">Use the workspace tabs or the ACE copilot prompts to dive deeper.</p>
           </div>
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {businessQuestions.map((item) => (
-              <div key={item.title} className="rounded-2xl border border-border/60 bg-card/70 p-5">
+              <div key={item.title} className="rounded-2xl border border-border/60 bg-card/70 p-4 sm:p-5">
                 <h3 className="text-sm font-semibold text-foreground">{item.title}</h3>
                 <p className="mt-2 text-sm text-foreground/70">{item.detail}</p>
               </div>
@@ -178,16 +178,16 @@ export default function Home() {
           </div>
         </section>
 
-        <section aria-labelledby="features" className="space-y-6">
+        <section aria-labelledby="features" className="space-y-4 sm:space-y-6">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h2 id="features" className="text-2xl font-semibold tracking-tight text-foreground">Why this studio stands out</h2>
+              <h2 id="features" className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">Why this studio stands out</h2>
               <p className="text-sm text-foreground/70">More than static charts—this is a launchpad for decision-ready insights.</p>
             </div>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             {featureHighlights.map((feature) => (
-              <div key={feature.heading} className="rounded-2xl border border-border/60 bg-card/70 p-5">
+              <div key={feature.heading} className="rounded-2xl border border-border/60 bg-card/70 p-4 sm:p-5">
                 <h3 className="text-base font-semibold text-foreground">{feature.heading}</h3>
                 <p className="mt-2 text-sm text-foreground/70">{feature.copy}</p>
               </div>
@@ -197,26 +197,26 @@ export default function Home() {
 
         <section aria-labelledby="copilot" className="space-y-4">
           <div className="flex flex-col gap-2">
-            <h2 id="copilot" className="text-2xl font-semibold tracking-tight text-foreground">ACE copilot: your always-on analyst</h2>
+            <h2 id="copilot" className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">ACE copilot: your always-on analyst</h2>
             <p className="text-sm text-foreground/70">Connect prompts with live data, SQL, and Python (Neon Postgres ready).</p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="rounded-2xl border border-border/60 bg-card/70 p-5">
+            <div className="rounded-2xl border border-border/60 bg-card/70 p-4 sm:p-5">
               <h3 className="text-sm font-semibold text-foreground">Natural-language questions</h3>
-              <p className="mt-2 text-sm text-foreground/70">“Compare M15-SBS vs Q46 this semester with charts” or “Draft a board-ready CBD summary.”</p>
+              <p className="mt-2 text-sm text-foreground/70">"Compare M15-SBS vs Q46 this semester with charts" or "Draft a board-ready CBD summary."</p>
             </div>
-            <div className="rounded-2xl border border-border/60 bg-card/70 p-5">
+            <div className="rounded-2xl border border-border/60 bg-card/70 p-4 sm:p-5">
               <h3 className="text-sm font-semibold text-foreground">Tool orchestration</h3>
               <p className="mt-2 text-sm text-foreground/70">Future integration includes SQL, Python, and viz helpers registered with the AI SDK.</p>
             </div>
-            <div className="rounded-2xl border border-border/60 bg-card/70 p-5">
+            <div className="rounded-2xl border border-border/60 bg-card/70 p-4 sm:p-5">
               <h3 className="text-sm font-semibold text-foreground">Shareable outputs</h3>
               <p className="mt-2 text-sm text-foreground/70">Use the chat transcript or generated markdown to brief executives and field teams quickly.</p>
             </div>
           </div>
           <a
             href="/chat"
-            className="inline-flex items-center gap-2 rounded-full border border-primary/40 px-4 py-2 text-sm font-medium text-primary hover:border-primary/60"
+            className="inline-flex items-center justify-center gap-2 rounded-full border border-primary/40 px-4 py-2 text-sm font-medium text-primary hover:border-primary/60"
           >
             Open the copilot workspace →
           </a>
@@ -224,10 +224,10 @@ export default function Home() {
 
         <section aria-labelledby="readiness" className="space-y-4">
           <div className="flex flex-col gap-2">
-            <h2 id="readiness" className="text-2xl font-semibold tracking-tight text-foreground">Data & ML readiness checklist</h2>
+            <h2 id="readiness" className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">Data & ML readiness checklist</h2>
             <p className="text-sm text-foreground/70">This project is built to plug into your Neon Postgres environment with minimal rework.</p>
           </div>
-          <div className="rounded-3xl border border-border/60 bg-background/90 p-6">
+          <div className="rounded-3xl border border-border/60 bg-background/90 p-4 sm:p-6">
             <ul className="grid gap-3 text-sm text-foreground/80 sm:grid-cols-2">
               {readinessChecklist.map((item) => (
                 <li key={item} className="flex items-start gap-2">
@@ -241,26 +241,26 @@ export default function Home() {
 
         <section aria-labelledby="next-steps" className="space-y-4">
           <div className="flex flex-col gap-2">
-            <h2 id="next-steps" className="text-2xl font-semibold tracking-tight text-foreground">What to do next</h2>
+            <h2 id="next-steps" className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">What to do next</h2>
             <p className="text-sm text-foreground/70">Coordinate with your team to finish the datathon submission with confidence.</p>
           </div>
           <ol className="grid gap-4 text-sm text-foreground/80 sm:grid-cols-2">
-            <li className="rounded-2xl border border-border/60 bg-card/70 p-5">
+            <li className="rounded-2xl border border-border/60 bg-card/70 p-4 sm:p-5">
               <span className="text-xs font-semibold uppercase tracking-wide text-primary">Step 1</span>
               <h3 className="mt-2 text-base font-semibold text-foreground">Sync on campus priorities</h3>
               <p className="mt-1">Use the Students and Operations views to align on which routes need the deepest dive.</p>
             </li>
-            <li className="rounded-2xl border border-border/60 bg-card/70 p-5">
+            <li className="rounded-2xl border border-border/60 bg-card/70 p-4 sm:p-5">
               <span className="text-xs font-semibold uppercase tracking-wide text-primary">Step 2</span>
               <h3 className="mt-2 text-base font-semibold text-foreground">Wire live data</h3>
               <p className="mt-1">Connect Neon Postgres and run the provided SQL recipes to feed real-time dashboards.</p>
             </li>
-            <li className="rounded-2xl border border-border/60 bg-card/70 p-5">
+            <li className="rounded-2xl border border-border/60 bg-card/70 p-4 sm:p-5">
               <span className="text-xs font-semibold uppercase tracking-wide text-primary">Step 3</span>
               <h3 className="mt-2 text-base font-semibold text-foreground">Leverage the copilot</h3>
               <p className="mt-1">Prompt the ACE assistant for writeups, visualizations, and simulation scripts.</p>
             </li>
-            <li className="rounded-2xl border border-border/60 bg-card/70 p-5">
+            <li className="rounded-2xl border border-border/60 bg-card/70 p-4 sm:p-5">
               <span className="text-xs font-semibold uppercase tracking-wide text-primary">Step 4</span>
               <h3 className="mt-2 text-base font-semibold text-foreground">Package the story</h3>
               <p className="mt-1">Use the Executive and Policy briefs to finalize decks, memos, and final judging submissions.</p>

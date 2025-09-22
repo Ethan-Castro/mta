@@ -2,8 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { getViolationTotals, getRouteTotals, getHotspots } from "@/lib/data/violations";
-import { ROUTE_COMPARISONS, CBD_ROUTE_TRENDS, VIOLATION_HOTSPOTS } from "@/lib/data/insights";
+import type { RouteComparison, CbdRouteTrend } from "@/lib/data/insights";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -50,7 +49,12 @@ const TREND_COLORS = {
   students: "#3B82F6",
 };
 
-export default function ExecutiveKpis() {
+type ExecutiveKpisProps = {
+  routeComparisons: RouteComparison[];
+  cbdRouteTrends: CbdRouteTrend[];
+};
+
+export default function ExecutiveKpis({ routeComparisons, cbdRouteTrends }: ExecutiveKpisProps) {
   const sp = useSearchParams();
   const globalRouteId = sp.get("routeId") || undefined;
   const globalStart = sp.get("start") || undefined;
@@ -135,9 +139,9 @@ export default function ExecutiveKpis() {
   const formatDate = (value: string | null) =>
     value ? new Date(value).toLocaleDateString(undefined, { month: "short", year: "numeric" }) : "n/a";
 
-  const aceRoutes = ROUTE_COMPARISONS.filter(route => route.aceEnforced);
+  const aceRoutes = routeComparisons.filter((route) => route.aceEnforced);
   const avgSpeedGain = aceRoutes.length
-    ? aceRoutes.reduce((acc, route) => acc + route.speedChangePct, 0) / aceRoutes.length
+    ? aceRoutes.reduce((acc, route) => acc + Number(route.speedChangePct ?? 0), 0) / aceRoutes.length
     : 0;
 
   const routeEfficiencyData = routes.slice(0, 10).map(route => ({
@@ -147,15 +151,15 @@ export default function ExecutiveKpis() {
     exemptShare: route.violations > 0 ? (route.exemptCount / route.violations) * 100 : 0,
   }));
 
-  const campusTypeData = ROUTE_COMPARISONS.reduce((acc, route) => {
+  const campusTypeData = routeComparisons.reduce((acc, route) => {
     const type = route.campusType;
     if (!acc[type]) {
       acc[type] = { type, count: 0, avgViolations: 0, totalSpeedChange: 0, totalStudents: 0 };
     }
-    acc[type].count++;
-    acc[type].avgViolations += route.averageMonthlyViolations;
-    acc[type].totalSpeedChange += route.speedChangePct;
-    acc[type].totalStudents += route.averageWeekdayStudents;
+    acc[type].count += 1;
+    acc[type].avgViolations += Number(route.averageMonthlyViolations ?? 0);
+    acc[type].totalSpeedChange += Number(route.speedChangePct ?? 0);
+    acc[type].totalStudents += Number(route.averageWeekdayStudents ?? 0);
     return acc;
   }, {} as Record<string, any>);
 
@@ -168,10 +172,10 @@ export default function ExecutiveKpis() {
 
   const violationTrendData = trendData;
 
-  const cbdImpactData = CBD_ROUTE_TRENDS.slice(0, 8).map(route => ({
+  const cbdImpactData = cbdRouteTrends.slice(0, 8).map((route) => ({
     route: route.routeName.split(' ')[0],
-    violationChange: route.violationChangePct,
-    speedChange: route.speedChangePct,
+    violationChange: Number(route.violationChangePct ?? 0),
+    speedChange: Number(route.speedChangePct ?? 0),
     crossesCbd: route.crossesCbd,
   }));
 
@@ -191,15 +195,15 @@ export default function ExecutiveKpis() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="grid grid-cols-1 gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Card className="border-l-4 border-l-red-500">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">ACE Violations</CardTitle>
             <TrendingDown className="h-4 w-4 text-red-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{loading ? "—" : totalViolations.toLocaleString()}</div>
+            <div className="text-xl font-bold sm:text-2xl">{loading ? "—" : totalViolations.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">
               {exemptShare}% exempt rate
             </p>
@@ -213,7 +217,7 @@ export default function ExecutiveKpis() {
             <Shield className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{loading ? "—" : routeCount}</div>
+            <div className="text-xl font-bold sm:text-2xl">{loading ? "—" : routeCount}</div>
             <p className="text-xs text-muted-foreground">
               {aceRoutes.length} with ACE enforcement
             </p>
@@ -221,13 +225,13 @@ export default function ExecutiveKpis() {
           </CardContent>
         </Card>
 
-        <Card className="border-l-4 border-l-green-500">
+        <Card className="border-l-4 border-l-green-500 sm:col-span-2 lg:col-span-1">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">ACE Speed Impact</CardTitle>
             <TrendingUp className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">+{avgSpeedGain.toFixed(1)}%</div>
+            <div className="text-xl font-bold sm:text-2xl">+{avgSpeedGain.toFixed(1)}%</div>
             <p className="text-xs text-muted-foreground">
               Average speed improvement
             </p>
@@ -242,17 +246,17 @@ export default function ExecutiveKpis() {
           <TabsTrigger value="policy">Policy</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <TabsContent value="overview" className="space-y-4 sm:space-y-6">
+          <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Activity className="h-5 w-5" />
+                  <Activity className="h-4 w-4 sm:h-5 sm:w-5" />
                   Violation Trends
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
+                <ResponsiveContainer width="100%" height={250}>
                   <ComposedChart data={violationTrendData}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="month" />
@@ -270,12 +274,12 @@ export default function ExecutiveKpis() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Target className="h-5 w-5" />
+                  <Target className="h-4 w-4 sm:h-5 sm:w-5" />
                   ACE Performance Radar
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
+                <ResponsiveContainer width="100%" height={250}>
                   <RadarChart data={radarData}>
                     <PolarGrid />
                     <PolarAngleAxis dataKey="metric" />
@@ -293,7 +297,7 @@ export default function ExecutiveKpis() {
                 <CardTitle>Campus Type Distribution</CardTitle>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
+                <ResponsiveContainer width="100%" height={250}>
                   <BarChart data={campusData}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="type" />
@@ -309,17 +313,17 @@ export default function ExecutiveKpis() {
           </div>
         </TabsContent>
 
-        <TabsContent value="routes" className="space-y-6">
+        <TabsContent value="routes" className="space-y-4 sm:space-y-6">
           <Card>
             <CardHeader>
               <CardTitle>Top Routes by Violations</CardTitle>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={400}>
+              <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={routeEfficiencyData} layout="horizontal">
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis type="number" />
-                  <YAxis dataKey="route" type="category" width={80} />
+                  <YAxis dataKey="route" type="category" width={60} />
                   <Tooltip />
                   <Bar dataKey="violations" fill={TREND_COLORS.violations} />
                 </BarChart>
@@ -328,13 +332,13 @@ export default function ExecutiveKpis() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="policy" className="space-y-6">
+        <TabsContent value="policy" className="space-y-4 sm:space-y-6">
           <Card>
             <CardHeader>
               <CardTitle>Policy Impact Projections</CardTitle>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
+              <ResponsiveContainer width="100%" height={250}>
                 <BarChart data={policyImpactData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="policy" />
@@ -351,7 +355,7 @@ export default function ExecutiveKpis() {
               <CardTitle>CBD Congestion Impact</CardTitle>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
+              <ResponsiveContainer width="100%" height={250}>
                 <ComposedChart data={cbdImpactData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="route" />
