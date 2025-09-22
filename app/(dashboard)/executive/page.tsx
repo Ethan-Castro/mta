@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import ExecutiveSummary from "@/components/ExecutiveSummary";
 import ExecutiveKpis from "@/components/ExecutiveKpis";
 import { useChat } from "@ai-sdk/react";
@@ -43,6 +44,10 @@ function formatPercent(value: number) {
   return `${percent.format(value)}%`;
 }
 export default function ExecutivePage() {
+  const searchParams = useSearchParams();
+  const globalRouteId = searchParams.get("routeId");
+  const globalStart = searchParams.get("start");
+  const globalEnd = searchParams.get("end");
   const [showExplain, setShowExplain] = useState(false);
   const [input, setInput] = useState("");
   const [selectedCampusType, setSelectedCampusType] = useState<string>("all");
@@ -105,13 +110,17 @@ export default function ExecutivePage() {
       setTrendRouteId(null);
       return;
     }
-    const primary = topRoutes[0];
-    setTrendRouteId(primary.routeId);
+    const focusRoute = (globalRouteId && filteredRoutes.find(r => r.routeId === globalRouteId)) || topRoutes[0];
+    setTrendRouteId(focusRoute.routeId);
     setTrendLoading(true);
     setTrendError(null);
 
     const controller = new AbortController();
-    fetch(`/api/violations/routes/${encodeURIComponent(primary.routeId)}?limit=720`, {
+    const url = new URL(`/api/violations/routes/${encodeURIComponent(focusRoute.routeId)}`, window.location.origin);
+    url.searchParams.set("limit", "720");
+    if (globalStart) url.searchParams.set("start", globalStart);
+    if (globalEnd) url.searchParams.set("end", globalEnd);
+    fetch(url.toString(), {
       signal: controller.signal,
     })
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`))))
@@ -139,7 +148,7 @@ export default function ExecutivePage() {
       });
 
     return () => controller.abort();
-  }, [topRoutes]);
+  }, [topRoutes, filteredRoutes, globalRouteId, globalStart, globalEnd]);
 
   const handleSubmit = (
     message: { text?: string },

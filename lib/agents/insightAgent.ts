@@ -1,4 +1,11 @@
 import { Experimental_Agent as Agent, Experimental_InferAgentUIMessage as InferAgentUIMessage, stepCountIs, tool } from "ai";
+import {
+  SYSTEM_PROMPT_INSIGHT_AGENT,
+  SYSTEM_PROMPT_ML_AGENT,
+  SYSTEM_PROMPT_NL_AGENT,
+  SYSTEM_PROMPT_WORKFLOW_AGENT,
+  SYSTEM_PROMPT_COMPREHENSIVE_AGENT,
+} from "@/lib/ai/system-prompts";
 import { z } from "zod";
 import {
   getExemptRepeaters,
@@ -13,10 +20,7 @@ import { createSocrataFromEnv } from "@/lib/data/socrata";
 
 const numberFormatter = new Intl.NumberFormat("en-US");
 
-// Ensure Vercel AI Gateway key is available for the default Gateway provider
-if (typeof process !== "undefined") {
-  process.env.AI_GATEWAY_API_KEY = process.env.AI_GATEWAY_API_KEY || "vck_71Q1WAPSF8Hxrgs9wXw0k8sdl8oHndAnZch694sGbRkTa7aHuT46f1oo";
-}
+// Ensure Vercel AI Gateway key is provided by environment only (no hardcoded fallback)
 
 function formatShare(violations: number, exempt: number) {
   if (!violations) return "0%";
@@ -24,16 +28,33 @@ function formatShare(violations: number, exempt: number) {
   return `${pct.toFixed(1)}%`;
 }
 
+async function executeTool(executor: any, params: any) {
+  if (typeof executor !== "function") {
+    throw new Error("Tool executor unavailable");
+  }
+  // Newer AI SDK tool executors receive (params, context); passing undefined keeps compatibility.
+  return executor(params, undefined);
+}
+
+function firstText(result: any, fallback = "") {
+  if (!result) return fallback;
+  if (typeof result === "string") return result;
+  const content = result?.content;
+  if (Array.isArray(content)) {
+    const textPart = content.find((part: any) => typeof part?.text === "string");
+    if (textPart?.text) return textPart.text as string;
+  }
+  if (typeof result?.text === "string") {
+    return result.text as string;
+  }
+  return fallback;
+}
+
 export const insightAgent = new Agent({
   model: "openai/gpt-5",
   stopWhen: stepCountIs(10),
-  system: `You are the ACE Insight Copilot built for the MTA Datathon. Blend Neon Postgres analytics with curated ACE narratives.
-- Always cite specific metrics, date ranges, and route IDs when responding.
-- Prefer tabular or bulleted formats for data-heavy answers.
-- Highlight comparisons across ACE vs non-ACE routes whenever relevant.
-- Offer SQL recipes or follow-up analysis steps when the user needs to replicate work.
-- Tie recommendations back to riders, enforcement teams, and policy impact.
-` ,
+  // Centralized system prompt: edit in lib/ai/system-prompts.ts
+  system: SYSTEM_PROMPT_INSIGHT_AGENT,
   tools: {
     route_overview: tool({
       description: "Summarize aggregated ACE violations for a given route and optional date window.",
@@ -248,12 +269,8 @@ export const insightAgent = new Agent({
 export const mlPredictionAgent = new Agent({
   model: "openai/gpt-4o",
   stopWhen: stepCountIs(10),
-  system: `You are an ML Prediction Agent specialized in transit analytics and forecasting.
-- Use statistical models for violation forecasting
-- Apply regression analysis for trend prediction
-- Consider seasonal patterns, policy changes, and external factors
-- Provide confidence intervals and model assumptions
-- Recommend data collection strategies for model improvement`,
+  // Centralized system prompt: edit in lib/ai/system-prompts.ts
+  system: SYSTEM_PROMPT_ML_AGENT,
   tools: {
     forecast_violations: tool({
       description: "Generate ML-based violation forecasts using historical data and trend analysis",
@@ -510,12 +527,8 @@ Assumptions:
 export const nlQueryAgent = new Agent({
   model: "openai/gpt-4o",
   stopWhen: stepCountIs(15),
-  system: `You are a Natural Language Query Agent that translates human language into structured data queries.
-- Parse complex questions about transit data
-- Generate appropriate SQL queries or API calls
-- Handle temporal, spatial, and categorical filtering
-- Provide query explanations and data validation
-- Suggest follow-up queries for deeper analysis`,
+  // Centralized system prompt: edit in lib/ai/system-prompts.ts
+  system: SYSTEM_PROMPT_NL_AGENT,
   tools: {
     parse_query_intent: tool({
       description: "Parse natural language queries to understand intent and required data",
@@ -771,12 +784,8 @@ Performance Notes:
 export const workflowAgent = new Agent({
   model: "openai/gpt-4o",
   stopWhen: stepCountIs(20),
-  system: `You are a Workflow Orchestration Agent that coordinates complex multi-step analysis tasks.
-- Break down complex questions into sequential steps
-- Coordinate between different data sources and analysis types
-- Maintain context across multiple tool calls
-- Provide progress updates and intermediate results
-- Synthesize findings into actionable recommendations`,
+  // Centralized system prompt: edit in lib/ai/system-prompts.ts
+  system: SYSTEM_PROMPT_WORKFLOW_AGENT,
   tools: {
     orchestrate_campus_study: tool({
       description: "Orchestrate comprehensive campus impact study",
@@ -824,13 +833,14 @@ export const workflowAgent = new Agent({
         if (includeForecasting && mlPredictionAgent) {
           workflowResults += `3. VIOLATION FORECASTING (3 months)\n`;
           for (const route of associatedRoutes.slice(0, 2)) {
-            const forecast = await mlPredictionAgent!.tools.forecast_violations.execute({
+            const forecast: any = await executeTool(mlPredictionAgent!.tools.forecast_violations.execute, {
               routeId: route.routeId,
               horizon: 3,
               includeSeasonality: true,
-              confidenceLevel: 0.8
+              confidenceLevel: 0.8,
             });
-            workflowResults += `- ${route.routeId}: ${forecast.content[0].text.split('\n')[3] || 'Forecast data'}\n`;
+            const forecastLine = firstText(forecast, "Forecast data").split("\n")[3] ?? "Forecast data";
+            workflowResults += `- ${route.routeId}: ${forecastLine || 'Forecast data'}\n`;
           }
           workflowResults += `\n`;
         }
@@ -838,13 +848,14 @@ export const workflowAgent = new Agent({
         // Step 4: Policy simulation (if requested)
         if (includePolicySimulation && mlPredictionAgent) {
           workflowResults += `4. POLICY IMPACT SIMULATION\n`;
-          const simulation = await mlPredictionAgent!.tools.simulate_policy_impact.execute({
+          const simulation: any = await executeTool(mlPredictionAgent!.tools.simulate_policy_impact.execute, {
             routeId: associatedRoutes[0]?.routeId || "M15-SBS",
             policyType: "ace_expansion",
             scenario: "Expanding ACE coverage to additional campus routes",
-            duration: 6
+            duration: 6,
           });
-          workflowResults += `${simulation.content[0].text.split('\n').slice(0, 5).join('\n')}\n\n`;
+          const simulationSnippet = firstText(simulation, "Simulation data").split("\n").slice(0, 5).join("\n");
+          workflowResults += `${simulationSnippet}\n\n`;
         }
 
         // Step 5: Recommendations
@@ -889,19 +900,19 @@ export const workflowAgent = new Agent({
         // Step 2: Impact simulation
         analysis += `2. IMPACT SIMULATION\n`;
         const simulations = await Promise.all(
-          affectedRoutes.slice(0, 3).map(routeId =>
-            mlPredictionAgent!.tools.simulate_policy_impact.execute({
+          affectedRoutes.slice(0, 3).map((routeId) =>
+            executeTool(mlPredictionAgent!.tools.simulate_policy_impact.execute, {
               routeId,
               policyType,
               scenario: `${policyType} implementation`,
-              duration: timeHorizon
+              duration: timeHorizon,
             })
           )
         );
 
         simulations.forEach((sim, idx) => {
           analysis += `Route ${affectedRoutes[idx]}:\n`;
-          const lines = sim.content[0].text.split('\n');
+          const lines = firstText(sim, "Simulation data").split('\n');
           const summaryLines = lines.slice(5, 8); // Extract summary lines
           analysis += summaryLines.map(line => `- ${line}`).join('\n') + '\n';
         });
@@ -1043,21 +1054,8 @@ export const workflowAgent = new Agent({
 export const comprehensiveAgent = new Agent({
   model: "openai/gpt-4o",
   stopWhen: stepCountIs(20),
-  system: `You are the Comprehensive MTA Transit Intelligence System - combining ML prediction, natural language query processing, and workflow orchestration capabilities.
-
-Core Capabilities:
-1. ML PREDICTION: Statistical forecasting, policy simulation, comparative analysis
-2. NATURAL LANGUAGE: Parse queries, generate SQL, validate data requests
-3. WORKFLOW ORCHESTRATION: Multi-step analysis, campus studies, policy impact analysis
-4. DATA INTEGRATION: Connect violations, CUNY campuses, Socrata datasets, insights
-
-Always:
-- Route simple queries to appropriate specialized agents
-- For complex multi-step analysis, coordinate between agents
-- Provide clear explanations of methodology and assumptions
-- Include confidence levels and data sources
-- Suggest follow-up questions or deeper analysis paths
-- Maintain context across multiple tool calls`,
+  // Centralized system prompt: edit in lib/ai/system-prompts.ts
+  system: SYSTEM_PROMPT_COMPREHENSIVE_AGENT,
   tools: {
     // Route queries to appropriate agents
     analyze_query_complexity: tool({
@@ -1120,11 +1118,11 @@ This query will be processed by the ${agentType} agent with ${complexity} analys
           const routeMatch = query.match(/route\s*([A-Za-z0-9-]+)/i);
           const routeId = routeMatch ? routeMatch[1] : "M15-SBS";
 
-          return await mlPredictionAgent!.tools.forecast_violations.execute({
+          return await executeTool(mlPredictionAgent!.tools.forecast_violations.execute, {
             routeId,
             horizon: parameters.horizon || 6,
             includeSeasonality: parameters.seasonality !== false,
-            confidenceLevel: parameters.confidence || 0.8
+            confidenceLevel: parameters.confidence || 0.8,
           });
         }
 
@@ -1135,18 +1133,18 @@ This query will be processed by the ${agentType} agent with ${complexity} analys
                            query.includes("congestion") ? "congestion_pricing" :
                            query.includes("exempt") ? "exempt_reduction" : "ace_expansion";
 
-          return await mlPredictionAgent!.tools.simulate_policy_impact.execute({
+          return await executeTool(mlPredictionAgent!.tools.simulate_policy_impact.execute, {
             routeId,
             policyType,
             scenario: query,
-            duration: parameters.duration || 12
+            duration: parameters.duration || 12,
           });
         }
 
-        return await mlPredictionAgent!.tools.comparative_analysis.execute({
+        return await executeTool(mlPredictionAgent!.tools.comparative_analysis.execute, {
           analysisType: "route_comparison",
           routeIds: parameters.routes || ["M15-SBS", "Bx12-SBS"],
-          metrics: parameters.metrics || ["violations", "exempt_share"]
+          metrics: parameters.metrics || ["violations", "exempt_share"],
         });
       },
     }),
@@ -1160,7 +1158,7 @@ This query will be processed by the ${agentType} agent with ${complexity} analys
       execute: async ({ query, context }) => {
         // Route to NL query agent
         if (query.includes("violation") || query.includes("ace") || query.includes("ticket")) {
-          return await nlQueryAgent.tools.parse_query_intent.execute({ query, context });
+          return await executeTool(nlQueryAgent.tools.parse_query_intent.execute, { query, context });
         }
 
         if (query.includes("sql") || query.includes("generate")) {
@@ -1168,17 +1166,17 @@ This query will be processed by the ${agentType} agent with ${complexity} analys
                         query.includes("route") ? "route_performance" :
                         query.includes("campus") ? "campus_impact" : "violation_analysis";
 
-          return await nlQueryAgent.tools.generate_sql_query.execute({
+          return await executeTool(nlQueryAgent.tools.generate_sql_query.execute, {
             intent,
             filters: [],
             metrics: ["violations", "exempt_share"],
-            limit: 100
+            limit: 100,
           });
         }
 
-        return await nlQueryAgent.tools.validate_data_query.execute({
+        return await executeTool(nlQueryAgent.tools.validate_data_query.execute, {
           sql: query,
-          expectedResultType: "count"
+          expectedResultType: "count",
         });
       },
     }),
@@ -1193,10 +1191,10 @@ This query will be processed by the ${agentType} agent with ${complexity} analys
         // Route to workflow agent
         if (workflowType === "campus_study") {
           const campusMatch = parameters.campus || "Hunter College";
-          return await workflowAgent.tools.orchestrate_campus_study.execute({
+          return await executeTool(workflowAgent.tools.orchestrate_campus_study.execute, {
             campusName: campusMatch,
             includeForecasting: parameters.forecasting !== false,
-            includePolicySimulation: parameters.simulation !== false
+            includePolicySimulation: parameters.simulation !== false,
           });
         }
 
@@ -1204,20 +1202,20 @@ This query will be processed by the ${agentType} agent with ${complexity} analys
           const policyType = parameters.policy || "ace_expansion";
           const routes = Array.isArray(parameters.routes) ? parameters.routes : ["M15-SBS"];
 
-          return await workflowAgent.tools.orchestrate_policy_analysis.execute({
+          return await executeTool(workflowAgent.tools.orchestrate_policy_analysis.execute, {
             policyType,
             affectedRoutes: routes,
             timeHorizon: parameters.horizon || 12,
-            includeStakeholderImpact: parameters.stakeholders !== false
+            includeStakeholderImpact: parameters.stakeholders !== false,
           });
         }
 
         if (workflowType === "emergency_response") {
-          return await workflowAgent.tools.orchestrate_emergency_response.execute({
+          return await executeTool(workflowAgent.tools.orchestrate_emergency_response.execute, {
             incidentType: parameters.type || "major_delay",
             affectedArea: parameters.area || "Manhattan",
             urgencyLevel: parameters.urgency || "medium",
-            includeCommunicationPlan: parameters.communication !== false
+            includeCommunicationPlan: parameters.communication !== false,
           });
         }
 
@@ -1238,43 +1236,50 @@ This query will be processed by the ${agentType} agent with ${complexity} analys
         const steps = [];
         let finalAnalysis = `Comprehensive Analysis: ${userQuery}\n\n`;
 
+        const agentTools = (this as { tools?: Record<string, any> }).tools;
+        if (!agentTools) {
+          return {
+            content: [{ type: "text", text: "Comprehensive analysis tools unavailable." }],
+          };
+        }
+
         // Step 1: Analyze query complexity
-        const complexityAnalysis = await this.tools.analyze_query_complexity.execute({
+        const complexityAnalysis: any = await executeTool(agentTools.analyze_query_complexity.execute, {
           userQuery,
-          context: "Multi-agent comprehensive analysis"
+          context: "Multi-agent comprehensive analysis",
         });
         steps.push("Query Analysis Complete");
-        finalAnalysis += `1. QUERY ANALYSIS\n${complexityAnalysis.content[0].text}\n\n`;
+        finalAnalysis += `1. QUERY ANALYSIS\n${firstText(complexityAnalysis, "Analysis unavailable")}\n\n`;
 
         // Step 2: Execute appropriate specialized analysis
         const queryLower = userQuery.toLowerCase();
 
         if (queryLower.includes("forecast") || queryLower.includes("predict")) {
-          const mlResult = await this.tools.execute_ml_query.execute({
+          const mlResult: any = await executeTool(agentTools.execute_ml_query.execute, {
             query: userQuery,
-            parameters: { horizon: 6, confidence: 0.8 }
+            parameters: { horizon: 6, confidence: 0.8 },
           });
           steps.push("ML Prediction Complete");
-          finalAnalysis += `2. ML PREDICTION ANALYSIS\n${mlResult.content[0].text}\n\n`;
+          finalAnalysis += `2. ML PREDICTION ANALYSIS\n${firstText(mlResult, "ML analysis unavailable")}\n\n`;
         }
 
         if (queryLower.includes("campus") || queryLower.includes("student")) {
-          const nlResult = await this.tools.execute_nl_query.execute({
+          const nlResult: any = await executeTool(agentTools.execute_nl_query.execute, {
             query: userQuery,
-            context: "Campus impact analysis"
+            context: "Campus impact analysis",
           });
           steps.push("Campus Analysis Complete");
-          finalAnalysis += `3. CAMPUS IMPACT ANALYSIS\n${nlResult.content[0].text}\n\n`;
+          finalAnalysis += `3. CAMPUS IMPACT ANALYSIS\n${firstText(nlResult, "Campus analysis unavailable")}\n\n`;
         }
 
         if (queryLower.includes("study") || queryLower.includes("comprehensive") || analysisDepth === "comprehensive") {
-          const workflowResult = await this.tools.execute_workflow.execute({
+          const workflowResult: any = await executeTool(agentTools.execute_workflow.execute, {
             workflowType: queryLower.includes("campus") ? "campus_study" :
                          queryLower.includes("policy") ? "policy_analysis" : "emergency_response",
-            parameters: {}
+            parameters: {},
           });
           steps.push("Workflow Orchestration Complete");
-          finalAnalysis += `4. WORKFLOW ANALYSIS\n${workflowResult.content[0].text}\n\n`;
+          finalAnalysis += `4. WORKFLOW ANALYSIS\n${firstText(workflowResult, "Workflow analysis unavailable")}\n\n`;
         }
 
         // Step 3: Synthesize findings

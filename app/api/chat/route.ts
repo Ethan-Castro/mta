@@ -1,55 +1,80 @@
-import { NextResponse } from "next/server";
-import { comprehensiveAgent as agent } from "@/lib/agents/insightAgent";
-import { addMessage, upsertConversation } from "@/lib/chat";
+import { streamText, UIMessage, convertToModelMessages, tool, stepCountIs } from "ai";
+import { z } from "zod";
+import { SYSTEM_PROMPTS } from "@/lib/ai/system-prompts";
+import { getNeonMCPTools } from "@/lib/mcp/neon";
+import { Composio } from "@composio/core";
+import { VercelProvider } from "@composio/vercel";
 
 export const runtime = "nodejs";
+export const maxDuration = 30;
 
 export async function POST(req: Request) {
+  const body = await req.json().catch(() => ({} as any));
+  const { messages = [], model, system }: { messages?: UIMessage[]; model?: string; system?: string } = body || {};
+
+
+  // Load Neon MCP tools (allowed set only). Best-effort; continue without if unavailable
+  let mcpBundle: Awaited<ReturnType<typeof getNeonMCPTools>> | null = null;
   try {
-    const body = await req.json().catch(() => ({} as any));
-    const rawMessages: any[] = Array.isArray(body?.messages) ? body.messages : [];
-    const { conversationId: conversationIdInput, title }: { conversationId?: string; title?: string } = body || {};
+    mcpBundle = await getNeonMCPTools();
+  } catch {}
 
-    // Normalize messages to the shape expected by the Agent API
-    const messages: any[] = rawMessages.map((m: any) => {
-      if (m && Array.isArray(m.parts)) return m;
-      if (m && typeof m.content === "string") {
-        return { role: m.role, parts: [{ type: "text", text: m.content }] };
-      }
-      if (m && typeof m.text === "string") {
-        return { role: m.role, parts: [{ type: "text", text: m.text }] };
-      }
-      return m;
-    });
+  // Load Composio Exa tools with Vercel provider
+  // Uses COMPOSIO_API_KEY and a server-generated user id (per-session).
+  let composioTools: Record<string, any> = {};
+  try {
+    const userId = (crypto.randomUUID && crypto.randomUUID()) || Math.random().toString(36).slice(2);
+    const composio = new Composio({ apiKey: process.env.COMPOSIO_API_KEY, provider: new VercelProvider() });
+    // Fetch only EXA toolkit for web search
+    composioTools = await composio.tools.get(userId, { toolkits: ["EXA"] });
+  } catch {}
 
-    const conversation = await upsertConversation(conversationIdInput ?? null, title ?? null);
-    const conversationId = conversation.id;
-
-    // Persist trailing user text message if present
-    const last = messages[messages.length - 1];
-    if (last?.role === "user") {
-      const rawParts: any = (last as any).parts;
-      const parts: any[] = Array.isArray(rawParts) ? rawParts : [];
-      const userText = parts.filter((p: any) => p?.type === "text").map((p: any) => p.text ?? "").join(" ");
-      if (userText) {
-        await addMessage({ conversationId, role: "user", content: userText });
-      }
-    }
-
-    const res = await agent.respond({ messages: messages as any });
-
-    // Best-effort: capture AI text chunks from result if available
-    // Best-effort persistence will be handled by UI route during streaming
-
-    // Attach conversation id header
-    return new NextResponse(res.body, {
-      headers: {
-        ...Object.fromEntries((res.headers as any)?.entries?.() ?? []),
-        "x-conversation-id": conversationId,
+  const tools = {
+    weather: tool({
+      description: "Get the weather in a location (fahrenheit)",
+      inputSchema: z.object({
+        location: z.string().describe("The location to get the weather for"),
+      }),
+      execute: async ({ location }) => {
+        const temperature = Math.round(Math.random() * (90 - 32) + 32);
+        return { location, temperature };
       },
-      status: res.status,
-    });
-  } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message || String(e) }, { status: 500 });
-  }
+    }),
+    convertFahrenheitToCelsius: tool({
+      description: "Convert a temperature in fahrenheit to celsius",
+      inputSchema: z.object({
+        temperature: z.number().describe("The temperature in fahrenheit to convert"),
+      }),
+      execute: async ({ temperature }) => {
+        const celsius = Math.round((temperature - 32) * (5 / 9));
+        return { celsius };
+      },
+    }),
+    ...(mcpBundle?.tools ?? {}),
+    ...(composioTools ?? {}),
+  } as const;
+
+  const result = streamText({
+    model: model || "openai/gpt-5",
+    system: system || SYSTEM_PROMPTS.default,
+    messages: convertToModelMessages(messages),
+    stopWhen: stepCountIs(5),
+    onError({ error }) {
+      console.error("/api/chat stream error:", error);
+    },
+    onStepFinish({ toolCalls, toolResults }) {
+      if (toolCalls?.length) {
+        console.debug("Tool calls:", toolCalls.map((c) => ({ name: c.toolName, input: c.input })));
+      }
+      if (toolResults?.length) {
+        console.debug(
+          "Tool results:",
+          toolResults.map((r) => ({ name: r.toolName, output: r.output }))
+        );
+      }
+    },
+    tools,
+  });
+
+  return result.toUIMessageStreamResponse();
 }

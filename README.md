@@ -21,6 +21,9 @@ Open [http://localhost:3000](http://localhost:3000) and navigate to stakeholder 
 Create a `.env.local` with the following keys:
 
 ```
+# Vercel AI Gateway (server-only). Required for live model access.
+AI_GATEWAY_API_KEY=
+
 # OpenAI (server-only)
 OPENAI_API_KEY=
 
@@ -48,8 +51,13 @@ CONGESTION_PRICING_START=2024-06-30
 # Neon MCP Server (optional - enables Postgres database tools in chat)
 # Set either SSE or HTTP URL to enable Neon MCP integration
 NEON_MCP_SSE_URL=https://mcp.neon.tech/sse
-# NEON_MCP_HTTP_URL=https://mcp.neon.tech  # Alternative HTTP transport
+# Alternative Streamable HTTP transport (recommended endpoint suffix /mcp)
+# NEON_MCP_HTTP_URL=https://mcp.neon.tech/mcp
 ```
+
+Notes:
+- Set `AI_GATEWAY_API_KEY` to enable live model responses. If unset or when using the UI model “Offline fallback”, the app will return a concise, non-streaming summary based on the violations API.
+- Never commit secrets. Only expose client-visible keys with the `NEXT_PUBLIC_` prefix.
 
 Only define secrets on the server; never expose them to the client. Client-visible keys must be prefixed with `NEXT_PUBLIC_`.
 
@@ -77,10 +85,31 @@ This project includes integration with the Neon MCP Server, allowing the chatbot
    ```bash
    NEON_MCP_SSE_URL=https://mcp.neon.tech/sse
    # or
-   NEON_MCP_HTTP_URL=https://mcp.neon.tech
+   NEON_MCP_HTTP_URL=https://mcp.neon.tech/mcp
    ```
 
-2. Test the integration by asking the chatbot:
+2. For Cursor MCP client setup, add `.cursor/mcp.json` (already included):
+   ```json
+   {
+     "mcpServers": {
+       "Neon": {
+         "command": "npx",
+         "args": ["-y", "mcp-remote", "https://mcp.neon.tech/mcp"]
+       }
+     }
+   }
+   ```
+
+   On first use Cursor will open a browser window to authorize access.
+
+3. To run a local server instead of the hosted one, use:
+   ```bash
+   # Requires NEON_API_KEY in your environment
+   npm run mcp:neon
+   ```
+   Then point your MCP client to the local process per your client's instructions.
+
+4. Test the integration by asking the chatbot:
    - "List my Neon projects"
    - "Create a database named 'test-db'"
    - "Run SQL: SELECT COUNT(*) FROM violations"

@@ -1,13 +1,92 @@
 import { streamText } from "ai";
+import { SYSTEM_PROMPTS } from "@/lib/ai/system-prompts";
 import { z } from "zod";
 import { getViolationSummary } from "@/lib/data/violations";
 import { sql } from "@/lib/db";
-import { addMessage, upsertConversation } from "@/lib/chat";
+import { addMessage, getMessages, upsertConversation } from "@/lib/chat";
+import { getNeonMCPTools } from "@/lib/mcp/neon";
+import { Composio } from "@composio/core";
+import { VercelProvider } from "@composio/vercel";
 // no next/headers in route handlers; use req.headers
 
 export const runtime = "nodejs";
+const TOOL_META_SENTINEL = "[[AI_TOOL_META]]";
+
+function stripSqlComments(sqlText: string) {
+  return sqlText.replace(/--.*?$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
+}
+
+function ensureReadOnlySql(sqlText: string):
+  | { ok: true; statement: string }
+  | { ok: false; reason: string } {
+  const withoutComments = stripSqlComments(sqlText);
+  const trimmed = withoutComments.trim();
+  if (!trimmed) {
+    return { ok: false, reason: "SQL statement required." };
+  }
+
+  const single = trimmed.replace(/[;\s]+$/, "").trim();
+  const lowered = single.toLowerCase();
+
+  if (!lowered.startsWith("select") && !lowered.startsWith("with ")) {
+    return { ok: false, reason: "Only SELECT queries are permitted." };
+  }
+
+  const forbiddenKeywords = [
+    "insert",
+    "update",
+    "delete",
+    "drop",
+    "truncate",
+    "alter",
+    "grant",
+    "revoke",
+    "comment",
+    "create",
+    "attach",
+    "replace",
+    "vacuum",
+    "analyze",
+    "merge",
+    "call",
+    "execute",
+  ];
+
+  if (forbiddenKeywords.some((kw) => new RegExp(`\\b${kw}\\b`, "i").test(lowered))) {
+    return { ok: false, reason: "Statement not allowed." };
+  }
+
+  if (single.includes(";")) {
+    return { ok: false, reason: "Only a single statement is permitted." };
+  }
+
+  return { ok: true, statement: single };
+}
+
+type ToolLogEntry = {
+  id: string;
+  name: string;
+  input?: unknown;
+  output?: unknown;
+  error?: string;
+};
+
+function toSerializable(value: unknown): unknown {
+  if (value === undefined) {
+    return null;
+  }
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean" || value === null) {
+    return value;
+  }
+  try {
+    return JSON.parse(JSON.stringify(value));
+  } catch {
+    return value && typeof value === "object" ? Object.fromEntries(Object.entries(value as Record<string, unknown>).slice(0, 50)) : String(value);
+  }
+}
 
 export async function POST(req: Request) {
+  let mcpBundle: Awaited<ReturnType<typeof getNeonMCPTools>> | null = null;
   try {
     const body = await req.json().catch(() => ({}));
     const { routeId, start, end, question, model, conversationId: conversationIdInput, title } = body || {};
@@ -19,8 +98,8 @@ export async function POST(req: Request) {
       await addMessage({ conversationId, role: "user", content: String(question) });
     }
 
-    // Fallback if no AI Gateway key: return a simple non-streaming text summary
-    if (!process.env.AI_GATEWAY_API_KEY) {
+    // Offline mode: explicit model "offline" or missing AI gateway key
+    if (model === "offline" || !process.env.AI_GATEWAY_API_KEY) {
       try {
         const forwardedProto = req.headers.get("x-forwarded-proto") || "http";
         const forwardedHost = req.headers.get("x-forwarded-host") || req.headers.get("host") || "localhost:3000";
@@ -53,15 +132,45 @@ export async function POST(req: Request) {
       }
     }
 
-    // Ensure Vercel AI Gateway key is available for the default Gateway provider
-    process.env.AI_GATEWAY_API_KEY = process.env.AI_GATEWAY_API_KEY || "vck_71Q1WAPSF8Hxrgs9wXw0k8sdl8oHndAnZch694sGbRkTa7aHuT46f1oo";
+    // Ensure Vercel AI Gateway key is provided by environment; do not fall back to hardcoded defaults
+
+    const historyMessages = await getMessages(conversationId, 200);
+    const modelMessages = historyMessages.map((msg) => ({
+      role: msg.role,
+      content: msg.content,
+    }));
+
+    if (modelMessages.length === 0) {
+      const fallbackPrompt = question
+        ? String(question)
+        : `Generate a concise summary of ACE violations${
+            routeId ? ` for route ${routeId}` : ""
+          }${
+            start || end ? ` between ${start ?? "the beginning"} and ${end ?? "now"}` : ""
+          }.`;
+      modelMessages.push({ role: "user", content: fallbackPrompt });
+    }
+
+    // Load Neon MCP tools and Composio Exa for this request
+    try {
+      mcpBundle = await getNeonMCPTools();
+    } catch {}
+
+    let composioTools: Record<string, any> = {};
+    try {
+      const userId = (crypto.randomUUID && crypto.randomUUID()) || Math.random().toString(36).slice(2);
+      const composio = new Composio({ apiKey: process.env.COMPOSIO_API_KEY, provider: new VercelProvider() });
+      composioTools = await composio.tools.get(userId, { toolkits: ["EXA"] });
+    } catch {}
+
+    const toolCallMap = new Map<string, { name: string; input?: unknown }>();
+    const toolLogs: ToolLogEntry[] = [];
 
     const result = streamText({
       model: model || "openai/gpt-5",
-      system: "You are a transit analytics assistant. Be concise and quantitative.",
-      prompt: question
-        ? `Answer the question using tools when needed. Question: ${question}`
-        : `Generate a concise summary of ACE violations for the selected window. Use tools.`,
+      // Centralized system prompt: edit in lib/ai/system-prompts.ts
+      system: SYSTEM_PROMPTS.streaming,
+      messages: modelMessages,
       tools: {
         runSql: {
           description: "Execute a SQL query against Neon Postgres (server-side only).",
@@ -69,12 +178,11 @@ export async function POST(req: Request) {
             sql: z.string().describe("Full SQL string to execute"),
           }),
           execute: async ({ sql: raw }) => {
-            const lowered = raw.trim().toLowerCase();
-            const forbidden = ["drop ", "truncate ", "alter ", "grant ", "revoke "];
-            if (forbidden.some((kw) => lowered.startsWith(kw))) {
-              return { error: "Statement not allowed." };
+            const check = ensureReadOnlySql(raw);
+            if ("reason" in check) {
+              return { error: check.reason };
             }
-            const rows = await sql(raw as any);
+            const rows = await sql.unsafe(check.statement);
             return { rows };
           },
         },
@@ -98,9 +206,34 @@ export async function POST(req: Request) {
             };
           },
         },
+        ...(mcpBundle?.tools ?? {}),
+        ...(composioTools ?? {}),
       },
       toolChoice: "auto",
       temperature: 0.2,
+      onStepFinish({ toolCalls, toolResults }) {
+        toolCalls?.forEach((call) => {
+          toolCallMap.set(call.toolCallId, {
+            name: call.toolName,
+            input: toSerializable(call.input),
+          });
+        });
+        toolResults?.forEach((result) => {
+          const matchingCall = result.toolCallId ? toolCallMap.get(result.toolCallId) : undefined;
+          const serialOutput = toSerializable(result.output);
+          const errorText =
+            serialOutput && typeof serialOutput === "object" && serialOutput !== null && "error" in serialOutput
+              ? String((serialOutput as Record<string, unknown>).error)
+              : undefined;
+          toolLogs.push({
+            id: result.toolCallId ?? `${result.toolName}-${toolLogs.length}`,
+            name: matchingCall?.name ?? result.toolName,
+            input: matchingCall?.input,
+            output: serialOutput,
+            error: errorText,
+          });
+        });
+      },
     });
 
     let assistantBuffer = "";
@@ -115,6 +248,10 @@ export async function POST(req: Request) {
         } catch (e) {
           controller.enqueue(encoder.encode("\n[stream error]\n"));
         } finally {
+          try {
+            const metaPayload = JSON.stringify({ toolLogs });
+            controller.enqueue(encoder.encode(`\n${TOOL_META_SENTINEL}${metaPayload}`));
+          } catch {}
           // Persist assistant message at the end of the stream
           if (assistantBuffer.trim()) {
             try {
@@ -122,12 +259,23 @@ export async function POST(req: Request) {
             } catch {}
           }
           controller.close();
+          if (mcpBundle) {
+            try {
+              await mcpBundle.closeAll();
+            } catch {}
+            mcpBundle = null;
+          }
         }
       },
     });
 
     return new Response(stream, { headers: { "Content-Type": "text/plain; charset=utf-8", "x-conversation-id": conversationId } });
   } catch (e) {
+    if (mcpBundle) {
+      try {
+        await mcpBundle.closeAll();
+      } catch {}
+    }
     return new Response("AI is temporarily unavailable.", { headers: { "Content-Type": "text/plain; charset=utf-8" } });
   }
 }

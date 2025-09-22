@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { nanoid } from "nanoid";
-import type { ChatStatus, FileUIPart } from "ai";
+import type { ChatStatus } from "ai";
 import {
   Actions,
   Action,
@@ -65,14 +65,8 @@ import {
   PromptInput,
   PromptInputBody,
   PromptInputTextarea,
-  PromptInputAttachments,
-  PromptInputAttachment,
   PromptInputToolbar,
   PromptInputTools,
-  PromptInputActionMenu,
-  PromptInputActionMenuTrigger,
-  PromptInputActionMenuContent,
-  PromptInputActionAddAttachments,
   PromptInputModelSelect,
   PromptInputModelSelectTrigger,
   PromptInputModelSelectContent,
@@ -133,6 +127,7 @@ const DATASET_URL =
 const ASSISTANT_AVATAR = "https://avatar.vercel.sh/assistant?text=AI";
 const USER_AVATAR = "https://avatar.vercel.sh/user?text=ME";
 const NUMBER_FORMAT = new Intl.NumberFormat("en-US");
+const TOOL_META_SENTINEL = "[[AI_TOOL_META]]";
 
 const personaPromptMap = {
   executive: [
@@ -191,6 +186,7 @@ type ToolState = {
   output?: unknown;
   errorText?: string;
   state: "input-streaming" | "input-available" | "output-available" | "output-error";
+  toolName?: string;
 };
 
 type ChainStep = {
@@ -198,6 +194,23 @@ type ChainStep = {
   description?: string;
   status: "complete" | "active" | "pending";
   detail?: string;
+};
+
+type ToolLogEntry = {
+  id: string;
+  name: string;
+  input?: unknown;
+  output?: unknown;
+  error?: string;
+};
+
+type AssistantMetadata = {
+  prompt: string;
+  summary: SummaryStats | null;
+  chainSteps: ChainStep[];
+  reasoningText: string;
+  toolState: ToolState | null;
+  toolLogs: ToolLogEntry[];
 };
 
 function formatNumber(value: number) {
@@ -276,91 +289,179 @@ function computeSummary(rows: Array<Record<string, unknown>>): SummaryStats {
 function buildSummaryChain(
   summary: SummaryStats | null,
   question: string,
-  streaming: boolean
+  streaming: boolean,
+  toolLogs: ToolLogEntry[] = []
 ): ChainStep[] {
-  if (!summary) {
+  const monthRange = summary
+    ? summary.months.length > 1
+      ? `${summary.months[0]} → ${summary.months[summary.months.length - 1]}`
+      : summary.months[0] ?? "n/a"
+    : null;
+
+  if (summary) {
+    const lastTool = toolLogs.at(-1);
+    const gatherDescription = lastTool
+      ? `Used ${lastTool.name} to fetch ${formatNumber(summary.rows.length)} records (${monthRange}).`
+      : `${formatNumber(summary.rows.length)} monthly route records across ${summary.routeCount} routes (${monthRange}).`;
+
     return [
       {
-        label: "Attempt dataset lookup",
-        description: "Fetch ACE violations grouped by route and month",
-        status: "pending",
+        label: lastTool ? `Run ${lastTool.name}` : "Gather dataset",
+        description: gatherDescription,
+        status: "complete",
       },
       {
-        label: "Fallback to cached context",
-        description: "Use heuristics when live data is unavailable",
-        status: "active",
+        label: "Aggregate KPIs",
+        description: `${formatNumber(summary.totalViolations)} violations | ${formatPercent(
+          summary.exemptShare
+        )} exempt share`,
+        status: "complete",
       },
       {
         label: "Compose response",
-        description: `Answer “${question}” with best-effort context`,
+        description: `Draft tailored answer for “${question}”`,
         status: streaming ? "active" : "complete",
       },
     ];
   }
 
-  const monthRange =
-    summary.months.length > 1
-      ? `${summary.months[0]} → ${summary.months[summary.months.length - 1]}`
-      : summary.months[0] ?? "n/a";
+  if (toolLogs.length > 0) {
+    const steps: ChainStep[] = toolLogs.map((log) => {
+      const output = log.output as Record<string, unknown> | undefined;
+      const rowsCount = output && Array.isArray((output as { rows?: unknown }).rows)
+        ? ((output as { rows?: unknown }).rows as unknown[]).length
+        : null;
+      return {
+        label: `Run ${log.name}`,
+        description: log.error
+          ? `Tool failed: ${log.error}`
+          : rowsCount != null
+          ? `Returned ${formatNumber(rowsCount)} rows.`
+          : "Completed successfully.",
+        status: "complete",
+      };
+    });
+    steps.push({
+      label: "Compose response",
+      description: `Draft tailored answer for “${question}”`,
+      status: streaming ? "active" : "complete",
+    });
+    return steps;
+  }
 
   return [
     {
-      label: "Gather violations dataset",
-      description: `${formatNumber(
-        summary.rows.length
-      )} monthly route records across ${summary.routeCount} routes (${monthRange})`,
-      status: "complete",
-    },
-    {
-      label: "Aggregate KPIs",
-      description: `${formatNumber(summary.totalViolations)} violations | ${formatPercent(
-        summary.exemptShare
-      )} exempt share`,
+      label: "Assess cached context",
+      description: "Question answered without tool calls",
       status: "complete",
     },
     {
       label: "Compose response",
-      description: `Draft tailored answer for “${question}”`,
+      description: `Answer “${question}” with available context`,
       status: streaming ? "active" : "complete",
     },
   ];
 }
 
+function extractSummaryRows(toolLogs: ToolLogEntry[]): Array<Record<string, unknown>> | null {
+  for (let index = toolLogs.length - 1; index >= 0; index -= 1) {
+    const log = toolLogs[index];
+    const output = log?.output as Record<string, unknown> | undefined;
+    if (!output || typeof output !== "object") {
+      continue;
+    }
+    const rows = (output as { rows?: unknown }).rows;
+    if (Array.isArray(rows)) {
+      return rows as Array<Record<string, unknown>>;
+    }
+  }
+  return null;
+}
+
+function buildReasoningFromToolLogs(
+  toolLogs: ToolLogEntry[],
+  summary: SummaryStats | null,
+  question: string
+): string {
+  if (toolLogs.length === 0) {
+    return summary
+      ? `Reused recent dataset context to answer “${question}”.`
+      : `Answered “${question}” without running external tools.`;
+  }
+
+  const lines = toolLogs.map((log) => {
+    if (log.error) {
+      return `Tool ${log.name} failed: ${log.error}`;
+    }
+    const output = log.output as Record<string, unknown> | undefined;
+    const rows = output && Array.isArray((output as { rows?: unknown }).rows)
+      ? ((output as { rows?: unknown }).rows as unknown[]).length
+      : null;
+    if (rows != null) {
+      return `Tool ${log.name} returned ${formatNumber(rows)} rows.`;
+    }
+    return `Tool ${log.name} completed successfully.`;
+  });
+
+  if (summary) {
+    lines.push(
+      `Synthesised answer from ${formatNumber(summary.rows.length)} grouped records with ${formatPercent(
+        summary.exemptShare
+      )} exempt share.`
+    );
+  }
+
+  return lines.join("\n\n");
+}
+
+function deriveToolState(toolLogs: ToolLogEntry[], baseInput: Record<string, unknown>): ToolState | null {
+  if (toolLogs.length === 0) {
+    return null;
+  }
+
+  const last = toolLogs[toolLogs.length - 1];
+  const inputCandidate = last.input;
+  const input =
+    inputCandidate && typeof inputCandidate === "object" && !Array.isArray(inputCandidate)
+      ? (inputCandidate as Record<string, unknown>)
+      : baseInput;
+
+  return {
+    input,
+    output: last.output,
+    errorText: last.error,
+    state: last.error ? "output-error" : "output-available",
+    toolName: last.name,
+  };
+}
+
 export default function AskAI() {
   const [inputValue, setInputValue] = useState("");
   const [model, setModel] = useState("openai/gpt-5");
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [status, setStatus] = useState<ChatStatus | undefined>();
   const [error, setError] = useState<string | null>(null);
-  const [toolState, setToolState] = useState<ToolState | null>(null);
-  const [summary, setSummary] = useState<SummaryStats | null>(null);
-  const [chainSteps, setChainSteps] = useState<ChainStep[]>([]);
-  const [reasoningText, setReasoningText] = useState<string>("");
-  const [activeQuestion, setActiveQuestion] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [activeAssistantId, setActiveAssistantId] = useState<string | null>(null);
+  const [assistantMeta, setAssistantMeta] = useState<Record<string, AssistantMetadata>>({});
   const [activePersona, setActivePersona] = useState<(typeof personaOptions)[number]["value"]>("executive");
   const activePrompts = useMemo(() => personaPromptMap[activePersona], [activePersona]);
 
   const submitQuestion = useCallback(
-    async (text: string, files: FileUIPart[] = []) => {
+    async (text: string) => {
       const question = text.trim();
       if (!question) {
         return;
       }
 
+      const selectedModel = model;
+      const currentConversationId = conversationId;
+
       setInputValue("");
       setError(null);
-      setActiveQuestion(question);
       setStatus("submitted");
       setIsStreaming(true);
-      setSummary(null);
-      setReasoningText("");
-      setChainSteps(buildSummaryChain(null, question, true));
-      setToolState({
-        input: { model, question, attachments: files.length },
-        state: "input-streaming",
-      });
 
       const userMessage: ChatMessage = {
         id: nanoid(),
@@ -377,56 +478,35 @@ export default function AskAI() {
       setMessages((prev) => [...prev, userMessage, assistantMessage]);
       setActiveAssistantId(assistantId);
 
-      const summaryPromise = fetch("/api/violations/summary", {
-        cache: "no-store",
-      })
-        .then(async (res) => {
-          if (!res.ok) {
-            throw new Error("Failed to load violation summary");
-          }
-          const data = await res.json();
-          const rows = Array.isArray(data?.rows) ? data.rows : [];
-          const stats = computeSummary(rows);
-          setSummary(stats);
-          setToolState({
-            input: { model, question, attachments: files.length },
-            output: stats.rows.slice(0, 8),
-            state: "output-available",
-          });
-          setChainSteps(buildSummaryChain(stats, question, true));
-          setReasoningText(
-            [
-              `Fetched ${formatNumber(
-                stats.rows.length
-              )} grouped records from the ACE violations dataset.`,
-              `Calculated ${formatNumber(
-                stats.totalViolations
-              )} total violations with ${formatPercent(
-                stats.exemptShare
-              )} of them marked exempt.`,
-              `Synthesising an answer for “${question}”.`,
-            ].join("\n\n")
-          );
-          return stats;
-        })
-        .catch((err) => {
-          const message = err instanceof Error ? err.message : String(err);
-          setToolState({
-            input: { model, question, attachments: files.length },
-            state: "output-error",
-            errorText: message,
-          });
-          setSummary(null);
-          setChainSteps(buildSummaryChain(null, question, true));
-          setReasoningText(`Unable to fetch dataset context: ${message}`);
-          return null;
-        });
+      const baseToolState: ToolState = {
+        input: { model: selectedModel, question },
+        state: "input-streaming",
+      };
+
+      const initialMeta: AssistantMetadata = {
+        prompt: question,
+        summary: null,
+        chainSteps: buildSummaryChain(null, question, true, []),
+        reasoningText: "",
+        toolState: baseToolState,
+        toolLogs: [],
+      };
+
+      setAssistantMeta((prev) => ({
+        ...prev,
+        [assistantId]: initialMeta,
+      }));
+
+      let toolMetaApplied = false;
 
       try {
         const response = await fetch("/api/chat/stream", {
           method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ question, model }),
+          headers: {
+            "content-type": "application/json",
+            ...(currentConversationId ? { "x-conversation-id": currentConversationId } : {}),
+          },
+          body: JSON.stringify({ question, model: selectedModel, conversationId: currentConversationId }),
         });
 
         if (!response.ok || !response.body) {
@@ -438,16 +518,25 @@ export default function AskAI() {
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
+        let latestDisplay = "";
+        let toolMetaPayload: string | null = null;
 
         while (true) {
           const { value, done } = await reader.read();
           if (value) {
             buffer += decoder.decode(value, { stream: !done });
-            const content = buffer;
+            let displayBuffer = buffer;
+            const sentinelIndex = buffer.indexOf(TOOL_META_SENTINEL);
+            if (sentinelIndex >= 0) {
+              displayBuffer = buffer.slice(0, sentinelIndex);
+              toolMetaPayload = buffer.slice(sentinelIndex + TOOL_META_SENTINEL.length);
+              buffer = displayBuffer;
+            }
+            latestDisplay = displayBuffer;
             setMessages((prev) =>
               prev.map((message) =>
                 message.id === assistantId
-                  ? { ...message, content }
+                  ? { ...message, content: displayBuffer }
                   : message
               )
             );
@@ -457,36 +546,85 @@ export default function AskAI() {
           }
         }
 
-        if (!buffer.trim()) {
-          buffer = "I wasn't able to generate an answer this time.";
+        if (!latestDisplay.trim()) {
+          const fallback = "I wasn't able to generate an answer this time.";
+          latestDisplay = fallback;
           setMessages((prev) =>
             prev.map((message) =>
               message.id === assistantId
-                ? { ...message, content: buffer }
+                ? { ...message, content: fallback }
                 : message
             )
           );
         }
 
-        await summaryPromise;
+        try {
+          const headerId = response.headers.get("x-conversation-id");
+          if (headerId) setConversationId(headerId);
+        } catch {}
+
+        let parsedMeta: { toolLogs?: ToolLogEntry[] } | null = null;
+        if (toolMetaPayload) {
+          const trimmed = toolMetaPayload.trim();
+          if (trimmed) {
+            try {
+              parsedMeta = JSON.parse(trimmed);
+            } catch (metaError) {
+              console.error("Failed to parse tool metadata", metaError);
+            }
+          }
+        }
+
+        const toolLogs = Array.isArray(parsedMeta?.toolLogs) ? parsedMeta!.toolLogs : [];
+        const summaryRows = extractSummaryRows(toolLogs);
+        const summary = summaryRows ? computeSummary(summaryRows) : null;
+        const reasoningText = buildReasoningFromToolLogs(toolLogs, summary, question);
+        const toolState = deriveToolState(toolLogs, baseToolState.input);
+
+        setAssistantMeta((prev) => {
+          const current = prev[assistantId] ?? initialMeta;
+          const nextMeta: AssistantMetadata = {
+            ...current,
+            summary,
+            chainSteps: buildSummaryChain(summary, question, false, toolLogs),
+            reasoningText,
+            toolState: toolState ?? null,
+            toolLogs,
+          };
+          return {
+            ...prev,
+            [assistantId]: nextMeta,
+          };
+        });
+        toolMetaApplied = true;
+
         setStatus(undefined);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         setError(message);
         setStatus("error");
-        setToolState((state) =>
-          state
-            ? {
-                ...state,
-                state: "output-error",
-                errorText: message,
-              }
-            : {
-                input: { model, question, attachments: files.length },
-                state: "output-error",
-                errorText: message,
-              }
-        );
+        setAssistantMeta((prev) => {
+          const current = prev[assistantId] ?? initialMeta;
+          const errorToolState: ToolState = {
+            input: current.toolState?.input ?? baseToolState.input,
+            output: current.toolState?.output,
+            errorText: message,
+            state: "output-error",
+            toolName: current.toolState?.toolName,
+          };
+
+          const nextMeta: AssistantMetadata = {
+            ...current,
+            reasoningText: current.reasoningText || `Assistant response failed: ${message}`,
+            toolState: errorToolState,
+            toolLogs: current.toolLogs ?? [],
+          };
+
+          return {
+            ...prev,
+            [assistantId]: nextMeta,
+          };
+        });
         setMessages((prev) =>
           prev.map((msg) =>
             msg.id === assistantId && !msg.content
@@ -497,17 +635,40 @@ export default function AskAI() {
               : msg
           )
         );
+        toolMetaApplied = true;
       } finally {
         setIsStreaming(false);
         setActiveAssistantId(null);
+        if (!toolMetaApplied) {
+          setAssistantMeta((prev) => {
+            const current = prev[assistantId];
+            if (!current) {
+              return prev;
+            }
+            const updatedToolState: ToolState | null =
+              current.toolState?.state === "input-streaming"
+                ? { ...current.toolState, state: "input-available" }
+                : current.toolState ?? null;
+            const nextMeta: AssistantMetadata = {
+              ...current,
+              chainSteps: buildSummaryChain(current.summary, current.prompt, false, current.toolLogs ?? []),
+              toolState: updatedToolState,
+              toolLogs: current.toolLogs ?? [],
+            };
+            return {
+              ...prev,
+              [assistantId]: nextMeta,
+            };
+          });
+        }
       }
     },
-    [model]
+    [model, conversationId]
   );
 
   const handleSubmit = useCallback(
     async (message: PromptInputMessage) => {
-      await submitQuestion(message.text ?? "", message.files ?? []);
+      await submitQuestion(message.text ?? "");
     },
     [submitQuestion]
   );
@@ -527,90 +688,8 @@ export default function AskAI() {
     }
   }, []);
 
-  useEffect(() => {
-    setChainSteps((steps) =>
-      steps.map((step, index) => {
-        if (index !== steps.length - 1) {
-          return step;
-        }
-        if (step.status === "pending") {
-          return step;
-        }
-        return {
-          ...step,
-          status: isStreaming ? "active" : "complete",
-        };
-      })
-    );
-  }, [isStreaming]);
-
-  const assistantSummary = useMemo(() => {
-    if (!summary) {
-      return null;
-    }
-
-    const topRoutes = summary.topRoutes.map((route) => (
-      <div key={route.route} className="flex items-center justify-between">
-        <span className="text-muted-foreground text-xs uppercase tracking-wide">
-          {route.route || "(unassigned)"}
-        </span>
-        <span className="font-medium text-sm">
-          {formatNumber(route.violations)}
-        </span>
-      </div>
-    ));
-
-    return (
-      <Artifact className="bg-background/80">
-        <ArtifactHeader>
-          <ArtifactTitle>ACE enforcement snapshot</ArtifactTitle>
-          <ArtifactActions>
-            <ArtifactAction
-              tooltip="Copy metrics"
-              icon={CopyIcon}
-              onClick={() =>
-                void copyToClipboard(
-                  JSON.stringify(
-                    {
-                      totalViolations: summary.totalViolations,
-                      totalExempt: summary.totalExempt,
-                      exemptShare: summary.exemptShare,
-                    },
-                    null,
-                    2
-                  )
-                )
-              }
-            />
-          </ArtifactActions>
-        </ArtifactHeader>
-        <ArtifactContent className="grid gap-3">
-          <div className="grid gap-1">
-            <ArtifactDescription>Total violations</ArtifactDescription>
-            <p className="font-semibold text-lg">
-              {formatNumber(summary.totalViolations)}
-            </p>
-          </div>
-          <div className="grid gap-1">
-            <ArtifactDescription>Exempt share</ArtifactDescription>
-            <p className="font-semibold text-lg">
-              {formatPercent(summary.exemptShare)}
-              <span className="text-muted-foreground text-xs">
-                {" "}({formatNumber(summary.totalExempt)} exempt)
-              </span>
-            </p>
-          </div>
-          <div className="grid gap-1">
-            <ArtifactDescription>Top routes</ArtifactDescription>
-            <div className="grid gap-1.5">{topRoutes}</div>
-          </div>
-        </ArtifactContent>
-      </Artifact>
-    );
-  }, [summary, copyToClipboard]);
-
   return (
-    <div className="space-y-6 rounded-2xl border border-border/60 bg-card/70 p-6 shadow-xl backdrop-blur">
+    <div className="flex h-full flex-col space-y-6 rounded-2xl border border-border/60 bg-card/70 p-6 shadow-xl backdrop-blur">
       <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-1">
           <h2 className="text-xl font-semibold tracking-tight">
@@ -626,7 +705,7 @@ export default function AskAI() {
         )}
       </div>
 
-      <Conversation className="h-[28rem] rounded-xl border border-border/50 bg-background/80">
+      <Conversation className="min-h-0 flex-1 rounded-xl border border-border/50 bg-background/80">
         <ConversationContent>
           {messages.length === 0 ? (
             <ConversationEmptyState
@@ -635,191 +714,264 @@ export default function AskAI() {
               icon={<MessageCircleIcon className="size-6" />}
             />
           ) : (
-            messages.map((message) => (
-              <Message key={message.id} from={message.role}>
-                <MessageAvatar
-                  src={message.role === "assistant" ? ASSISTANT_AVATAR : USER_AVATAR}
-                  name={message.role === "assistant" ? "AI" : "You"}
-                />
-                <MessageContent
-                  variant={message.role === "assistant" ? "contained" : "flat"}
-                  className="w-full"
-                >
-                  {message.role === "assistant" ? (
-                    <div className="space-y-4">
-                      <div className="flex justify-end">
-                        <Actions>
-                          <Action
-                            tooltip="Copy response"
-                            onClick={() => void copyToClipboard(message.content)}
+            messages.map((message) => {
+              const meta =
+                message.role === "assistant"
+                  ? assistantMeta[message.id]
+                  : undefined;
+              const summaryRows = meta?.summary?.rows.slice(0, 5) ?? null;
+              const summaryCard = meta?.summary ? (
+                <Artifact className="bg-background/80">
+                  <ArtifactHeader>
+                    <ArtifactTitle>ACE enforcement snapshot</ArtifactTitle>
+                    <ArtifactActions>
+                      <ArtifactAction
+                        tooltip="Copy metrics"
+                        icon={CopyIcon}
+                        onClick={() =>
+                          void copyToClipboard(
+                            JSON.stringify(
+                              {
+                                totalViolations: meta.summary?.totalViolations,
+                                totalExempt: meta.summary?.totalExempt,
+                                exemptShare: meta.summary?.exemptShare,
+                              },
+                              null,
+                              2
+                            )
+                          )
+                        }
+                      />
+                    </ArtifactActions>
+                  </ArtifactHeader>
+                  <ArtifactContent className="grid gap-3">
+                    <div className="grid gap-1">
+                      <ArtifactDescription>Total violations</ArtifactDescription>
+                      <p className="font-semibold text-lg">
+                        {formatNumber(meta.summary.totalViolations)}
+                      </p>
+                    </div>
+                    <div className="grid gap-1">
+                      <ArtifactDescription>Exempt share</ArtifactDescription>
+                      <p className="font-semibold text-lg">
+                        {formatPercent(meta.summary.exemptShare)}
+                        <span className="text-muted-foreground text-xs">
+                          {" "}({formatNumber(meta.summary.totalExempt)} exempt)
+                        </span>
+                      </p>
+                    </div>
+                    <div className="grid gap-1">
+                      <ArtifactDescription>Top routes</ArtifactDescription>
+                      <div className="grid gap-1.5">
+                        {meta.summary.topRoutes.map((route) => (
+                          <div
+                            key={route.route}
+                            className="flex items-center justify-between"
                           >
-                            <CopyIcon className="size-4" />
-                          </Action>
-                          <Action
-                            tooltip="Reuse answer as prompt"
-                            onClick={() => setInputValue(message.content)}
-                          >
-                            <SquarePenIcon className="size-4" />
-                          </Action>
-                          <Action
-                            tooltip="Regenerate"
-                            onClick={() => void submitQuestion(message.content)}
-                          >
-                            <RefreshCcwIcon className="size-4" />
-                          </Action>
-                        </Actions>
+                            <span className="text-muted-foreground text-xs uppercase tracking-wide">
+                              {route.route || "(unassigned)"}
+                            </span>
+                            <span className="font-medium text-sm">
+                              {formatNumber(route.violations)}
+                            </span>
+                          </div>
+                        ))}
                       </div>
+                    </div>
+                  </ArtifactContent>
+                </Artifact>
+              ) : null;
+              const toolHeaderType: `tool-${string}` = meta?.toolState?.toolName
+                ? (`tool-${meta.toolState.toolName.replace(/[^a-zA-Z0-9_-]/g, "-") || "generic"}` as `tool-${string}`)
+                : "tool-generic";
 
-                      {activeAssistantId === message.id && isStreaming && (
-                        <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                          <Loader />
-                          <span>Streaming live response…</span>
+              return (
+                <Message key={message.id} from={message.role}>
+                  <MessageAvatar
+                    src={message.role === "assistant" ? ASSISTANT_AVATAR : USER_AVATAR}
+                    name={message.role === "assistant" ? "AI" : "You"}
+                  />
+                  <MessageContent
+                    variant={message.role === "assistant" ? "contained" : "flat"}
+                    className="w-full"
+                  >
+                    {message.role === "assistant" ? (
+                      <div className="space-y-4">
+                        <div className="flex justify-end">
+                          <Actions>
+                            <Action
+                              tooltip="Copy response"
+                              onClick={() => void copyToClipboard(message.content)}
+                            >
+                              <CopyIcon className="size-4" />
+                            </Action>
+                            <Action
+                              tooltip="Reuse answer as prompt"
+                              onClick={() => setInputValue(message.content)}
+                            >
+                              <SquarePenIcon className="size-4" />
+                            </Action>
+                            <Action
+                              tooltip="Regenerate"
+                              onClick={() => void submitQuestion(message.content)}
+                            >
+                              <RefreshCcwIcon className="size-4" />
+                            </Action>
+                          </Actions>
                         </div>
-                      )}
 
-                      {message.content && (
-                        <Branch defaultBranch={0}>
-                          <BranchMessages>
-                            <div className="grid gap-4">
-                              <Response>{message.content}</Response>
-                              {summary && (
-                                <InlineCitation className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                                  <InlineCitationText>
-                                    Source: NYC Open Data
-                                  </InlineCitationText>
-                                  <InlineCitationCard>
-                                    <InlineCitationCardTrigger
-                                      sources={[DATASET_URL]}
-                                    />
-                                    <InlineCitationCardBody>
-                                      <InlineCitationCarousel>
-                                        <InlineCitationCarouselContent>
-                                          <InlineCitationCarouselItem>
-                                            <InlineCitationCarouselHeader>
-                                              <InlineCitationCarouselPrev />
-                                              <InlineCitationCarouselIndex />
-                                              <InlineCitationCarouselNext />
-                                            </InlineCitationCarouselHeader>
-                                            <InlineCitationSource
-                                              title="Automated Bus Lane Enforcement Violations"
-                                              url={DATASET_URL}
-                                            >
-                                              <InlineCitationQuote>
-                                                Monthly ACE violations and exemption counts grouped by bus route.
-                                              </InlineCitationQuote>
-                                            </InlineCitationSource>
-                                          </InlineCitationCarouselItem>
-                                        </InlineCitationCarouselContent>
-                                      </InlineCitationCarousel>
-                                    </InlineCitationCardBody>
-                                  </InlineCitationCard>
-                                </InlineCitation>
-                              )}
-                            </div>
-                            <div className="grid gap-4">
-                              {assistantSummary}
-                              {summary && (
-                                <CodeBlock
-                                  code={JSON.stringify(summary.rows.slice(0, 5), null, 2)}
-                                  language="json"
-                                  showLineNumbers
-                                >
-                                  <CodeBlockCopyButton aria-label="Copy JSON" />
-                                </CodeBlock>
-                              )}
-                            </div>
-                          </BranchMessages>
-                          <BranchSelector from="assistant">
-                            <BranchPrevious />
-                            <BranchPage />
-                            <BranchNext />
-                          </BranchSelector>
-                        </Branch>
-                      )}
+                        {activeAssistantId === message.id && isStreaming && (
+                          <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                            <Loader />
+                            <span>Streaming live response…</span>
+                          </div>
+                        )}
 
-                      <ChainOfThought defaultOpen={false}>
-                        <ChainOfThoughtHeader />
-                        <ChainOfThoughtContent>
-                          <ChainOfThoughtSearchResults>
-                            <ChainOfThoughtSearchResult>
-                              {summary
-                                ? `${summary.routeCount} routes analysed`
-                                : "Offline reasoning"}
-                            </ChainOfThoughtSearchResult>
-                          </ChainOfThoughtSearchResults>
-                          {chainSteps.map((step) => (
-                            <ChainOfThoughtStep
-                              key={step.label}
-                              label={step.label}
-                              description={step.description}
-                              status={step.status}
+                        {message.content && (
+                          <Branch defaultBranch={0}>
+                            <BranchMessages>
+                              <div className="grid gap-4">
+                                <Response>{message.content}</Response>
+                                {meta?.summary && (
+                                  <InlineCitation className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                    <InlineCitationText>
+                                      Source: NYC Open Data
+                                    </InlineCitationText>
+                                    <InlineCitationCard>
+                                      <InlineCitationCardTrigger sources={[DATASET_URL]} />
+                                      <InlineCitationCardBody>
+                                        <InlineCitationCarousel>
+                                          <InlineCitationCarouselContent>
+                                            <InlineCitationCarouselItem>
+                                              <InlineCitationCarouselHeader>
+                                                <InlineCitationCarouselPrev />
+                                                <InlineCitationCarouselIndex />
+                                                <InlineCitationCarouselNext />
+                                              </InlineCitationCarouselHeader>
+                                              <InlineCitationSource
+                                                title="Automated Bus Lane Enforcement Violations"
+                                                url={DATASET_URL}
+                                              >
+                                                <InlineCitationQuote>
+                                                  Monthly ACE violations and exemption counts grouped by bus route.
+                                                </InlineCitationQuote>
+                                              </InlineCitationSource>
+                                            </InlineCitationCarouselItem>
+                                          </InlineCitationCarouselContent>
+                                        </InlineCitationCarousel>
+                                      </InlineCitationCardBody>
+                                    </InlineCitationCard>
+                                  </InlineCitation>
+                                )}
+                              </div>
+                              <div className="grid gap-4">
+                                {summaryCard}
+                                {summaryRows && (
+                                  <CodeBlock
+                                    code={JSON.stringify(summaryRows, null, 2)}
+                                    language="json"
+                                    showLineNumbers
+                                  >
+                                    <CodeBlockCopyButton aria-label="Copy JSON" />
+                                  </CodeBlock>
+                                )}
+                              </div>
+                            </BranchMessages>
+                            <BranchSelector from="assistant">
+                              <BranchPrevious />
+                              <BranchPage />
+                              <BranchNext />
+                            </BranchSelector>
+                          </Branch>
+                        )}
+
+                        <ChainOfThought defaultOpen={false}>
+                          <ChainOfThoughtHeader />
+                          <ChainOfThoughtContent>
+                            <ChainOfThoughtSearchResults>
+                              <ChainOfThoughtSearchResult>
+                                {meta?.summary
+                                  ? `${meta.summary.routeCount} routes analysed`
+                                  : meta?.toolLogs?.length
+                                  ? `${meta.toolLogs.length} tool ${meta.toolLogs.length === 1 ? "call" : "calls"}`
+                                  : "No tool calls"}
+                              </ChainOfThoughtSearchResult>
+                            </ChainOfThoughtSearchResults>
+                            {(meta?.chainSteps ?? []).map((step) => (
+                              <ChainOfThoughtStep
+                                key={step.label}
+                                label={step.label}
+                                description={step.description}
+                                status={step.status}
+                              />
+                            ))}
+                          </ChainOfThoughtContent>
+                        </ChainOfThought>
+
+                        <Reasoning
+                          isStreaming={isStreaming && activeAssistantId === message.id}
+                          defaultOpen
+                          duration={meta?.summary ? Math.max(1, Math.round(meta.summary.rows.length / 40)) : undefined}
+                        >
+                          <ReasoningTrigger />
+                          <ReasoningContent>
+                            {meta?.reasoningText || "Reasoning unavailable for this turn."}
+                          </ReasoningContent>
+                        </Reasoning>
+
+                        {meta?.toolState && (
+                          <Tool defaultOpen className="bg-background/70">
+                            <ToolHeader
+                              type={toolHeaderType}
+                              state={meta.toolState.state}
                             />
-                          ))}
-                        </ChainOfThoughtContent>
-                      </ChainOfThought>
+                            <ToolContent>
+                              <ToolInput input={meta.toolState.input} />
+                              <ToolOutput
+                                output={meta.toolState.output}
+                                errorText={meta.toolState.errorText}
+                              />
+                            </ToolContent>
+                          </Tool>
+                        )}
 
-                      <Reasoning
-                        isStreaming={isStreaming && activeAssistantId === message.id}
-                        defaultOpen
-                        duration={summary ? Math.max(1, Math.round(summary.rows.length / 40)) : undefined}
-                      >
-                        <ReasoningTrigger />
-                        <ReasoningContent>
-                          {reasoningText ||
-                            "Reasoning unavailable for this turn."}
-                        </ReasoningContent>
-                      </Reasoning>
+                        {meta?.summary && (
+                          <Sources>
+                            <SourcesTrigger count={1} />
+                            <SourcesContent>
+                              <Source href={DATASET_URL} title="Automated Bus Lane Enforcement Violations">
+                                ACE violations dataset on data.ny.gov
+                              </Source>
+                            </SourcesContent>
+                          </Sources>
+                        )}
 
-                      {toolState && (
-                        <Tool defaultOpen className="bg-background/70">
-                          <ToolHeader
-                            type="tool-getViolationsSummary"
-                            state={toolState.state}
-                          />
-                          <ToolContent>
-                            <ToolInput input={toolState.input} />
-                            <ToolOutput
-                              output={toolState.output}
-                              errorText={toolState.errorText}
-                            />
-                          </ToolContent>
-                        </Tool>
-                      )}
-
-                      <Sources>
-                        <SourcesTrigger count={1} />
-                        <SourcesContent>
-                          <Source href={DATASET_URL} title="Automated Bus Lane Enforcement Violations">
-                            ACE violations dataset on data.ny.gov
-                          </Source>
-                        </SourcesContent>
-                      </Sources>
-
-                      <OpenIn query={message.content || activeQuestion || ""}>
-                        <OpenInTrigger />
-                        <OpenInContent>
-                          <OpenInLabel>Continue in another chat</OpenInLabel>
-                          <OpenInChatGPT />
-                          <OpenInClaude />
-                          <OpenInT3 />
-                          <OpenInSeparator />
-                          <OpenInScira />
-                          <OpenInv0 />
-                        </OpenInContent>
-                      </OpenIn>
-                    </div>
-                  ) : (
-                    <div className="grid gap-2">
-                      <div className="inline-flex items-center gap-2 text-muted-foreground text-xs uppercase tracking-wide">
-                        <BarChart3Icon className="size-3" />
-                        Prompt
+                        <OpenIn query={meta?.prompt || message.content || ""}>
+                          <OpenInTrigger />
+                          <OpenInContent>
+                            <OpenInLabel>Continue in another chat</OpenInLabel>
+                            <OpenInChatGPT />
+                            <OpenInClaude />
+                            <OpenInT3 />
+                            <OpenInSeparator />
+                            <OpenInScira />
+                            <OpenInv0 />
+                          </OpenInContent>
+                        </OpenIn>
                       </div>
-                      <p className="text-sm leading-relaxed">{message.content}</p>
-                    </div>
-                  )}
-                </MessageContent>
-              </Message>
-            ))
+                    ) : (
+                      <div className="grid gap-2">
+                        <div className="inline-flex items-center gap-2 text-muted-foreground text-xs uppercase tracking-wide">
+                          <BarChart3Icon className="size-3" />
+                          Prompt
+                        </div>
+                        <p className="text-sm leading-relaxed">{message.content}</p>
+                      </div>
+                    )}
+                  </MessageContent>
+                </Message>
+              );
+            })
           )}
         </ConversationContent>
         <ConversationScrollButton />
@@ -865,7 +1017,6 @@ export default function AskAI() {
       <PromptInput
         onSubmit={handleSubmit}
         className="rounded-xl border border-border/60 bg-background/90"
-        globalDrop
       >
         <PromptInputBody>
           <PromptInputTextarea
@@ -874,24 +1025,15 @@ export default function AskAI() {
             placeholder="Ask about ACE violations, exemptions, trends, or tooling…"
           />
         </PromptInputBody>
-        <PromptInputAttachments>
-          {(file) => <PromptInputAttachment data={file} />}
-        </PromptInputAttachments>
         <PromptInputToolbar>
           <PromptInputTools>
-            <PromptInputActionMenu>
-              <PromptInputActionMenuTrigger />
-              <PromptInputActionMenuContent>
-                <PromptInputActionAddAttachments />
-              </PromptInputActionMenuContent>
-            </PromptInputActionMenu>
             <PromptInputModelSelect value={model} onValueChange={setModel}>
               <PromptInputModelSelectTrigger>
                 <PromptInputModelSelectValue placeholder="Model" />
               </PromptInputModelSelectTrigger>
               <PromptInputModelSelectContent>
-                <PromptInputModelSelectItem value="gpt-4o-mini">
-                  GPT-4o mini
+                <PromptInputModelSelectItem value="openai/gpt-5">
+                  GPT-5 (via Gateway)
                 </PromptInputModelSelectItem>
                 <PromptInputModelSelectItem value="offline">
                   Offline fallback

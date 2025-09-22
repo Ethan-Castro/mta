@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { getViolationTotals, getRouteTotals, getHotspots } from "@/lib/data/violations";
 import { ROUTE_COMPARISONS, CBD_ROUTE_TRENDS, VIOLATION_HOTSPOTS } from "@/lib/data/insights";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -50,9 +51,16 @@ const TREND_COLORS = {
 };
 
 export default function ExecutiveKpis() {
+  const sp = useSearchParams();
+  const globalRouteId = sp.get("routeId") || undefined;
+  const globalStart = sp.get("start") || undefined;
+  const globalEnd = sp.get("end") || undefined;
   const [routes, setRoutes] = useState<RouteRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
+  const [trendData, setTrendData] = useState<Array<{ month: string; violations: number; exempt: number }>>([]);
+  const [trendLoading, setTrendLoading] = useState<boolean>(false);
+  const [trendError, setTrendError] = useState<string>("");
 
   useEffect(() => {
     (async () => {
@@ -68,6 +76,38 @@ export default function ExecutiveKpis() {
       }
     })();
   }, []);
+
+  // Load Neon-backed monthly trend for violations/exempt
+  useEffect(() => {
+    const controller = new AbortController();
+    const url = new URL("/api/violations/summary", window.location.origin);
+    if (globalRouteId) url.searchParams.set("routeId", globalRouteId);
+    if (globalStart) url.searchParams.set("start", globalStart);
+    if (globalEnd) url.searchParams.set("end", globalEnd);
+    url.searchParams.set("limit", "50000");
+    setTrendLoading(true);
+    setTrendError("");
+    fetch(url.toString(), { cache: "no-store", signal: controller.signal })
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`))))
+      .then((json) => {
+        const rows = Array.isArray(json?.rows) ? json.rows : [];
+        const points = rows
+          .slice()
+          .sort((a: any, b: any) => String(a?.date_trunc_ym || "").localeCompare(String(b?.date_trunc_ym || "")))
+          .map((r: any) => ({
+            month: String(r?.date_trunc_ym || ""),
+            violations: Number(r?.violations || 0),
+            exempt: Number(r?.exempt_count || 0),
+          }));
+        setTrendData(points);
+      })
+      .catch((e: any) => {
+        if (e?.name !== "AbortError") setTrendError(e?.message || "Trend failed");
+        setTrendData([]);
+      })
+      .finally(() => setTrendLoading(false));
+    return () => controller.abort();
+  }, [globalRouteId, globalStart, globalEnd]);
 
   const { totalViolations, totalExempt, routeCount, firstSeen, lastSeen } = useMemo(() => {
     const initial = {
@@ -126,14 +166,7 @@ export default function ExecutiveKpis() {
     avgStudents: Math.round(item.totalStudents / item.count),
   }));
 
-  const violationTrendData = [
-    { month: "Jan", violations: 45000, exempt: 12000, speed: 7.8 },
-    { month: "Feb", violations: 42000, exempt: 11500, speed: 8.1 },
-    { month: "Mar", violations: 48000, exempt: 13200, speed: 7.5 },
-    { month: "Apr", violations: 46000, exempt: 12600, speed: 7.9 },
-    { month: "May", violations: 44000, exempt: 11800, speed: 8.2 },
-    { month: "Jun", violations: 43000, exempt: 11200, speed: 8.3 },
-  ];
+  const violationTrendData = trendData;
 
   const cbdImpactData = CBD_ROUTE_TRENDS.slice(0, 8).map(route => ({
     route: route.routeName.split(' ')[0],
@@ -223,13 +256,14 @@ export default function ExecutiveKpis() {
                   <ComposedChart data={violationTrendData}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="month" />
-                    <YAxis yAxisId="left" />
-                    <YAxis yAxisId="right" orientation="right" />
+                    <YAxis />
                     <Tooltip />
-                    <Area yAxisId="left" type="monotone" dataKey="violations" fill={TREND_COLORS.violations} fillOpacity={0.3} stroke={TREND_COLORS.violations} />
-                    <Line yAxisId="right" type="monotone" dataKey="speed" stroke={TREND_COLORS.speed} strokeWidth={3} />
+                    <Area type="monotone" dataKey="violations" fill={TREND_COLORS.violations} fillOpacity={0.3} stroke={TREND_COLORS.violations} name="Violations" />
+                    <Area type="monotone" dataKey="exempt" fill={TREND_COLORS.exempt} fillOpacity={0.2} stroke={TREND_COLORS.exempt} name="Exempt" />
                   </ComposedChart>
                 </ResponsiveContainer>
+                {trendLoading && <div className="text-xs text-muted-foreground mt-1">Loading Neon trend…</div>}
+                {trendError && <div className="text-xs text-destructive mt-1">{trendError}</div>}
               </CardContent>
             </Card>
 
