@@ -16,6 +16,7 @@ export type ChatMessage = {
   role: ChatRole;
   content: string;
   created_at: string;
+  meta?: unknown;
 };
 
 export async function ensureChatSchema(): Promise<void> {
@@ -37,6 +38,8 @@ export async function ensureChatSchema(): Promise<void> {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
   `;
+  // Add meta column if it's missing to store tool metadata
+  await sql`ALTER TABLE messages ADD COLUMN IF NOT EXISTS meta JSONB`;
 }
 
 export async function createConversation(title?: string | null): Promise<Conversation> {
@@ -94,13 +97,13 @@ export async function listConversations(limit = 50): Promise<Conversation[]> {
   return rows;
 }
 
-export async function addMessage(params: { conversationId: string; role: ChatRole; content: string }): Promise<ChatMessage> {
+export async function addMessage(params: { conversationId: string; role: ChatRole; content: string; meta?: unknown }): Promise<ChatMessage> {
   await ensureChatSchema();
   const id = nanoid();
   const rows = (await sql`
-    INSERT INTO messages (id, conversation_id, role, content)
-    VALUES (${id}, ${params.conversationId}, ${params.role}, ${params.content})
-    RETURNING id, conversation_id, role, content, created_at
+    INSERT INTO messages (id, conversation_id, role, content, meta)
+    VALUES (${id}, ${params.conversationId}, ${params.role}, ${params.content}, ${params.meta ?? null})
+    RETURNING id, conversation_id, role, content, created_at, meta
   `) as ChatMessage[];
   // Touch conversation updated_at
   await touchConversation(params.conversationId);
@@ -110,7 +113,7 @@ export async function addMessage(params: { conversationId: string; role: ChatRol
 export async function getMessages(conversationId: string, limit = 200): Promise<ChatMessage[]> {
   await ensureChatSchema();
   const rows = (await sql`
-    SELECT id, conversation_id, role, content, created_at
+    SELECT id, conversation_id, role, content, created_at, meta
     FROM messages
     WHERE conversation_id = ${conversationId}
     ORDER BY created_at ASC

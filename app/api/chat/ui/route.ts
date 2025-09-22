@@ -1,18 +1,40 @@
-import { streamText, type UIMessage, convertToModelMessages } from "ai";
+import { streamText, type UIMessage, convertToModelMessages, tool, stepCountIs } from "ai";
 import { z } from "zod";
 import { addMessage, upsertConversation } from "@/lib/chat";
 import { getViolationSummary } from "@/lib/data/violations";
 import { sql } from "@/lib/db";
-import { getNeonMCPTools } from "@/lib/mcp/neon";
-import { Composio } from "@composio/core";
-import { VercelProvider } from "@composio/vercel";
+import { SYSTEM_PROMPTS } from "@/lib/ai/system-prompts";
+import Exa from "exa-js";
+import {
+  ALLOWED_TABLES,
+  ensureSelectAllowed,
+  queryTableRowCount,
+  queryViolationStats,
+  queryTableSchema,
+  SqlToolError,
+} from "@/lib/ai/sql-tools";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
+const exa = new Exa(process.env.EXA_API_KEY);
+
 export async function POST(req: Request) {
   const { messages, model, conversationId: conversationIdInput, title }: { messages: UIMessage[]; model?: string; conversationId?: string; title?: string } =
     await req.json();
+
+  const headerModel = req.headers.get("x-model") || undefined;
+  let attachmentModel: string | undefined;
+  try {
+    const allParts = (messages || []).flatMap((m: any) => Array.isArray(m?.parts) ? m.parts : []);
+    for (let i = allParts.length - 1; i >= 0; i--) {
+      const p = allParts[i];
+      if (p && p.type === "model" && typeof p.value === "string" && p.value) {
+        attachmentModel = p.value;
+        break;
+      }
+    }
+  } catch {}
 
   const headerConversation = req.headers.get("x-conversation-id") || undefined;
   const conversation = await upsertConversation(conversationIdInput ?? headerConversation ?? null, title ?? null);
@@ -33,38 +55,76 @@ export async function POST(req: Request) {
 
   // Require AI Gateway key to be provided by environment (no hardcoded fallback)
 
-  // Load Neon MCP tools (allowed set only). Best-effort; continue without if unavailable
-  let mcpBundle: Awaited<ReturnType<typeof getNeonMCPTools>> | null = null;
-  try {
-    mcpBundle = await getNeonMCPTools();
-  } catch {}
-
-  // Load Composio Exa tools with Vercel provider for web search
-  let composioTools: Record<string, any> = {};
-  try {
-    const userId = (crypto.randomUUID && crypto.randomUUID()) || Math.random().toString(36).slice(2);
-    const composio = new Composio({ apiKey: process.env.COMPOSIO_API_KEY, provider: new VercelProvider() });
-    composioTools = await composio.tools.get(userId, { toolkits: ["EXA"] });
-  } catch {}
+  // No MCP: tools are defined locally below
 
   const tools = {
-    runSql: {
-      description: "Execute a SQL query against Neon Postgres (server-side only).",
+    webSearch: tool({
+      description: "Search the web for up-to-date information",
       inputSchema: z.object({
-        sql: z.string().describe("Parameterized SQL using Neon serverless tagged template is not supported; pass full SQL string."),
+        query: z.string().min(1).max(200).describe("The search query"),
       }),
-      execute: async ({ sql: raw }) => {
-        // Basic guardrail: disallow dangerous statements in this demo
-        const lowered = raw.trim().toLowerCase();
-        const forbidden = ["drop ", "truncate ", "alter ", "grant ", "revoke "];
-        if (forbidden.some((kw) => lowered.startsWith(kw))) {
-          return { error: "Statement not allowed." };
+      execute: async ({ query }) => {
+        if (!process.env.EXA_API_KEY) {
+          return { error: "EXA_API_KEY is not configured." };
         }
-        const rows = await sql(raw as any);
-        return { rows };
+        try {
+          const { results } = await exa.searchAndContents(query, {
+            type: "auto",
+            text: true,
+            livecrawl: "always",
+            numResults: 20,
+          } as any);
+          return results.map((result: any) => ({
+            title: result.title,
+            url: result.url,
+            content: String(result.text || "").slice(0, 1000),
+            publishedDate: result.publishedDate ?? result.published ?? null,
+          }));
+        } catch (error: any) {
+          return { error: error?.message || "Web search failed" };
+        }
       },
-    },
-    getViolationsSummary: {
+    }),
+    listAllowedTables: tool({
+      description: "List database tables that the assistant is permitted to query.",
+      inputSchema: z.object({}),
+      execute: async () => ({ tables: ALLOWED_TABLES }),
+    }),
+    describeTable: tool({
+      description: "Describe the schema of an allowed table (public schema only).",
+      inputSchema: z.object({ table: z.enum(ALLOWED_TABLES) }),
+      execute: async ({ table }) => {
+        try {
+          return await queryTableSchema({ table });
+        } catch (error) {
+          if (error instanceof SqlToolError) {
+            return { error: error.message };
+          }
+          throw error;
+        }
+      },
+    }),
+    countTableRows: tool({
+      description: "Count rows from allowed tables with optional time filters.",
+      inputSchema: z.object({
+        table: z.enum(ALLOWED_TABLES),
+        year: z.number().int().optional(),
+        start: z.string().optional(),
+        end: z.string().optional(),
+        dateColumn: z.string().optional(),
+      }),
+      execute: async ({ table, year, start, end, dateColumn }) => {
+        try {
+          return await queryTableRowCount({ table, year, start, end, dateColumn });
+        } catch (error) {
+          if (error instanceof SqlToolError) {
+            return { error: error.message };
+          }
+          throw error;
+        }
+      },
+    }),
+    getViolationsSummary: tool({
       description: "Fetch grouped violations and exempt counts per route per month",
       inputSchema: z.object({
         routeId: z.string().optional(),
@@ -83,14 +143,33 @@ export async function POST(req: Request) {
           })),
         };
       },
-    },
-    chartViolationsTrend: {
+    }),
+    violationTotals: tool({
+      description: "Aggregate violation totals (overall and exempt) with optional filters.",
+      inputSchema: z.object({
+        routeId: z.string().optional(),
+        year: z.number().int().optional(),
+        start: z.string().optional(),
+        end: z.string().optional(),
+      }),
+      execute: async ({ routeId, year, start, end }) => {
+        try {
+          return await queryViolationStats({ routeId, year, start, end });
+        } catch (error) {
+          if (error instanceof SqlToolError) {
+            return { error: error.message };
+          }
+          throw error;
+        }
+      },
+    }),
+    chartViolationsTrend: tool({
       description: "Return a line chart spec for monthly violations for given route(s) and window.",
       inputSchema: z.object({
         routeId: z.string().optional(),
         start: z.string().optional(),
         end: z.string().optional(),
-        limit: z.number().optional().default(5000),
+        limit: z.number().optional().default(50000),
       }),
       execute: async ({ routeId, start, end, limit }) => {
         const rows = await getViolationSummary({ routeId, start, end, limit });
@@ -103,16 +182,43 @@ export async function POST(req: Request) {
           data,
         };
       },
-    },
-    ...(mcpBundle?.tools ?? {}),
-    ...(composioTools ?? {}),
+    }),
+    chartViolationsGrouped: tool({
+      description: "Return grouped-bar chart spec of monthly violations vs exempt counts.",
+      inputSchema: z.object({
+        routeId: z.string().optional(),
+        start: z.string().optional(),
+        end: z.string().optional(),
+        limit: z.number().optional().default(50000),
+      }),
+      execute: async ({ routeId, start, end, limit }) => {
+        const rows = await getViolationSummary({ routeId, start, end, limit });
+        const monthMap = new Map<string, { violations: number; exempt: number }>();
+        for (const r of rows) {
+          const key = r.month;
+          const agg = monthMap.get(key) || { violations: 0, exempt: 0 };
+          agg.violations += Number(r.violations || 0);
+          agg.exempt += Number(r.exemptCount || 0);
+          monthMap.set(key, agg);
+        }
+        const data = Array.from(monthMap.entries())
+          .sort((a, b) => a[0].localeCompare(b[0]))
+          .map(([month, v]) => ({ name: month, violations: v.violations, exempt: v.exempt }));
+        return {
+          chart: { type: "grouped-bar", title: "Monthly violations vs exempt", yLabel: "Count" },
+          data,
+        };
+      },
+    }),
   } as const;
 
   const result = streamText({
-    model: model ?? "openai/gpt-5",
+    model: headerModel ?? attachmentModel ?? model ?? "openai/gpt-5-mini",
+    system: SYSTEM_PROMPTS.streaming,
     messages: convertToModelMessages(messages),
     tools,
     toolChoice: "auto",
+    stopWhen: stepCountIs(15),
   });
   const uiResponse = result.toUIMessageStreamResponse();
 
@@ -124,5 +230,3 @@ export async function POST(req: Request) {
     status: uiResponse.status,
   });
 }
-
-

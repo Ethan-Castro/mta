@@ -30,14 +30,10 @@ export async function getNeonMCPTools(): Promise<MCPToolsBundle> {
     "list_shared_projects",
     "describe_project",
     "get_connection_string",
-    "run_sql",
-    "run_sql_transaction",
     "get_database_tables",
     "describe_table_schema",
     "list_slow_queries",
     "explain_sql_statement",
-    "prepare_query_tuning",
-    "complete_query_tuning",
     "provision_neon_auth",
   ]);
 

@@ -3,16 +3,24 @@
 import { Chat, useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { useMemo, useState } from "react";
+import {
+  PromptInputModelSelect,
+  PromptInputModelSelectTrigger,
+  PromptInputModelSelectContent,
+  PromptInputModelSelectItem,
+  PromptInputModelSelectValue,
+} from "@/components/ai-elements/prompt-input";
 
 export default function ToolsChat() {
   const [input, setInput] = useState("");
   const [showTools, setShowTools] = useState(true);
+  const [model, setModel] = useState<string>("openai/gpt-5-mini");
   const chat = useMemo(
     () =>
       new Chat({
-        transport: new DefaultChatTransport({ api: "/api/chat/ui" }),
+        transport: new DefaultChatTransport({ api: "/api/chat/ui", headers: { "x-model": model } as any }),
       }),
-    []
+    [model]
   );
   const { messages, sendMessage, status, error } = useChat({ chat });
 
@@ -25,6 +33,17 @@ export default function ToolsChat() {
           : [];
         return <Sparkline data={points} height={220} />;
       }
+      if (spec?.type === "grouped-bar") {
+        const GroupedBar = require("@/components/charts/GroupedBar").default;
+        const rows = Array.isArray(data)
+          ? data.map((d: any) => ({
+              name: String(d.name ?? d.label ?? ""),
+              violations: Number(d.violations ?? d.value ?? 0),
+              exempt: Number(d.exempt ?? 0),
+            }))
+          : [];
+        return <GroupedBar data={rows} height={260} />;
+      }
     } catch {}
     return (
       <pre className="overflow-x-auto rounded-md bg-muted/30 p-2 text-xs">
@@ -36,8 +55,8 @@ export default function ToolsChat() {
   const helpText = useMemo(
     () =>
       showTools
-        ? "Watching tool execution. Ask: What's the weather in New York in celsius?"
-        : "Focusing on final output. Toggle to watch tools.",
+        ? "Watching tool execution. Try: 'How many violations rows in 2024?' or 'List allowed tables'."
+        : "Focusing on final output. Toggle to watch tool data.",
     [showTools]
   );
 
@@ -48,23 +67,42 @@ export default function ToolsChat() {
           <h3 className="text-sm font-semibold sm:text-base">Tool-enabled streaming chat</h3>
           <p className="text-xs text-muted-foreground" id="toolschat-helptext">{helpText}</p>
         </div>
-        <label className="inline-flex items-center gap-2 text-xs" htmlFor="toggle-show-tools">
-          <input
-            id="toggle-show-tools"
-            type="checkbox"
-            className="accent-primary"
-            checked={showTools}
-            onChange={(e) => setShowTools(e.target.checked)}
-            aria-describedby="toolschat-helptext"
-          />
-          Show tools
-        </label>
+        <div className="flex items-center gap-3">
+          <div className="text-xs">
+            <PromptInputModelSelect value={model} onValueChange={setModel}>
+              <PromptInputModelSelectTrigger>
+                <PromptInputModelSelectValue placeholder="Model" />
+              </PromptInputModelSelectTrigger>
+              <PromptInputModelSelectContent>
+                <PromptInputModelSelectItem value="openai/gpt-5-mini">GPT-5 Mini (via Gateway)</PromptInputModelSelectItem>
+                <PromptInputModelSelectItem value="xai/grok-4-fast-reasoning">Grok-4 Fast Reasoning (xAI)</PromptInputModelSelectItem>
+                <PromptInputModelSelectItem value="anthropic/claude-sonnet-4">Claude Sonnet 4 (Anthropic)</PromptInputModelSelectItem>
+                <PromptInputModelSelectItem value="google/gemini-2.5-flash">Gemini 2.5 Flash (Google)</PromptInputModelSelectItem>
+                <PromptInputModelSelectItem value="google/gemini-2.5-pro">Gemini 2.5 Pro (Google)</PromptInputModelSelectItem>
+                <PromptInputModelSelectItem value="openai/gpt-oss-120b">GPT-OSS 120B (OpenAI)</PromptInputModelSelectItem>
+                <PromptInputModelSelectItem value="moonshotai/kimi-k2-0905">Kimi K2 0905 (Moonshot)</PromptInputModelSelectItem>
+                <PromptInputModelSelectItem value="offline">Offline fallback</PromptInputModelSelectItem>
+              </PromptInputModelSelectContent>
+            </PromptInputModelSelect>
+          </div>
+          <label className="inline-flex items-center gap-2 text-xs" htmlFor="toggle-show-tools">
+            <input
+              id="toggle-show-tools"
+              type="checkbox"
+              className="accent-primary"
+              checked={showTools}
+              onChange={(e) => setShowTools(e.target.checked)}
+              aria-describedby="toolschat-helptext"
+            />
+            Show tools
+          </label>
+        </div>
       </div>
 
       <div className="mb-3 max-h-[18rem] space-y-3 overflow-y-auto rounded-xl border border-border/60 bg-background/80 p-3 sm:max-h-[22rem] sm:p-4" role="log" aria-label="Messages">
         {messages.length === 0 && (
           <div className="text-sm text-muted-foreground">
-            Try: "What's the weather in New York?" or "What's the weather in New York in celsius?"
+            Sample prompts: "How many violations rows in 2024?", "Show row count for bus_segment_speeds_2025", or "Plot violations trend for M15-SBS".
           </div>
         )}
 
@@ -93,10 +131,53 @@ export default function ToolsChat() {
                       </pre>
                     );
                   }
+                  case "tool-webSearch": {
+                    if (!showTools) return null;
+                    const output = (part as any).output ?? part;
+                    const results: any[] = Array.isArray(output) ? output : Array.isArray(output?.results) ? output.results : [];
+                    return (
+                      <div key={`${message.id}-tool-web-${i}`} className="space-y-2 rounded-md border border-border/60 bg-background/70 p-2">
+                        <div className="text-xs font-medium">Web search results</div>
+                        {results.length === 0 ? (
+                          <div className="text-xs text-muted-foreground">No results</div>
+                        ) : (
+                          <ul className="space-y-2">
+                            {results.slice(0, 5).map((r: any, idx: number) => (
+                              <li key={idx} className="text-xs">
+                                <a href={r.url} target="_blank" rel="noreferrer" className="font-medium underline underline-offset-2">
+                                  {r.title || r.url}
+                                </a>
+                                {r.publishedDate && (
+                                  <span className="ml-2 text-[10px] text-muted-foreground">{String(r.publishedDate).slice(0, 10)}</span>
+                                )}
+                                {r.content && (
+                                  <div className="mt-1 line-clamp-3 text-muted-foreground">{String(r.content)}</div>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    );
+                  }
+                  case "tool-listAllowedTables":
+                  case "tool-countTableRows":
+                  case "tool-violationTotals":
+                  case "tool-getViolationsSummary": {
+                    if (!showTools) return null;
+                    return (
+                      <pre
+                        key={`${message.id}-tool-${i}`}
+                        className="overflow-x-auto rounded-md bg-muted/40 p-2 text-xs"
+                      >
+                        {JSON.stringify(part.output ?? part, null, 2)}
+                      </pre>
+                    );
+                  }
                   default: {
                     // Only show tool parts when they are tool-related and showTools is enabled
                     const looksLikeTool = typeof part?.type === "string" && part.type.startsWith("tool-");
-                    if (part.type === "tool-chartViolationsTrend") {
+                  if (part.type === "tool-chartViolationsTrend" || part.type === "tool-chartViolationsGrouped") {
                       if (!showTools) return null;
                       const payload: any = (part as any).output ?? part;
                       return (
@@ -162,4 +243,3 @@ export default function ToolsChat() {
     </div>
   );
 }
-

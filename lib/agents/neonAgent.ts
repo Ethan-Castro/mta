@@ -1,7 +1,6 @@
 import { Experimental_Agent as Agent, stepCountIs, tool } from "ai";
 import { z } from "zod";
 import { sql } from "@/lib/db";
-import { getNeonMCPTools } from "@/lib/mcp/neon";
 
 function buildLocalSqlTools(options: { allowDestructive: boolean }) {
   const { allowDestructive } = options;
@@ -51,21 +50,11 @@ function buildLocalSqlTools(options: { allowDestructive: boolean }) {
   } as const;
 }
 
-export async function getNeonAgent(options?: { maxSteps?: number; includeMcp?: boolean; allowDestructive?: boolean }) {
+export async function getNeonAgent(options?: { maxSteps?: number; allowDestructive?: boolean }) {
   const maxSteps = options?.maxSteps ?? 8;
-  const includeMcp = options?.includeMcp ?? true;
   const allowDestructive = options?.allowDestructive ?? false;
 
   const localTools = buildLocalSqlTools({ allowDestructive });
-
-  let mcpBundle: Awaited<ReturnType<typeof getNeonMCPTools>> | null = null;
-  if (includeMcp) {
-    try {
-      mcpBundle = await getNeonMCPTools();
-    } catch {
-      mcpBundle = null;
-    }
-  }
 
   const agent = new Agent({
     model: "openai/gpt-4o",
@@ -76,12 +65,11 @@ export async function getNeonAgent(options?: { maxSteps?: number; includeMcp?: b
 - Provide concise results and follow-up recommendations.`,
     tools: {
       ...localTools,
-      ...(mcpBundle?.tools ?? {}),
     },
   });
 
   async function close() {
-    await mcpBundle?.closeAll?.();
+    // No-op; retained for API parity
   }
 
   return { agent, close };

@@ -13,8 +13,8 @@ IMPORTANT DATE HANDLING:
 - The database contains data from 2019 to present - use the most recent available months
 
 Tool routing rules:
-- For database or MTA ACE data questions (metrics, SQL, tables, routes, violations), prefer Neon MCP tools first.
-- For external/web information (news, references outside our DB), prefer Exa web search tools.
+- For database or MTA ACE data questions (metrics, SQL, tables, routes, violations), use the built-in Neon database tools (no MCP).
+- For external/web information (news, references outside our DB), use Exa web search tools.
 - Only call tools when necessary. Do not show tools unless they were actually used.`;
 
 // AskAI streaming endpoint prompt
@@ -27,7 +27,7 @@ IMPORTANT DATE HANDLING:
 - The database contains data from 2019 to present - use the most recent available months
 
 Tool routing rules:
-- Prefer Neon MCP for database/data questions (violations, routes, SQL, schema) and only when needed.
+- Use the built-in Neon database tools (no MCP) for data questions (violations, routes, SQL, schema) and only when needed.
 - Prefer Exa search for web/external queries requiring current information or citations.
 - Use at most the minimal number of tool calls needed.`;
 

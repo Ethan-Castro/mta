@@ -1,22 +1,22 @@
-import { streamText } from "ai";
+import { streamText, stepCountIs } from "ai";
 import { SYSTEM_PROMPTS } from "@/lib/ai/system-prompts";
 import { z } from "zod";
 import { getViolationSummary } from "@/lib/data/violations";
 import { sql } from "@/lib/db";
 import { addMessage, getMessages, upsertConversation } from "@/lib/chat";
-import { getNeonMCPTools } from "@/lib/mcp/neon";
 import {
   buildAssistantFallback,
   computeSummary,
   extractSummaryRows,
   type ToolLogEntry,
 } from "@/lib/ai/assistant-utils";
-import { Composio } from "@composio/core";
-import { VercelProvider } from "@composio/vercel";
+import Exa from "exa-js";
 // no next/headers in route handlers; use req.headers
 
 export const runtime = "nodejs";
 const TOOL_META_SENTINEL = "[[AI_TOOL_META]]";
+
+const exa = new Exa(process.env.EXA_API_KEY);
 
 function stripSqlComments(sqlText: string) {
   return sqlText.replace(/--.*?$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
@@ -84,10 +84,11 @@ function toSerializable(value: unknown): unknown {
 }
 
 export async function POST(req: Request) {
-  let mcpBundle: Awaited<ReturnType<typeof getNeonMCPTools>> | null = null;
   try {
     const body = await req.json().catch(() => ({}));
     const { routeId, start, end, question, model, conversationId: conversationIdInput, title } = body || {};
+
+    const headerModel = req.headers.get("x-model") || undefined;
 
     // Ensure conversation exists and persist the user message
     const conversation = await upsertConversation(conversationIdInput ?? null, title ?? null);
@@ -151,27 +152,44 @@ export async function POST(req: Request) {
       modelMessages.push({ role: "user", content: fallbackPrompt });
     }
 
-    // Load Neon MCP tools and Composio Exa for this request
-    try {
-      mcpBundle = await getNeonMCPTools();
-    } catch {}
-
-    let composioTools: Record<string, any> = {};
-    try {
-      const userId = (crypto.randomUUID && crypto.randomUUID()) || Math.random().toString(36).slice(2);
-      const composio = new Composio({ apiKey: process.env.COMPOSIO_API_KEY, provider: new VercelProvider() });
-      composioTools = await composio.tools.get(userId, { toolkits: ["EXA"] });
-    } catch {}
+    // No MCP: tools are implemented locally (Exa + direct Neon DB access)
 
     const toolCallMap = new Map<string, { name: string; input?: unknown }>();
     const toolLogs: ToolLogEntry[] = [];
 
     const result = streamText({
-      model: model || "openai/gpt-5",
+      model: headerModel ?? (model || "openai/gpt-5-mini"),
       // Centralized system prompt: edit in lib/ai/system-prompts.ts
       system: SYSTEM_PROMPTS.streaming,
       messages: modelMessages,
       tools: {
+        webSearch: {
+          description: "Search the web for up-to-date information",
+          inputSchema: z.object({
+            query: z.string().min(1).max(200).describe("The search query"),
+          }),
+          execute: async ({ query }) => {
+            if (!process.env.EXA_API_KEY) {
+              return { error: "EXA_API_KEY is not configured." };
+            }
+            try {
+              const { results } = await exa.searchAndContents(query, {
+                type: "auto",
+                text: true,
+                livecrawl: "always",
+                numResults: 20,
+              } as any);
+              return results.map((result: any) => ({
+                title: result.title,
+                url: result.url,
+                content: String(result.text || "").slice(0, 1000),
+                publishedDate: result.publishedDate ?? result.published ?? null,
+              }));
+            } catch (error: any) {
+              return { error: error?.message || "Web search failed" };
+            }
+          },
+        },
         runSql: {
           description: "Execute a SQL query against Neon Postgres (server-side only).",
           inputSchema: z.object({
@@ -206,10 +224,9 @@ export async function POST(req: Request) {
             };
           },
         },
-        ...(mcpBundle?.tools ?? {}),
-        ...(composioTools ?? {}),
       },
       toolChoice: "auto",
+      stopWhen: stepCountIs(15),
       onStepFinish({ toolCalls, toolResults }) {
         toolCalls?.forEach((call) => {
           toolCallMap.set(call.toolCallId, {
@@ -264,30 +281,19 @@ export async function POST(req: Request) {
             controller.enqueue(encoder.encode(`\n${TOOL_META_SENTINEL}${metaPayload}`));
           } catch {}
 
-          // Persist assistant message at the end of the stream
+          // Persist assistant message at the end of the stream (with tool metadata)
           if (assistantBuffer.trim()) {
             try {
-              await addMessage({ conversationId, role: "assistant", content: assistantBuffer });
+              await addMessage({ conversationId, role: "assistant", content: assistantBuffer, meta: { toolLogs } });
             } catch {}
           }
           controller.close();
-          if (mcpBundle) {
-            try {
-              await mcpBundle.closeAll();
-            } catch {}
-            mcpBundle = null;
-          }
         }
       },
     });
 
     return new Response(stream, { headers: { "Content-Type": "text/plain; charset=utf-8", "x-conversation-id": conversationId } });
   } catch (e) {
-    if (mcpBundle) {
-      try {
-        await mcpBundle.closeAll();
-      } catch {}
-    }
     return new Response("AI is temporarily unavailable.", { headers: { "Content-Type": "text/plain; charset=utf-8" } });
   }
 }

@@ -23,7 +23,7 @@ export async function POST(req: Request) {
     process.env.AI_GATEWAY_API_KEY = process.env.AI_GATEWAY_API_KEY || "vck_71Q1WAPSF8Hxrgs9wXw0k8sdl8oHndAnZch694sGbRkTa7aHuT46f1oo";
 
     const { object } = await generateObject({
-      model: "openai/gpt-5",
+      model: "openai/gpt-5-mini",
       schema: SummarySchema,
       system: "Extract concise KPIs and recommendations from ACE analytics.",
       prompt: `Summarize and structure this data for executives: ${JSON.stringify(data).slice(0, 8000)}`,

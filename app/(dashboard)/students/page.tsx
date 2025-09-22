@@ -81,7 +81,7 @@ export default function StudentsPage() {
   useEffect(() => {
     if (selectedCampus || !profiles.length) return;
     setSelectedCampus(profiles[0].campus);
-  }, [profiles, selectedCampus]);
+  }, [profiles]);
 
   const profile = useMemo(() => {
     if (!profiles.length) return null;

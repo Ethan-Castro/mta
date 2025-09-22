@@ -339,7 +339,7 @@ function deriveToolState(toolLogs: ToolLogEntry[], baseInput: Record<string, unk
 
 export default function AskAI() {
   const [inputValue, setInputValue] = useState("");
-  const [model, setModel] = useState("openai/gpt-5");
+  const [model, setModel] = useState("openai/gpt-5-mini");
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [status, setStatus] = useState<ChatStatus | undefined>();
@@ -960,8 +960,26 @@ export default function AskAI() {
                 <PromptInputModelSelectValue placeholder="Model" />
               </PromptInputModelSelectTrigger>
               <PromptInputModelSelectContent>
-                <PromptInputModelSelectItem value="openai/gpt-5">
-                  GPT-5 (via Gateway)
+                <PromptInputModelSelectItem value="openai/gpt-5-mini">
+                  GPT-5 Mini (via Gateway)
+                </PromptInputModelSelectItem>
+                <PromptInputModelSelectItem value="xai/grok-4-fast-reasoning">
+                  Grok-4 Fast Reasoning (xAI)
+                </PromptInputModelSelectItem>
+                <PromptInputModelSelectItem value="anthropic/claude-sonnet-4">
+                  Claude Sonnet 4 (Anthropic)
+                </PromptInputModelSelectItem>
+                <PromptInputModelSelectItem value="google/gemini-2.5-flash">
+                  Gemini 2.5 Flash (Google)
+                </PromptInputModelSelectItem>
+                <PromptInputModelSelectItem value="google/gemini-2.5-pro">
+                  Gemini 2.5 Pro (Google)
+                </PromptInputModelSelectItem>
+                <PromptInputModelSelectItem value="openai/gpt-oss-120b">
+                  GPT-OSS 120B (OpenAI)
+                </PromptInputModelSelectItem>
+                <PromptInputModelSelectItem value="moonshotai/kimi-k2-0905">
+                  Kimi K2 0905 (Moonshot)
                 </PromptInputModelSelectItem>
                 <PromptInputModelSelectItem value="offline">
                   Offline fallback

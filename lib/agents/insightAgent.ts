@@ -125,7 +125,7 @@ function firstText(result: any, fallback = "") {
 }
 
 export const insightAgent = new Agent({
-  model: "openai/gpt-5",
+  model: "openai/gpt-5-mini",
   stopWhen: stepCountIs(10),
   // Centralized system prompt: edit in lib/ai/system-prompts.ts
   system: SYSTEM_PROMPT_INSIGHT_AGENT,
