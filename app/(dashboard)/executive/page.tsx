@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import ExecutiveSummary from "@/components/ExecutiveSummary";
 import ExecutiveKpis from "@/components/ExecutiveKpis";
@@ -43,7 +43,8 @@ const integer = new Intl.NumberFormat("en-US");
 function formatPercent(value: number) {
   return `${percent.format(value)}%`;
 }
-export default function ExecutivePage() {
+
+function ExecutivePageContent() {
   const searchParams = useSearchParams();
   const globalRouteId = searchParams.get("routeId");
   const globalStart = searchParams.get("start");
@@ -355,5 +356,13 @@ export default function ExecutivePage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ExecutivePage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-64">Loading...</div>}>
+      <ExecutivePageContent />
+    </Suspense>
   );
 }
