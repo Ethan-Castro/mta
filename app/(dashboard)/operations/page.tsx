@@ -357,17 +357,20 @@ export default function OperationsPage() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <header>
+      <header className="animate-fade-up space-y-1">
         <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Operations</h1>
         <p className="text-sm text-foreground/70">Compare routes, speeds, and violations.</p>
       </header>
       {(curatedError || campusError) && (
-        <div className="rounded-lg border border-destructive/60 bg-destructive/10 p-3 text-xs text-destructive space-y-1">
+        <div className="animate-fade-up rounded-lg border border-destructive/60 bg-destructive/10 p-3 text-xs text-destructive space-y-1 shadow-sm">
           {curatedError && <div>{curatedError}</div>}
           {campusError && <div>{campusError}</div>}
         </div>
       )}
-      <section aria-labelledby="operations-brief" className="rounded-xl border border-border/60 bg-card/70 p-4">
+      <section
+        aria-labelledby="operations-brief"
+        className="surface-card animate-fade-up animate-fade-up-delay-1 rounded-xl border border-border/60 bg-card/80 p-4 shadow-soft-lg sm:p-5"
+      >
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 id="operations-brief" className="text-sm font-semibold text-foreground">What this answers</h2>
@@ -385,11 +388,11 @@ export default function OperationsPage() {
         </div>
       </section>
       {dataError && (
-        <div className="rounded-lg border border-destructive/60 bg-destructive/10 p-3 text-xs text-destructive">
+        <div className="animate-fade-up rounded-lg border border-destructive/60 bg-destructive/10 p-3 text-xs text-destructive shadow-sm">
           {dataError}
         </div>
       )}
-      <div className="grid grid-cols-1 gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 animate-fade-up animate-fade-up-delay-2 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
         <InsightCard
           title="Avg speed delta"
           value={formatChange(avgSpeedDelta)}
@@ -423,7 +426,10 @@ export default function OperationsPage() {
           trendPositive={false}
         />
       </div>
-      <section aria-labelledby="operations-comparison" className="rounded-xl border border-border/60 bg-card/70 p-4 space-y-3">
+      <section
+        aria-labelledby="operations-comparison"
+        className="surface-card animate-fade-up animate-fade-up-delay-3 rounded-xl border border-border/60 bg-card/80 p-4 shadow-soft-lg space-y-3 sm:p-5"
+      >
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 id="operations-comparison" className="text-sm font-medium">Multi-route comparison</h2>
@@ -432,7 +438,7 @@ export default function OperationsPage() {
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span>Top routes</span>
             <Select value={String(comparisonLimit)} onValueChange={(value) => setComparisonLimit(Number(value))}>
-              <SelectTrigger className="h-8 w-[72px] text-xs">
+              <SelectTrigger className="h-8 w-[72px] rounded-lg border border-foreground/15 bg-background/80 text-xs transition-colors duration-300 hover:border-primary/40 focus-visible:border-primary/40 focus-visible:ring-2 focus-visible:ring-primary/30">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent align="end">
@@ -450,22 +456,30 @@ export default function OperationsPage() {
           Violations and exempt notifications are sourced directly from Neon Postgres. Adjust campus filters and toggles above to reshape this comparison.
         </p>
       </section>
-      <div className="text-xs">
-        <button onClick={() => setShowExplain((s) => !s)} className="rounded-md border border-foreground/10 hover:border-foreground/20 px-2 py-1 transition-colors">
+      <div className="animate-fade-up text-xs">
+        <button
+          onClick={() => setShowExplain((s) => !s)}
+          className="inline-flex items-center gap-2 rounded-full border border-foreground/15 bg-background/80 px-3 py-1.5 font-medium transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/40 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+        >
           {showExplain ? "Hide explanation" : "Explain this view"}
         </button>
         {showExplain && (
-          <div className="mt-2 rounded-md border border-foreground/10 p-3 text-foreground/80">
+          <div className="mt-2 rounded-md border border-foreground/10 bg-background/80 p-3 text-foreground/80 shadow-sm">
             Toggle individual routes to benchmark campus corridors. Cards refresh with Neon-powered metrics and the map
             highlights the highest-pressure locations for field teams.
           </div>
         )}
       </div>
-      <div className="rounded-xl border border-foreground/10 p-4 space-y-4">
+      <div className="surface-card animate-fade-up rounded-xl border border-foreground/10 bg-card/80 p-4 shadow-soft-lg space-y-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-sm font-medium">Route focus</h2>
           <label className="text-xs inline-flex items-center gap-2 cursor-pointer select-none">
-            <input type="checkbox" checked={useClusters} onChange={(e) => setUseClusters(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={useClusters}
+              onChange={(e) => setUseClusters(e.target.checked)}
+              className="h-4 w-4 rounded border-foreground/30 text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            />
             Cluster hotspots on map
           </label>
         </div>
@@ -475,7 +489,10 @@ export default function OperationsPage() {
               Filter by campus type
             </label>
             <Select value={selectedCampusType} onValueChange={setSelectedCampusType}>
-              <SelectTrigger id="operations-campus-filter" className="max-w-xs text-sm">
+              <SelectTrigger
+                id="operations-campus-filter"
+                className="max-w-xs rounded-lg border border-foreground/15 bg-background/80 text-sm transition-colors duration-300 hover:border-primary/40 focus-visible:border-primary/40 focus-visible:ring-2 focus-visible:ring-primary/30"
+              >
                 <SelectValue>
                   {campusTypeOptions.find((option) => option.value === selectedCampusType)?.label ?? "All campus types"}
                 </SelectValue>
@@ -493,7 +510,10 @@ export default function OperationsPage() {
             {routeComparisons.filter((route) => campusRouteIds.has(route.routeId)).map((route) => {
               const isEnabled = enabledRoutes[route.routeId] !== false;
               return (
-                <label key={route.routeId} className="inline-flex items-center gap-2 cursor-pointer select-none">
+                <label
+                  key={route.routeId}
+                  className="inline-flex items-center gap-2 cursor-pointer select-none rounded-full border border-foreground/10 bg-background/70 px-3 py-1.5 transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/40 hover:text-primary"
+                >
                   <input
                     type="checkbox"
                     checked={isEnabled}
@@ -503,9 +523,13 @@ export default function OperationsPage() {
                         [route.routeId]: e.target.checked,
                       }))
                     }
+                    className="h-4 w-4 rounded border-foreground/30 text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
                   />
                   <span className="inline-flex items-center gap-2">
-                    <span style={{ backgroundColor: ROUTE_COLORS[route.routeId] || "#2563eb", width: 10, height: 10, borderRadius: 9999 }} />
+                    <span
+                      style={{ backgroundColor: ROUTE_COLORS[route.routeId] || "#2563eb" }}
+                      className="h-2.5 w-2.5 rounded-full shadow-[0_0_0_4px_rgba(8,23,156,0.08)]"
+                    />
                     {route.routeId} | {route.routeName}
                   </span>
                 </label>
@@ -517,19 +541,29 @@ export default function OperationsPage() {
           </div>
         </div>
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 gap-4 animate-fade-up lg:grid-cols-5">
         <div className="space-y-4 lg:col-span-3">
-          <MapPanel height={280} center={[-73.95, 40.73]} zoom={10.2} markers={markerData} cluster={useClusters} hoverPopups={!useClusters} />
-          <div className="rounded-xl border border-foreground/10 p-4 space-y-3">
+          <MapPanel
+            height={280}
+            center={[-73.95, 40.73]}
+            zoom={10.2}
+            markers={markerData}
+            cluster={useClusters}
+            hoverPopups={!useClusters}
+          />
+          <div className="surface-card rounded-xl border border-foreground/10 bg-card/80 p-4 shadow-soft-lg space-y-3 sm:p-5">
             <h2 className="text-sm font-medium">Top pressure points</h2>
             {loadingData && !filteredHotspots.length ? (
-              <div className="text-xs text-muted-foreground">Loading hotspot metrics…</div>
+              <div className="animate-pulse text-xs text-muted-foreground">Loading hotspot metrics…</div>
             ) : (
               <ul className="space-y-3 text-sm text-foreground/80">
                 {topHotspots.map((point, index) => {
                   const share = point.violations ? (point.exemptCount / point.violations) * 100 : 0;
                   return (
-                    <li key={`${point.busRouteId}-${point.latitude}-${point.longitude}`} className="rounded-lg border border-foreground/10 p-3">
+                    <li
+                      key={`${point.busRouteId}-${point.latitude}-${point.longitude}`}
+                      className="rounded-lg border border-foreground/10 bg-background/80 p-3 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg"
+                    >
                       <div className="flex flex-col gap-1 text-xs text-foreground/60 sm:flex-row sm:items-center sm:justify-between">
                         <span>
                           #{index + 1} · {point.busRouteId} | {point.campus}
@@ -546,7 +580,7 @@ export default function OperationsPage() {
                   );
                 })}
                 {!topHotspots.length && (
-                  <li className="rounded-lg border border-dashed border-foreground/20 p-3 text-xs text-muted-foreground">
+                  <li className="rounded-lg border border-dashed border-foreground/20 bg-background/70 p-3 text-xs text-muted-foreground">
                     No Neon hotspot data for the current filters.
                   </li>
                 )}
@@ -555,13 +589,16 @@ export default function OperationsPage() {
           </div>
         </div>
         <div className="space-y-4 lg:col-span-2">
-          <div className="rounded-xl border border-foreground/10 p-4 space-y-3">
+          <div className="surface-card rounded-xl border border-foreground/10 bg-card/80 p-4 shadow-soft-lg space-y-3 sm:p-5">
             <h2 className="text-sm font-medium">Repeat exempt vehicles</h2>
             <ul className="space-y-3 text-sm text-foreground/80">
               {filteredRepeaters.slice(0, 6).map((repeater) => {
                 const staticContext = repeater.staticContext;
                 return (
-                  <li key={repeater.vehicleId} className="rounded-lg border border-foreground/10 p-3">
+                  <li
+                    key={repeater.vehicleId}
+                    className="rounded-lg border border-foreground/10 bg-background/80 p-3 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg"
+                  >
                     <div className="flex items-center justify-between text-xs text-foreground/60">
                       <span>{repeater.vehicleId}</span>
                       <span>{repeater.violations} exemptions</span>
@@ -574,17 +611,20 @@ export default function OperationsPage() {
                 );
               })}
               {!filteredRepeaters.length && (
-                <li className="rounded-lg border border-dashed border-foreground/20 p-3 text-xs text-muted-foreground">
+                <li className="rounded-lg border border-dashed border-foreground/20 bg-background/70 p-3 text-xs text-muted-foreground">
                   No repeat exempt fleets detected for the current filters.
                 </li>
               )}
             </ul>
           </div>
-          <div className="rounded-xl border border-foreground/10 p-4 space-y-3">
+          <div className="surface-card rounded-xl border border-foreground/10 bg-card/80 p-4 shadow-soft-lg space-y-3 sm:p-5">
             <h2 className="text-sm font-medium">Scenario playbooks</h2>
             <ul className="space-y-3 text-sm text-foreground/80">
               {analystScenarios.map((scenario) => (
-                <li key={scenario.title} className="rounded-lg border border-foreground/10 p-3">
+                <li
+                  key={scenario.title}
+                  className="rounded-lg border border-foreground/10 bg-background/80 p-3 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg"
+                >
                   <div className="font-medium text-foreground/90">{scenario.title}</div>
                   <div className="mt-1 text-xs text-foreground/60">Inputs: {scenario.expectedInputs}</div>
                   <p className="mt-2 leading-relaxed">{scenario.description}</p>
@@ -595,8 +635,11 @@ export default function OperationsPage() {
           </div>
         </div>
       </div>
-      <section aria-labelledby="operations-table" className="rounded-xl border border-foreground/10 p-4">
-        <h2 className="text-sm font-medium mb-3">Route comparison benchmark</h2>
+      <section
+        aria-labelledby="operations-table"
+        className="surface-card animate-fade-up rounded-xl border border-foreground/10 bg-card/80 p-4 shadow-soft-lg sm:p-5"
+      >
+        <h2 className="mb-3 text-sm font-medium">Route comparison benchmark</h2>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="text-xs uppercase text-foreground/60">
@@ -612,7 +655,7 @@ export default function OperationsPage() {
             </thead>
             <tbody className="divide-y divide-foreground/10">
               {routeTable.map((route) => (
-                <tr key={route.routeId} className="align-top">
+                <tr key={route.routeId} className="align-top transition-colors hover:bg-primary/5">
                   <td className="py-2 pr-3 font-medium text-foreground/90">
                     {route.routeId}
                     <div className="text-xs text-foreground/60">{route.routeName}</div>

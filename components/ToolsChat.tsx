@@ -161,6 +161,7 @@ export default function ToolsChat() {
                     );
                   }
                   case "tool-listAllowedTables":
+                  case "tool-runSqlSelect":
                   case "tool-countTableRows":
                   case "tool-violationTotals":
                   case "tool-getViolationsSummary": {

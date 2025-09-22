@@ -45,6 +45,7 @@
   --sidebar-ring: #3d4cd7;
 
   --font-weight-bold: 700;
+  --ease-smooth: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .dark {
@@ -253,5 +254,140 @@
       -webkit-text-size-adjust: 100%;
       text-size-adjust: 100%;
     }
+  }
+}
+
+@layer components {
+  .surface-card {
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.6s var(--ease-smooth), box-shadow 0.6s var(--ease-smooth), border-color 0.6s var(--ease-smooth);
+    box-shadow: 0 18px 40px -32px rgba(8, 23, 156, 0.55);
+  }
+
+  .surface-card::before {
+    content: "";
+    position: absolute;
+    inset: -40% -70% auto;
+    height: 220%;
+    border-radius: 9999px;
+    background: radial-gradient(circle at center, rgba(8, 23, 156, 0.28), rgba(8, 23, 156, 0));
+    opacity: 0;
+    transform: translate3d(-8%, 12%, 0);
+    transition: opacity 0.8s var(--ease-smooth), transform 0.8s var(--ease-smooth);
+    pointer-events: none;
+  }
+
+  .surface-card::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(120deg, rgba(8, 23, 156, 0.14), rgba(255, 205, 0, 0.1) 55%, transparent 75%);
+    opacity: 0;
+    transition: opacity 0.8s var(--ease-smooth);
+    pointer-events: none;
+  }
+
+  .surface-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 24px 52px -28px rgba(8, 23, 156, 0.6);
+    border-color: rgba(61, 76, 215, 0.28);
+  }
+
+  .surface-card:hover::before {
+    opacity: 0.55;
+    transform: translate3d(0, 0, 0);
+  }
+
+  .surface-card:hover::after {
+    opacity: 0.35;
+  }
+
+  .surface-card:focus-within {
+    transform: translateY(-2px);
+    border-color: rgba(61, 76, 215, 0.35);
+    box-shadow: 0 20px 44px -28px rgba(8, 23, 156, 0.45);
+  }
+}
+
+@layer utilities {
+  .animate-fade-up {
+    animation: fade-up 0.6s var(--ease-smooth) both;
+  }
+
+  .animate-fade-up-slower {
+    animation: fade-up 0.8s var(--ease-smooth) both;
+  }
+
+  .animate-fade-up-delay-1 {
+    animation-delay: 0.12s;
+  }
+
+  .animate-fade-up-delay-2 {
+    animation-delay: 0.24s;
+  }
+
+  .animate-fade-up-delay-3 {
+    animation-delay: 0.36s;
+  }
+
+  .animate-gradient-x::after {
+    content: "";
+    position: absolute;
+    inset-y: 10%;
+    inset-inline: -40%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.16), transparent);
+    transform: translateX(-60%);
+    animation: gradient-x 2.6s linear infinite;
+    pointer-events: none;
+  }
+
+  .shadow-soft-lg {
+    box-shadow: 0 28px 64px -36px rgba(8, 23, 156, 0.45);
+  }
+
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 24px, 0);
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+  }
+
+  @keyframes gradient-x {
+    from {
+      transform: translateX(-60%);
+    }
+    to {
+      transform: translateX(120%);
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up,
+  .animate-fade-up-slower {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
+  }
+
+  .surface-card,
+  .surface-card:hover,
+  .surface-card:focus-within {
+    transform: none !important;
+    transition-duration: 0.001s !important;
+    box-shadow: 0 0 0 0 rgba(0, 0, 0, 0) !important;
+  }
+
+  .surface-card::before,
+  .surface-card::after,
+  .surface-card:hover::before,
+  .surface-card:hover::after {
+    opacity: 0 !important;
+    transition-duration: 0.001s !important;
   }
 }

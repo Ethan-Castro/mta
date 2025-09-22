@@ -429,7 +429,8 @@ export default function AskAI() {
           if (value) {
             buffer += decoder.decode(value, { stream: !done });
             let displayBuffer = buffer;
-            const sentinelIndex = buffer.indexOf(TOOL_META_SENTINEL);
+            // Use last occurrence to avoid accidental matches in assistant text
+            const sentinelIndex = buffer.lastIndexOf(TOOL_META_SENTINEL);
             if (sentinelIndex >= 0) {
               displayBuffer = buffer.slice(0, sentinelIndex);
               toolMetaPayload = buffer.slice(sentinelIndex + TOOL_META_SENTINEL.length);
@@ -459,7 +460,14 @@ export default function AskAI() {
           const trimmed = toolMetaPayload.trim();
           if (trimmed) {
             try {
-              parsedMeta = JSON.parse(trimmed);
+              // Safely extract the JSON object in case extra trailing text is present
+              let candidate = trimmed;
+              const firstBrace = candidate.indexOf("{");
+              const lastBrace = candidate.lastIndexOf("}");
+              if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+                candidate = candidate.slice(firstBrace, lastBrace + 1);
+              }
+              parsedMeta = JSON.parse(candidate);
             } catch (metaError) {
               console.error("Failed to parse tool metadata", metaError);
             }

@@ -4,16 +4,33 @@
 type QueryParams = Record<string, string | number | boolean | null | undefined>;
 
 function getBaseUrl(): string {
-  const base = process.env.NEON_DATA_API_URL;
-  if (!base) {
-    throw new Error("NEON_DATA_API_URL is not set. Provide your Data API endpoint.");
-  }
+  const configured =
+    process.env.NEON_DATA_API_URL ||
+    process.env.NEXT_PUBLIC_NEON_DATA_API_URL ||
+    process.env.STACK_DATA_API_URL ||
+    process.env.NEXT_PUBLIC_STACK_DATA_API_URL;
+  const fallback = "https://ep-tiny-firefly-ad4fba68.apirest.c-2.us-east-1.aws.neon.tech/neondb/rest/v1";
+  const base = configured || fallback;
   return base.replace(/\/$/, "");
 }
 
 function getAuthHeaders(): Record<string, string> {
-  const token = process.env.NEON_DATA_API_TOKEN || process.env.NEON_DATA_API_KEY;
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  const token =
+    process.env.NEON_DATA_API_TOKEN ||
+    process.env.NEON_DATA_API_KEY ||
+    process.env.STACK_SECRET_SERVER_KEY ||
+    process.env.STACK_API_KEY;
+  const projectId = process.env.STACK_PROJECT_ID || process.env.NEXT_PUBLIC_STACK_PROJECT_ID;
+
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+    headers.apikey = token;
+  }
+  if (projectId) {
+    headers["X-Project-Id"] = projectId;
+  }
+  return headers;
 }
 
 function buildQuery(params: QueryParams): string {
@@ -84,5 +101,4 @@ export function filterParamsFromDateRange({
 export function eqFilter(column: string, value: string): QueryParams {
   return { [column]: `eq.${value}` } as QueryParams;
 }
-
 

@@ -218,16 +218,19 @@ function ExecutivePageContent() {
   };
   return (
     <div className="space-y-4 sm:space-y-6">
-      <header>
+      <header className="animate-fade-up space-y-1">
         <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Executive</h1>
         <p className="text-sm text-foreground/70">KPIs, trends, and AI summaries.</p>
       </header>
       {curatedError && (
-        <div className="rounded-lg border border-destructive/60 bg-destructive/10 p-3 text-xs text-destructive">
+        <div className="animate-fade-up rounded-lg border border-destructive/60 bg-destructive/10 p-3 text-xs text-destructive shadow-sm">
           {curatedError}
         </div>
       )}
-      <section aria-labelledby="executive-overview" className="rounded-xl border border-border/60 bg-card/70 p-4">
+      <section
+        aria-labelledby="executive-overview"
+        className="surface-card animate-fade-up animate-fade-up-delay-1 rounded-xl border border-border/60 bg-card/80 p-4 shadow-soft-lg sm:p-5"
+      >
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-2">
             <h2 id="executive-overview" className="text-sm font-semibold text-foreground">How to use this view</h2>
@@ -247,7 +250,10 @@ function ExecutivePageContent() {
               Filter by campus type
             </label>
             <Select value={selectedCampusType} onValueChange={setSelectedCampusType}>
-              <SelectTrigger id="executive-campus-filter" className="text-sm">
+              <SelectTrigger
+                id="executive-campus-filter"
+                className="rounded-lg border border-foreground/15 bg-background/80 text-sm transition-colors duration-300 hover:border-primary/40 focus-visible:border-primary/40 focus-visible:ring-2 focus-visible:ring-primary/30"
+              >
                 <SelectValue>
                   {campusTypeOptions.find((option) => option.value === selectedCampusType)?.label ?? "All campus types"}
                 </SelectValue>
@@ -263,7 +269,7 @@ function ExecutivePageContent() {
           </div>
         </div>
       </section>
-      <div className="grid grid-cols-1 gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 animate-fade-up animate-fade-up-delay-2 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
         <InsightCard
           title="ACE speed uplift"
           value={formatPercent(aceSpeedGain)}
@@ -290,7 +296,10 @@ function ExecutivePageContent() {
         />
       </div>
       {trendRouteId && (
-        <section aria-labelledby="exec-trend" className="rounded-xl border border-border/60 bg-card/70 p-4 space-y-3">
+        <section
+          aria-labelledby="exec-trend"
+          className="surface-card animate-fade-up animate-fade-up-delay-3 rounded-xl border border-border/60 bg-card/80 p-4 shadow-soft-lg space-y-3 sm:p-5"
+        >
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 id="exec-trend" className="text-sm font-medium">Monthly violations trend</h2>
@@ -312,14 +321,20 @@ function ExecutivePageContent() {
           <p className="text-[11px] text-muted-foreground">Tip: adjust the campus filter to compare other executive corridors.</p>
         </section>
       )}
-      <section aria-labelledby="exec-narratives" className="rounded-xl border border-foreground/10 p-4 space-y-3">
+      <section
+        aria-labelledby="exec-narratives"
+        className="surface-card animate-fade-up rounded-xl border border-foreground/10 bg-card/80 p-4 shadow-soft-lg space-y-3 sm:p-5"
+      >
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <h2 id="exec-narratives" className="text-sm font-medium">Narratives to brief</h2>
           <span className="text-xs text-foreground/60">Anchor updates to the three core business questions.</span>
         </div>
         <ul className="space-y-3 text-sm text-foreground/80">
           {topRoutes.map((route) => (
-            <li key={route.routeId} className="rounded-lg border border-foreground/10 px-3 py-2">
+            <li
+              key={route.routeId}
+              className="rounded-lg border border-foreground/10 bg-background/80 px-3 py-2 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg"
+            >
               <div className="font-medium text-foreground/90">
                 {route.routeId} - {route.routeName}
               </div>
@@ -328,24 +343,30 @@ function ExecutivePageContent() {
             </li>
           ))}
           {topRoutes.length === 0 && (
-            <li className="rounded-lg border border-dashed border-foreground/20 px-3 py-4 text-xs text-muted-foreground">
+            <li className="rounded-lg border border-dashed border-foreground/20 bg-background/70 px-3 py-4 text-xs text-muted-foreground">
               No routes available for the selected campus type. Choose another filter to populate narratives.
             </li>
           )}
         </ul>
       </section>
-      <div className="text-xs">
-        <button onClick={() => setShowExplain((s) => !s)} className="rounded-md border border-foreground/10 hover:border-foreground/20 px-2 py-1 transition-colors">
+      <div className="animate-fade-up text-xs">
+        <button
+          onClick={() => setShowExplain((s) => !s)}
+          className="inline-flex items-center gap-2 rounded-full border border-foreground/15 bg-background/80 px-3 py-1.5 font-medium transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/40 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+        >
           {showExplain ? "Hide explanation" : "Explain this view"}
         </button>
         {showExplain && (
-          <div className="mt-2 rounded-md border border-foreground/10 p-3 text-foreground/80">
+          <div className="mt-2 rounded-md border border-foreground/10 bg-background/80 p-3 text-foreground/80 shadow-sm">
             High-level KPIs summarize recent ACE violations and exempt shares. Generate an AI summary for context over a selected time window.
           </div>
         )}
       </div>
       <ExecutiveKpis routeComparisons={routes} cbdRouteTrends={cbdRoutes} />
-      <section aria-labelledby="exec-prompts" className="rounded-xl border border-foreground/10 p-4 space-y-3">
+      <section
+        aria-labelledby="exec-prompts"
+        className="surface-card animate-fade-up rounded-xl border border-foreground/10 bg-card/80 p-4 shadow-soft-lg space-y-3 sm:p-5"
+      >
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <h2 id="exec-prompts" className="text-sm font-medium">Pre-drafted AI prompts</h2>
           <span className="text-xs text-foreground/60">Paste into the assistant or API to generate ready-to-send briefings.</span>
@@ -355,21 +376,25 @@ function ExecutivePageContent() {
             <button
               key={prompt}
               onClick={() => setInput(prompt)}
-              className="rounded-lg border border-foreground/10 px-3 py-2 text-left text-foreground/80 transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              className="group relative overflow-hidden rounded-lg border border-foreground/10 bg-background/80 px-3 py-2 text-left text-foreground/80 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/40 hover:bg-primary/5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
               type="button"
             >
-              {prompt}
+              <span className="absolute inset-x-3 top-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" aria-hidden />
+              <span className="relative z-10 block">{prompt}</span>
             </button>
           ))}
         </div>
       </section>
-      <div>
+      <div className="animate-fade-up">
         <ExecutiveSummary />
       </div>
-      <div className="rounded-xl border border-foreground/10 p-4">
-        <h2 className="text-sm font-medium mb-3">Ask the ACE assistant</h2>
+      <div className="surface-card animate-fade-up rounded-xl border border-foreground/10 bg-card/80 p-4 shadow-soft-lg sm:p-5">
+        <h2 className="mb-3 text-sm font-medium">Ask the ACE assistant</h2>
         <div className="flex flex-col">
-          <Conversation className="relative w-full" style={{ height: 280 }}>
+          <Conversation
+            className="relative w-full overflow-hidden rounded-lg border border-foreground/10 bg-background/80 shadow-inner"
+            style={{ height: 280 }}
+          >
             <ConversationContent>
               {messages.length === 0 ? (
                 <ConversationEmptyState
@@ -400,17 +425,20 @@ function ExecutivePageContent() {
             </ConversationContent>
             <ConversationScrollButton />
           </Conversation>
-          <PromptInput onSubmit={handleSubmit} className="mt-3 relative">
+          <PromptInput
+            onSubmit={handleSubmit}
+            className="relative mt-3 rounded-lg border border-foreground/10 bg-background/90 shadow-sm transition-all duration-300 focus-within:border-primary/40 focus-within:ring-2 focus-within:ring-primary/30"
+          >
             <PromptInputTextarea
               value={input}
               placeholder="Ask for an executive summary..."
               onChange={(e) => setInput(e.currentTarget.value)}
-              className="pr-10"
+              className="min-h-[60px] resize-none bg-transparent pr-12 text-sm focus:outline-none"
             />
             <PromptInputSubmit
               status={status === "streaming" ? "streaming" : "ready"}
               disabled={!input.trim()}
-              className="absolute bottom-1 right-1"
+              className="absolute bottom-2 right-2 rounded-full bg-primary/90 text-primary-foreground shadow-sm transition-transform duration-300 hover:scale-105"
             />
           </PromptInput>
         </div>

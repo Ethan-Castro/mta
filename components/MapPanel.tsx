@@ -55,7 +55,14 @@ export default function MapPanel({ height = 300, center = [-73.9857, 40.7484], z
   const interactiveLayerIds = cluster ? ["clusters", "unclustered-point"] : undefined;
 
   return (
-    <div className="rounded-lg border border-foreground/10 overflow-hidden" style={{ height }}>
+    <div
+      className="surface-card group animate-fade-up relative overflow-hidden rounded-xl border border-foreground/10 bg-background/85 shadow-soft-lg"
+      style={{ height }}
+    >
+      <span
+        className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent opacity-0 transition-opacity duration-700 group-hover:opacity-100"
+        aria-hidden
+      />
       {token ? (
         <Map
           ref={mapRef}
@@ -99,37 +106,45 @@ export default function MapPanel({ height = 300, center = [-73.9857, 40.7484], z
 
           {!cluster && (
             <>
-              {markers.map((m) => (
-                <Marker key={m.id} longitude={m.longitude} latitude={m.latitude} anchor="bottom">
-                  <div
-                    role="button"
-                    tabIndex={0}
-                    aria-label={m.title ? `Open ${m.title}` : `Open ${m.id}`}
-                    style={{
-                      backgroundColor: m.color || "#2563eb",
-                      width: m.id.startsWith('campus-') ? 14 : 10,
-                      height: m.id.startsWith('campus-') ? 14 : 10,
-                      borderRadius: 9999,
-                      border: `2px solid ${m.id.startsWith('campus-') ? '#ffffff' : 'white'}`,
-                      boxShadow: m.id.startsWith('campus-') ? "0 0 0 2px rgba(139, 92, 246, 0.3), 0 0 0 1px rgba(0,0,0,0.2)" : "0 0 0 1px rgba(0,0,0,0.2)",
-                      cursor: "pointer",
-                    }}
-                    title={m.title}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedId(m.id);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
+              {markers.map((m) => {
+                const isActive = selectedId === m.id || hoveredId === m.id;
+                const baseSize = m.id.startsWith("campus-") ? 14 : 10;
+                return (
+                  <Marker key={m.id} longitude={m.longitude} latitude={m.latitude} anchor="bottom">
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      aria-label={m.title ? `Open ${m.title}` : `Open ${m.id}`}
+                      style={{
+                        backgroundColor: m.color || "#2563eb",
+                        width: baseSize,
+                        height: baseSize,
+                        borderRadius: 9999,
+                        border: `2px solid ${m.id.startsWith("campus-") ? "#ffffff" : "white"}`,
+                        boxShadow: m.id.startsWith("campus-")
+                          ? "0 0 0 2px rgba(139, 92, 246, 0.3), 0 0 0 1px rgba(0,0,0,0.2)"
+                          : "0 0 0 1px rgba(0,0,0,0.2)",
+                        transform: isActive ? "scale(1.2)" : "scale(1)",
+                        transition: "transform 0.3s var(--ease-smooth), box-shadow 0.3s var(--ease-smooth)",
+                        cursor: "pointer",
+                      }}
+                      title={m.title}
+                      onClick={(e) => {
+                        e.stopPropagation();
                         setSelectedId(m.id);
-                      }
-                    }}
-                    onMouseEnter={() => hoverPopups && setHoveredId(m.id)}
-                    onMouseLeave={() => hoverPopups && setHoveredId((curr) => (curr === m.id ? null : curr))}
-                  />
-                </Marker>
-              ))}
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setSelectedId(m.id);
+                        }
+                      }}
+                      onMouseEnter={() => hoverPopups && setHoveredId(m.id)}
+                      onMouseLeave={() => hoverPopups && setHoveredId((curr) => (curr === m.id ? null : curr))}
+                    />
+                  </Marker>
+                );
+              })}
             </>
           )}
 
@@ -193,11 +208,18 @@ export default function MapPanel({ height = 300, center = [-73.9857, 40.7484], z
               }}
               focusAfterOpen={false}
             >
-              <div className="space-y-1">
-                <div className="text-sm font-medium leading-snug">{selected.title || selected.id}</div>
+              <div className="space-y-1 rounded-md border border-primary/20 bg-background/95 p-2 shadow-sm">
+                <div className="text-sm font-medium leading-snug text-foreground">
+                  {selected.title || selected.id}
+                </div>
                 {selected.description && <div className="text-xs text-foreground/70">{selected.description}</div>}
                 {selected.href && (
-                  <a href={selected.href} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">
+                  <a
+                    href={selected.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs font-medium text-primary transition-colors hover:text-primary/80"
+                  >
                     Visit website
                   </a>
                 )}
@@ -206,10 +228,10 @@ export default function MapPanel({ height = 300, center = [-73.9857, 40.7484], z
           )}
         </Map>
       ) : (
-        <div className="h-full grid place-items-center text-sm text-foreground/60">Map is unavailable. Set a map token to enable maps.</div>
+        <div className="grid h-full place-items-center rounded-lg border border-dashed border-foreground/20 bg-background/80 text-center text-sm text-foreground/60">
+          Map is unavailable. Set a map token to enable maps.
+        </div>
       )}
     </div>
   );
 }
-
-

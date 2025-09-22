@@ -11,6 +11,8 @@ import {
   SqlToolError,
 } from "@/lib/ai/sql-tools";
 import { getViolationSummary } from "@/lib/data/violations";
+import { sql } from "@/lib/db";
+import { dataApiGet } from "@/lib/data-api";
 
 export const maxDuration = 30;
 export const runtime = "nodejs";
@@ -63,6 +65,43 @@ export async function POST(req: Request) {
           }));
         } catch (error: any) {
           return { error: error?.message || "Web search failed" };
+        }
+      },
+    }),
+    dataApiSelect: tool({
+      description:
+        "Query the Neon Data API (PostgREST). Use PostgREST params: select, eq.*, order, limit, etc. Table must be allowed.",
+      inputSchema: z.object({
+        table: z.enum(ALLOWED_TABLES),
+        select: z.string().optional().default("*"),
+        params: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
+        limit: z.number().int().optional(),
+        order: z.string().optional(),
+      }),
+      execute: async ({ table, select, params = {}, limit, order }) => {
+        const qp: Record<string, any> = { select, ...(params || {}) };
+        if (typeof limit === "number") qp.limit = String(limit);
+        if (order) qp.order = order;
+        const rows = await dataApiGet({ table, params: qp });
+        return { rows };
+      },
+    }),
+    runSqlSelect: tool({
+      description:
+        "Execute a single SELECT (or WITH ...) query against allowed tables only. Use for analytics and listing.",
+      inputSchema: z.object({
+        statement: z.string().min(1).describe("A single SELECT/CTE statement limited to allowed tables"),
+      }),
+      execute: async ({ statement }) => {
+        try {
+          ensureSelectAllowed(statement);
+          const rows = await (sql as any).unsafe(statement);
+          return { rows };
+        } catch (error) {
+          if (error instanceof SqlToolError) {
+            return { error: error.message };
+          }
+          throw error;
         }
       },
     }),

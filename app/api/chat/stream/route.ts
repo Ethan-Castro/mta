@@ -203,6 +203,18 @@ export async function POST(req: Request) {
             return { rows };
           },
         },
+        describeTable: {
+          description: "Describe the schema of an allowed table (public schema only).",
+          inputSchema: z.object({ table: z.enum(["violations", "cuny_campus_locations", "bus_segment_speeds_2025", "bus_segment_speeds_2023_2024"]) }),
+          execute: async ({ table }) => {
+            try {
+              const result = await import("@/lib/ai/sql-tools");
+              return await result.queryTableSchema({ table });
+            } catch (error: any) {
+              return { error: error?.message || "Describe table failed" };
+            }
+          },
+        },
         getViolationsSummary: {
           description: "Fetch grouped violations and exempt counts per route per month",
           inputSchema: z.object({
