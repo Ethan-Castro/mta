@@ -1,4 +1,7 @@
 // Using anchor tags to avoid dependency on next/link types in this scaffold
+import SpeedCard from "@/components/SpeedCard";
+import ViolationsCard from "@/components/ViolationsCard";
+import RouteAnalysisCard from "@/components/RouteAnalysisCard";
 
 const personas = [
   {
@@ -101,8 +104,7 @@ export default function Home() {
               ACE Insight Studio for Executives, Analysts, and Campus Advocates
             </h1>
             <p className="max-w-2xl text-sm text-foreground/70 sm:text-base">
-              This workspace centralizes Automated Camera Enforcement (ACE) insights so your team can answer the datathon
-              business questions with confidence, share-ready visuals, and ML-ready pipelines.
+              One place to monitor ACE performance, explain changes, and brief leadership with confidence.
             </p>
           </div>
           <div className="grid gap-3 text-xs text-foreground/70 sm:grid-cols-3 sm:text-sm">
@@ -122,13 +124,13 @@ export default function Home() {
           <div className="flex flex-col gap-3 text-sm sm:flex-row sm:items-center">
             <a
               href="/chat"
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-4 py-2 font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+              className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-4 py-2 font-medium text-primary-foreground shadow-sm transition-all hover:-translate-y-0.5 hover:bg-primary/90 hover:shadow-lg"
             >
-              Launch ACE Copilot
+              Open ACE Copilot
             </a>
             <a
               href="/executive"
-              className="inline-flex items-center justify-center gap-1 rounded-full border border-primary/40 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-primary hover:border-primary/60"
+              className="inline-flex items-center justify-center gap-2 rounded-full border border-foreground/30 bg-transparent px-4 py-2 text-sm font-medium text-foreground/80 transition-all hover:border-foreground/50 hover:text-foreground"
             >
               Explore dashboards
             </a>
@@ -148,14 +150,14 @@ export default function Home() {
               <a
                 key={persona.href}
                 href={persona.href}
-                className="flex h-full flex-col rounded-2xl border border-border/60 bg-card/70 p-4 transition-colors hover:border-primary/40 hover:bg-primary/5 sm:p-5"
+                className="group flex h-full flex-col rounded-2xl border border-border/60 bg-card/70 p-4 transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/40 hover:bg-primary/5 hover:shadow-lg sm:p-5"
               >
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-base font-semibold text-foreground sm:text-lg">{persona.title}</h3>
                     <p className="text-xs uppercase tracking-wide text-primary/80">{persona.subtitle}</p>
                   </div>
-                  <span className="text-primary">→</span>
+                  <span className="text-primary transition-transform duration-300 group-hover:translate-x-1">→</span>
                 </div>
                 <p className="mt-3 text-sm text-foreground/70">{persona.description}</p>
               </a>
@@ -195,9 +197,21 @@ export default function Home() {
           </div>
         </section>
 
+        <section aria-labelledby="predictions" className="space-y-4">
+          <div className="flex flex-col gap-2">
+            <h2 id="predictions" className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">Live predictions</h2>
+            <p className="text-sm text-foreground/70">Try speed, violations, and route analysis models with adjustable inputs.</p>
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <SpeedCard />
+            <ViolationsCard />
+            <RouteAnalysisCard />
+          </div>
+        </section>
+
         <section aria-labelledby="copilot" className="space-y-4">
           <div className="flex flex-col gap-2">
-            <h2 id="copilot" className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">ACE copilot: your always-on analyst</h2>
+            <h2 id="copilot" className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">ACE Copilot: your always-on analyst</h2>
             <p className="text-sm text-foreground/70">Connect prompts with live data, SQL, and Python (Neon Postgres ready).</p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -216,9 +230,9 @@ export default function Home() {
           </div>
           <a
             href="/chat"
-            className="inline-flex items-center justify-center gap-2 rounded-full border border-primary/40 px-4 py-2 text-sm font-medium text-primary hover:border-primary/60"
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-all hover:-translate-y-0.5 hover:bg-primary/90 hover:shadow-lg"
           >
-            Open the copilot workspace →
+            Open ACE Copilot →
           </a>
         </section>
 

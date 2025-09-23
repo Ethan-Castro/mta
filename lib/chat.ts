@@ -1,4 +1,4 @@
-import { sql } from "@/lib/db";
+import { sql, isDbConfigured } from "@/lib/db";
 import { nanoid } from "nanoid";
 
 export type ChatRole = "user" | "assistant";
@@ -19,7 +19,12 @@ export type ChatMessage = {
   meta?: unknown;
 };
 
+// In-memory fallback when a database is not configured
+const memoryConversations = new Map<string, Conversation>();
+const memoryMessagesByConversation = new Map<string, ChatMessage[]>();
+
 export async function ensureChatSchema(): Promise<void> {
+  if (!isDbConfigured) return;
   // Use text ids so we don't depend on extensions
   await sql`
     CREATE TABLE IF NOT EXISTS conversations (
@@ -45,6 +50,13 @@ export async function ensureChatSchema(): Promise<void> {
 export async function createConversation(title?: string | null): Promise<Conversation> {
   const id = nanoid();
   await ensureChatSchema();
+  if (!isDbConfigured) {
+    const now = new Date().toISOString();
+    const conv: Conversation = { id, title: title ?? null, created_at: now, updated_at: now };
+    memoryConversations.set(id, conv);
+    memoryMessagesByConversation.set(id, []);
+    return conv;
+  }
   const rows = (await sql`
     INSERT INTO conversations (id, title)
     VALUES (${id}, ${title ?? null})
@@ -55,6 +67,14 @@ export async function createConversation(title?: string | null): Promise<Convers
 
 export async function touchConversation(conversationId: string): Promise<void> {
   await ensureChatSchema();
+  if (!isDbConfigured) {
+    const existing = memoryConversations.get(conversationId);
+    if (existing) {
+      existing.updated_at = new Date().toISOString();
+      memoryConversations.set(conversationId, existing);
+    }
+    return;
+  }
   await sql`UPDATE conversations SET updated_at = now() WHERE id = ${conversationId}`;
 }
 
@@ -62,6 +82,23 @@ export async function upsertConversation(conversationId?: string | null, title?:
   await ensureChatSchema();
   if (!conversationId) {
     return createConversation(title ?? null);
+  }
+  if (!isDbConfigured) {
+    const existing = memoryConversations.get(conversationId);
+    if (existing) {
+      if (title != null && title !== existing.title) {
+        const updated: Conversation = { ...existing, title, updated_at: new Date().toISOString() };
+        memoryConversations.set(conversationId, updated);
+        return updated;
+      }
+      await touchConversation(conversationId);
+      return existing;
+    }
+    const now = new Date().toISOString();
+    const created: Conversation = { id: conversationId, title: title ?? null, created_at: now, updated_at: now };
+    memoryConversations.set(conversationId, created);
+    memoryMessagesByConversation.set(conversationId, []);
+    return created;
   }
   const existing = (await sql`
     SELECT id, title, created_at, updated_at FROM conversations WHERE id = ${conversationId}
@@ -88,6 +125,11 @@ export async function upsertConversation(conversationId?: string | null, title?:
 
 export async function listConversations(limit = 50): Promise<Conversation[]> {
   await ensureChatSchema();
+  if (!isDbConfigured) {
+    const all = Array.from(memoryConversations.values());
+    all.sort((a, b) => (a.updated_at > b.updated_at ? -1 : a.updated_at < b.updated_at ? 1 : 0));
+    return all.slice(0, limit);
+  }
   const rows = (await sql`
     SELECT id, title, created_at, updated_at
     FROM conversations
@@ -100,6 +142,21 @@ export async function listConversations(limit = 50): Promise<Conversation[]> {
 export async function addMessage(params: { conversationId: string; role: ChatRole; content: string; meta?: unknown }): Promise<ChatMessage> {
   await ensureChatSchema();
   const id = nanoid();
+  if (!isDbConfigured) {
+    const created: ChatMessage = {
+      id,
+      conversation_id: params.conversationId,
+      role: params.role,
+      content: params.content,
+      created_at: new Date().toISOString(),
+      meta: params.meta ?? null,
+    } as ChatMessage;
+    const list = memoryMessagesByConversation.get(params.conversationId) ?? [];
+    list.push(created);
+    memoryMessagesByConversation.set(params.conversationId, list);
+    await touchConversation(params.conversationId);
+    return created;
+  }
   const rows = (await sql`
     INSERT INTO messages (id, conversation_id, role, content, meta)
     VALUES (${id}, ${params.conversationId}, ${params.role}, ${params.content}, ${params.meta ?? null})
@@ -112,6 +169,10 @@ export async function addMessage(params: { conversationId: string; role: ChatRol
 
 export async function getMessages(conversationId: string, limit = 200): Promise<ChatMessage[]> {
   await ensureChatSchema();
+  if (!isDbConfigured) {
+    const list = memoryMessagesByConversation.get(conversationId) ?? [];
+    return list.slice(-limit);
+  }
   const rows = (await sql`
     SELECT id, conversation_id, role, content, created_at, meta
     FROM messages
@@ -124,6 +185,9 @@ export async function getMessages(conversationId: string, limit = 200): Promise<
 
 export async function getConversation(conversationId: string): Promise<Conversation | null> {
   await ensureChatSchema();
+  if (!isDbConfigured) {
+    return memoryConversations.get(conversationId) ?? null;
+  }
   const rows = (await sql`
     SELECT id, title, created_at, updated_at FROM conversations WHERE id = ${conversationId}
   `) as Conversation[];

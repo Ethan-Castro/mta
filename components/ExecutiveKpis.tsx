@@ -13,7 +13,7 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
+  Tooltip as RechartsTooltip,
   ResponsiveContainer,
   LineChart,
   Line,
@@ -31,7 +31,8 @@ import {
   Radar,
   ComposedChart,
 } from "recharts";
-import { TrendingUp, TrendingDown, AlertTriangle, Users, MapPin, Activity, Target, Shield } from "lucide-react";
+import { TrendingUp, TrendingDown, Activity, Target, Shield } from "lucide-react";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
 type RouteRow = {
   busRouteId: string;
@@ -172,6 +173,22 @@ export default function ExecutiveKpis({ routeComparisons, cbdRouteTrends }: Exec
 
   const violationTrendData = trendData;
 
+  // Compute latest delta for violations trend (last vs previous month)
+  const violationsDelta = useMemo(() => {
+    if (!violationTrendData || violationTrendData.length < 2) return null as null | { abs: number; pct: number };
+    const last = violationTrendData[violationTrendData.length - 1]?.violations ?? 0;
+    const prev = violationTrendData[violationTrendData.length - 2]?.violations ?? 0;
+    const abs = last - prev;
+    const pct = prev > 0 ? (abs / prev) * 100 : 0;
+    return { abs, pct };
+  }, [violationTrendData]);
+
+  const aceCoveragePct = useMemo(() => {
+    const total = routeCount || 0;
+    const ace = aceRoutes.length || 0;
+    return total ? Math.round((ace / total) * 100) : 0;
+  }, [routeCount, aceRoutes.length]);
+
   const cbdImpactData = cbdRouteTrends.slice(0, 8).map((route) => ({
     route: route.routeName.split(' ')[0],
     violationChange: Number(route.violationChangePct ?? 0),
@@ -199,42 +216,115 @@ export default function ExecutiveKpis({ routeComparisons, cbdRouteTrends }: Exec
       <div className="grid grid-cols-1 gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Card className="border-l-4 border-l-red-500">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">ACE Violations</CardTitle>
-            <TrendingDown className="h-4 w-4 text-red-500" />
+            <CardTitle className="text-sm font-medium">
+              <div className="inline-flex items-center gap-2">
+                ACE violations
+                <Tooltip>
+                  <TooltipTrigger>
+                    <button type="button" className="rounded-full border border-foreground/20 p-0.5 leading-none text-[10px] text-foreground/70">i</button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Monthly ACE violations across monitored routes; exempt share is the portion marked exempt.
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            </CardTitle>
+            {violationsDelta && (violationsDelta.abs >= 0 ? (
+              <TrendingUp className="h-4 w-4 text-rose-500" />
+            ) : (
+              <TrendingDown className="h-4 w-4 text-emerald-500" />
+            ))}
           </CardHeader>
           <CardContent>
-            <div className="text-xl font-bold sm:text-2xl">{loading ? "—" : totalViolations.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">
-              {exemptShare}% exempt rate
-            </p>
+            <div className="text-xl font-bold sm:text-2xl" aria-live="polite">
+              {loading ? "—" : totalViolations.toLocaleString()}
+            </div>
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>{exemptShare}% exempt rate</span>
+              {violationsDelta && (
+                <span className={violationsDelta.abs >= 0 ? "text-rose-600" : "text-emerald-600"}>
+                  {violationsDelta.abs >= 0 ? "+" : ""}{Math.round(violationsDelta.pct * 10) / 10}% vs prev mo
+                </span>
+              )}
+            </div>
             <div className="text-[11px] text-muted-foreground mt-1">Window: {formatDate(firstSeen)} → {formatDate(lastSeen)}</div>
+            <div className="mt-3 h-12">
+              {trendLoading ? (
+                <div className="h-full w-full animate-pulse rounded bg-foreground/10" />
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={violationTrendData.slice(-12)}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" hide />
+                    <YAxis hide />
+                    <Tooltip />
+                    <Area type="monotone" dataKey="violations" stroke="#EF4444" fill="#EF4444" fillOpacity={0.2} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
+            </div>
           </CardContent>
         </Card>
 
         <Card className="border-l-4 border-l-blue-500">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Routes Monitored</CardTitle>
-            <Shield className="h-4 w-4 text-blue-500" />
+            <CardTitle className="text-sm font-medium">
+              <div className="inline-flex items-center gap-2">
+                Routes monitored
+                <Tooltip>
+                  <TooltipTrigger>
+                    <button type="button" className="rounded-full border border-foreground/20 p-0.5 leading-none text-[10px] text-foreground/70">i</button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Number of routes tracked in the current window; ACE coverage is the share enforced by ACE.
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            </CardTitle>
+            <Shield className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-xl font-bold sm:text-2xl">{loading ? "—" : routeCount}</div>
-            <p className="text-xs text-muted-foreground">
-              {aceRoutes.length} with ACE enforcement
-            </p>
+            <div className="text-xl font-bold sm:text-2xl" aria-live="polite">{loading ? "—" : routeCount}</div>
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>{aceRoutes.length} with ACE enforcement</span>
+              <span className="text-foreground/70">{aceCoveragePct}% coverage</span>
+            </div>
+            <div className="mt-2">
+              {loading ? (
+                <div className="h-2 w-full animate-pulse rounded bg-foreground/10" />
+              ) : (
+                <Progress value={aceCoveragePct} />
+              )}
+            </div>
             <div className="text-[11px] text-muted-foreground mt-1">Source: Neon Postgres</div>
           </CardContent>
         </Card>
 
-        <Card className="border-l-4 border-l-green-500 sm:col-span-2 lg:col-span-1">
+        <Card className="border-l-4 border-l-green-600 sm:col-span-2 lg:col-span-1">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">ACE Speed Impact</CardTitle>
-            <TrendingUp className="h-4 w-4 text-green-500" />
+            <CardTitle className="text-sm font-medium">
+              <div className="inline-flex items-center gap-2">
+                ACE speed impact
+                <Tooltip>
+                  <TooltipTrigger>
+                    <button type="button" className="rounded-full border border-foreground/20 p-0.5 leading-none text-[10px] text-foreground/70">i</button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Average percent change in median bus speed on ACE corridors vs matched non-ACE baselines; weighted by daily ridership.
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            </CardTitle>
+            <TrendingUp className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-xl font-bold sm:text-2xl">+{avgSpeedGain.toFixed(1)}%</div>
+            <div className="text-xl font-bold sm:text-2xl">{avgSpeedGain >= 0 ? "+" : ""}{avgSpeedGain.toFixed(1)}%</div>
             <p className="text-xs text-muted-foreground">
               Average speed improvement
             </p>
+            <div className="text-[11px] text-muted-foreground mt-1">
+              Top route: {routeComparisons.length ? [...routeComparisons].sort((a,b)=>Number(b.speedChangePct||0)-Number(a.speedChangePct||0))[0].routeId : "n/a"}
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -261,7 +351,7 @@ export default function ExecutiveKpis({ routeComparisons, cbdRouteTrends }: Exec
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="month" />
                     <YAxis />
-                    <Tooltip />
+                    <RechartsTooltip />
                     <Area type="monotone" dataKey="violations" fill={TREND_COLORS.violations} fillOpacity={0.3} stroke={TREND_COLORS.violations} name="Violations" />
                     <Area type="monotone" dataKey="exempt" fill={TREND_COLORS.exempt} fillOpacity={0.2} stroke={TREND_COLORS.exempt} name="Exempt" />
                   </ComposedChart>
@@ -286,7 +376,7 @@ export default function ExecutiveKpis({ routeComparisons, cbdRouteTrends }: Exec
                     <PolarRadiusAxis angle={90} domain={[0, 100]} />
                     <Radar name="ACE Routes" dataKey="ace" stroke={TREND_COLORS.speed} fill={TREND_COLORS.speed} fillOpacity={0.3} />
                     <Radar name="Non-ACE Routes" dataKey="nonAce" stroke={TREND_COLORS.violations} fill={TREND_COLORS.violations} fillOpacity={0.3} />
-                    <Tooltip />
+                    <RechartsTooltip />
                   </RadarChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -361,7 +451,7 @@ export default function ExecutiveKpis({ routeComparisons, cbdRouteTrends }: Exec
                   <XAxis dataKey="route" />
                   <YAxis yAxisId="left" />
                   <YAxis yAxisId="right" orientation="right" />
-                  <Tooltip />
+                  <RechartsTooltip />
                   <Bar yAxisId="left" dataKey="violationChange" fill={TREND_COLORS.violations} name="Violation Change %" />
                   <Line yAxisId="right" type="monotone" dataKey="speedChange" stroke={TREND_COLORS.speed} strokeWidth={3} name="Speed Change %" />
                 </ComposedChart>

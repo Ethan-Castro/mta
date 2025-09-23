@@ -1,4 +1,4 @@
-import { sql } from "@/lib/db";
+import { sql, isDbConfigured } from "@/lib/db";
 
 export type Campus = {
   type: string;
@@ -13,6 +13,45 @@ export type Campus = {
 };
 
 export async function getCampuses(): Promise<Campus[]> {
+  if (!isDbConfigured) {
+    // Return sample data when database is not available
+    return [
+      {
+        type: "Senior College",
+        campus: "Baruch College",
+        website: "https://www.baruch.cuny.edu",
+        address: "55 Lexington Ave",
+        city: "New York",
+        state: "NY",
+        zip: "10010",
+        latitude: 40.7406,
+        longitude: -73.9838,
+      },
+      {
+        type: "Senior College",
+        campus: "Brooklyn College",
+        website: "https://www.brooklyn.cuny.edu",
+        address: "2900 Bedford Ave",
+        city: "Brooklyn",
+        state: "NY",
+        zip: "11210",
+        latitude: 40.6324,
+        longitude: -73.9529,
+      },
+      {
+        type: "Senior College",
+        campus: "City College",
+        website: "https://www.ccny.cuny.edu",
+        address: "160 Convent Ave",
+        city: "New York",
+        state: "NY",
+        zip: "10031",
+        latitude: 40.8193,
+        longitude: -73.9502,
+      },
+    ];
+  }
+
   const rows = await sql`
     select
       institution_type,

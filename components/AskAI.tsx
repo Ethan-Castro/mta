@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { nanoid } from "nanoid";
 import type { ChatStatus } from "ai";
 import {
@@ -350,6 +351,19 @@ export default function AskAI() {
   const [activePersona, setActivePersona] = useState<(typeof personaOptions)[number]["value"]>("executive");
   const activePrompts = useMemo(() => personaPromptMap[activePersona], [activePersona]);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const sp = useSearchParams();
+  const scopeChips = useMemo(() => {
+    const start = sp.get("start") || "";
+    const end = sp.get("end") || "";
+    const routeId = sp.get("routeId") || "";
+    const campusType = sp.get("campusType") || "";
+    const chips: Array<{ label: string; value: string }> = [];
+    if (start) chips.push({ label: "Start", value: new Date(start).toLocaleString() });
+    if (end) chips.push({ label: "End", value: new Date(end).toLocaleString() });
+    if (routeId) chips.push({ label: "Routes", value: routeId });
+    if (campusType) chips.push({ label: "Campus", value: campusType });
+    return chips;
+  }, [sp]);
 
   const submitQuestion = useCallback(
     async (text: string) => {
@@ -366,10 +380,13 @@ export default function AskAI() {
       setStatus("submitted");
       setIsStreaming(true);
 
+      const scope = scopeChips.map((c) => `${c.label}: ${c.value}`).join(" | ");
+      const scopedQuestion = scope ? `[Scope] ${scope}\n\n${question}` : question;
+
       const userMessage: ChatMessage = {
         id: nanoid(),
         role: "user",
-        content: question,
+        content: scopedQuestion,
       };
       const assistantId = nanoid();
       const assistantMessage: ChatMessage = {
@@ -409,7 +426,7 @@ export default function AskAI() {
             "content-type": "application/json",
             ...(currentConversationId ? { "x-conversation-id": currentConversationId } : {}),
           },
-          body: JSON.stringify({ question, model: selectedModel, conversationId: currentConversationId }),
+        body: JSON.stringify({ question: scopedQuestion, model: selectedModel, conversationId: currentConversationId }),
         });
 
         if (!response.ok || !response.body) {
@@ -477,12 +494,12 @@ export default function AskAI() {
         const toolLogs = Array.isArray(parsedMeta?.toolLogs) ? parsedMeta!.toolLogs : [];
         const summaryRows = extractSummaryRows(toolLogs);
         const summary = summaryRows ? computeSummary(summaryRows) : null;
-        const reasoningText = buildReasoningFromToolLogs(toolLogs, summary, question);
+        const reasoningText = buildReasoningFromToolLogs(toolLogs, summary, scopedQuestion);
         const toolState = deriveToolState(toolLogs, baseToolState.input);
 
         if (!latestDisplay.trim()) {
           const fallbackAnswer =
-            buildAssistantFallback(summary, toolLogs, question) ?? "I wasn't able to generate an answer this time.";
+            buildAssistantFallback(summary, toolLogs, scopedQuestion) ?? "I wasn't able to generate an answer this time.";
           latestDisplay = fallbackAnswer;
           setMessages((prev) =>
             prev.map((message) =>
@@ -825,9 +842,9 @@ export default function AskAI() {
                                     : "No tool calls"}
                                 </ChainOfThoughtSearchResult>
                               </ChainOfThoughtSearchResults>
-                              {(meta?.chainSteps ?? []).map((step) => (
+                              {(meta?.chainSteps ?? []).map((step, index) => (
                                 <ChainOfThoughtStep
-                                  key={step.label}
+                                  key={`${index}-${step.label}`}
                                   label={step.label}
                                   description={step.description}
                                   status={step.status}

@@ -50,10 +50,10 @@ export default function GlobalHeader() {
           <ThemeToggle />
           <Link
             href="/chat"
-            className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1.5 text-xs font-medium text-primary transition-colors hover:border-primary/40 hover:bg-primary/15 sm:px-3"
+            className="inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md sm:px-3"
           >
-            <span className="hidden sm:inline">Launch Copilot</span>
-            <span className="sm:hidden">Copilot</span>
+            <span className="hidden sm:inline">Open ACE Copilot</span>
+            <span className="sm:hidden">Open Copilot</span>
             <ArrowUpRightIcon className="size-3.5" aria-hidden="true" />
           </Link>
         </div>

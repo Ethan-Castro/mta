@@ -2,7 +2,7 @@ import { streamText, stepCountIs } from "ai";
 import { SYSTEM_PROMPTS } from "@/lib/ai/system-prompts";
 import { z } from "zod";
 import { getViolationSummary } from "@/lib/data/violations";
-import { sql } from "@/lib/db";
+import { sql, isDbConfigured } from "@/lib/db";
 import { addMessage, getMessages, upsertConversation } from "@/lib/chat";
 import {
   buildAssistantFallback,
@@ -12,6 +12,7 @@ import {
 } from "@/lib/ai/assistant-utils";
 import { getExa } from "@/lib/ai/exa";
 // no next/headers in route handlers; use req.headers
+import { getNeonMCPTools } from "@/lib/mcp/neon";
 
 export const runtime = "nodejs";
 const TOOL_META_SENTINEL = "[[AI_TOOL_META]]";
@@ -50,7 +51,6 @@ function ensureReadOnlySql(sqlText: string):
     "attach",
     "replace",
     "vacuum",
-    "analyze",
     "merge",
     "call",
     "execute",
@@ -150,51 +150,70 @@ export async function POST(req: Request) {
       modelMessages.push({ role: "user", content: fallbackPrompt });
     }
 
-    // No MCP: tools are implemented locally (Exa + direct Neon DB access)
+    // Build local tools (Exa + direct Neon DB access)
 
     const toolCallMap = new Map<string, { name: string; input?: unknown }>();
     const toolLogs: ToolLogEntry[] = [];
 
-    const result = streamText({
-      model: headerModel ?? (model || "openai/gpt-5-mini"),
-      // Centralized system prompt: edit in lib/ai/system-prompts.ts
-      system: SYSTEM_PROMPTS.streaming,
-      messages: modelMessages,
-      tools: {
-        webSearch: {
-          description: "Search the web for up-to-date information",
-          inputSchema: z.object({
-            query: z.string().min(1).max(200).describe("The search query"),
-          }),
-          execute: async ({ query }) => {
-            if (!process.env.EXA_API_KEY) {
-              return { error: "EXA_API_KEY is not configured." };
-            }
-            try {
-              const exa = getExa();
-              const { results } = await exa.searchAndContents(query, {
-                type: "auto",
-                text: true,
-                livecrawl: "always",
-                numResults: 20,
-              } as any);
-              return results.map((result: any) => ({
-                title: result.title,
-                url: result.url,
-                content: String(result.text || "").slice(0, 1000),
-                publishedDate: result.publishedDate ?? result.published ?? null,
-              }));
-            } catch (error: any) {
-              return { error: error?.message || "Web search failed" };
-            }
-          },
+    const localTools: Record<string, any> = {
+      webSearch: {
+        description: "Search the web for up-to-date information",
+        inputSchema: z.object({
+          query: z.string().min(1).max(200).describe("The search query"),
+        }),
+        execute: async ({ query }: { query: string }) => {
+          if (!process.env.EXA_API_KEY) {
+            return { error: "EXA_API_KEY is not configured." };
+          }
+          try {
+            const exa = getExa();
+            const { results } = await exa.searchAndContents(query, {
+              type: "auto",
+              text: true,
+              livecrawl: "always",
+              numResults: 20,
+            } as any);
+            return results.map((result: any) => ({
+              title: result.title,
+              url: result.url,
+              content: String(result.text || "").slice(0, 1000),
+              publishedDate: result.publishedDate ?? result.published ?? null,
+            }));
+          } catch (error: any) {
+            return { error: error?.message || "Web search failed" };
+          }
         },
+      },
+      getViolationsSummary: {
+        description: "Fetch grouped violations and exempt counts per route per month",
+        inputSchema: z.object({
+          routeId: z.string().optional(),
+          start: z.string().optional(),
+          end: z.string().optional(),
+          limit: z.number().optional().default(5000),
+        }),
+        execute: async ({ routeId, start, end, limit }: { routeId?: string; start?: string; end?: string; limit?: number }) => {
+          const rows = await getViolationSummary({ routeId, start, end, limit });
+          return {
+            rows: rows.map((row) => ({
+              bus_route_id: row.busRouteId,
+              date_trunc_ym: row.month,
+              violations: row.violations,
+              exempt_count: row.exemptCount,
+            })),
+          };
+        },
+      },
+    };
+
+    if (isDbConfigured) {
+      Object.assign(localTools, {
         runSql: {
           description: "Execute a SQL query against Neon Postgres (server-side only).",
           inputSchema: z.object({
             sql: z.string().describe("Full SQL string to execute"),
           }),
-          execute: async ({ sql: raw }) => {
+          execute: async ({ sql: raw }: { sql: string }) => {
             const check = ensureReadOnlySql(raw);
             if ("reason" in check) {
               return { error: check.reason };
@@ -205,8 +224,8 @@ export async function POST(req: Request) {
         },
         describeTable: {
           description: "Describe the schema of an allowed table (public schema only).",
-          inputSchema: z.object({ table: z.enum(["violations", "cuny_campus_locations", "bus_segment_speeds_2025", "bus_segment_speeds_2023_2024"]) }),
-          execute: async ({ table }) => {
+          inputSchema: z.object({ table: z.string().describe("Table name (validated against allow-list)") }),
+          execute: async ({ table }: { table: string }) => {
             try {
               const result = await import("@/lib/ai/sql-tools");
               return await result.queryTableSchema({ table });
@@ -215,27 +234,27 @@ export async function POST(req: Request) {
             }
           },
         },
-        getViolationsSummary: {
-          description: "Fetch grouped violations and exempt counts per route per month",
-          inputSchema: z.object({
-            routeId: z.string().optional(),
-            start: z.string().optional(),
-            end: z.string().optional(),
-            limit: z.number().optional().default(5000),
-          }),
-          execute: async ({ routeId, start, end, limit }) => {
-            const rows = await getViolationSummary({ routeId, start, end, limit });
-            return {
-              rows: rows.map((row) => ({
-                bus_route_id: row.busRouteId,
-                date_trunc_ym: row.month,
-                violations: row.violations,
-                exempt_count: row.exemptCount,
-              })),
-            };
+        listTables: {
+          description: "List table names in the 'public' schema",
+          inputSchema: z.object({}),
+          execute: async () => {
+            const rows = await sql`select table_name from information_schema.tables where table_schema = 'public' order by table_name`;
+            return { tables: (rows as any[]).map((r: any) => r.table_name) };
           },
         },
-      },
+      });
+    }
+
+    // Attach Neon MCP tools if available (best-effort)
+    const mcp = await getNeonMCPTools().catch(() => null);
+    const tools = { ...(localTools as Record<string, any>), ...(mcp?.tools || {}) };
+
+    const result = streamText({
+      model: headerModel ?? (model || "openai/gpt-5-mini"),
+      // Centralized system prompt: edit in lib/ai/system-prompts.ts
+      system: SYSTEM_PROMPTS.streaming,
+      messages: modelMessages,
+      tools,
       toolChoice: "auto",
       stopWhen: stepCountIs(15),
       onStepFinish({ toolCalls, toolResults }) {

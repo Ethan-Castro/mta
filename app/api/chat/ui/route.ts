@@ -14,6 +14,7 @@ import {
   SqlToolError,
 } from "@/lib/ai/sql-tools";
 import { dataApiGet } from "@/lib/data-api";
+import { getNeonMCPTools } from "@/lib/mcp/neon";
 
 export const maxDuration = 30;
 export const runtime = "nodejs";
@@ -39,6 +40,9 @@ export async function POST(req: Request) {
   const conversation = await upsertConversation(conversationIdInput ?? headerConversation ?? null, title ?? null);
   const conversationId = conversation.id;
 
+  // Try to attach Neon MCP tools (best-effort)
+  const mcp = await getNeonMCPTools().catch(() => null);
+
   // Persist last user message (if any)
   const last = messages[messages.length - 1];
   if (last && last.role === "user") {
@@ -54,9 +58,8 @@ export async function POST(req: Request) {
 
   // Require AI Gateway key to be provided by environment (no hardcoded fallback)
 
-  // No MCP: tools are defined locally below
-
-  const tools = {
+  // Build local tools; merge MCP tools if available
+  const localTools = {
     webSearch: tool({
       description: "Search the web for up-to-date information",
       inputSchema: z.object({
@@ -129,7 +132,7 @@ export async function POST(req: Request) {
     }),
     describeTable: tool({
       description: "Describe the schema of an allowed table (public schema only).",
-      inputSchema: z.object({ table: z.enum(ALLOWED_TABLES) }),
+      inputSchema: z.object({ table: z.string().describe("Table name (validated against allow-list)") }),
       execute: async ({ table }) => {
         try {
           return await queryTableSchema({ table });
@@ -248,6 +251,40 @@ export async function POST(req: Request) {
       },
     }),
   } as const;
+
+  const aliasTools = {
+    listTables: tool({
+      description: "List table names in the 'public' schema",
+      inputSchema: z.object({}),
+      execute: async () => {
+        const rows = await (sql as any)`
+          select table_name
+          from information_schema.tables
+          where table_schema = 'public'
+          order by table_name
+        `;
+        return { tables: (rows as any[]).map((r: any) => r.table_name) };
+      },
+    }),
+    runSql: tool({
+      description: "Execute a read-only SQL statement (SELECT/CTE only).",
+      inputSchema: z.object({ sql: z.string().describe("SQL to run (single SELECT/CTE)") }),
+      execute: async ({ sql: statement }) => {
+        try {
+          ensureSelectAllowed(statement);
+          const rows = await (sql as any).unsafe(statement);
+          return { rows };
+        } catch (error) {
+          if (error instanceof SqlToolError) {
+            return { error: error.message };
+          }
+          throw error;
+        }
+      },
+    }),
+  } as const;
+
+  const tools = { ...localTools, ...aliasTools, ...(mcp?.tools || {}) } as Record<string, any>;
 
   const result = streamText({
     model: headerModel ?? attachmentModel ?? model ?? "openai/gpt-5-mini",

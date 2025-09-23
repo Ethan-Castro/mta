@@ -231,43 +231,42 @@ function ExecutivePageContent() {
         aria-labelledby="executive-overview"
         className="surface-card animate-fade-up animate-fade-up-delay-1 rounded-xl border border-border/60 bg-card/80 p-4 shadow-soft-lg sm:p-5"
       >
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="space-y-2">
-            <h2 id="executive-overview" className="text-sm font-semibold text-foreground">How to use this view</h2>
-            <p className="text-xs text-muted-foreground">
-              Answer Datathon Question 1 by comparing ACE-enabled routes with non-ACE corridors, tracking exempt share, and
-              briefing leadership on the highest-impact recommendations.
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-1">
+            <h2 id="executive-overview" className="text-sm font-semibold text-foreground">Headline</h2>
+            <p className="text-sm text-foreground/80">
+              ACE corridors improved average bus speeds by {formatPercent(Math.max(0, aceSpeedGain))}
+              {" "}
+              ({cbdViolationDrop !== 0 ? `${cbdViolationDrop > 0 ? "▼" : "▲"}${formatPercent(Math.abs(cbdViolationDrop))} vs prior window` : "vs prior window"}); exemptions and hotspots vary by campus type.
             </p>
-            <ul className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
-              <li>• Highlight campus routes with the greatest ACE speed gains.</li>
-              <li>• Quantify exempt share and recurring fleets for rapid policy decisions.</li>
-              <li>• Use the AI prompts to draft executive-ready talking points.</li>
-              <li>• Update the summary with future Neon Postgres feeds for live metrics.</li>
-            </ul>
           </div>
-          <div className="flex min-w-[200px] flex-col gap-2 text-xs text-muted-foreground sm:min-w-[210px]">
-            <label htmlFor="executive-campus-filter" className="font-medium uppercase tracking-wide">
-              Filter by campus type
-            </label>
-            <Select value={selectedCampusType} onValueChange={setSelectedCampusType}>
-              <SelectTrigger
-                id="executive-campus-filter"
-                className="rounded-lg border border-foreground/15 bg-background/80 text-sm transition-colors duration-300 hover:border-primary/40 focus-visible:border-primary/40 focus-visible:ring-2 focus-visible:ring-primary/30"
-              >
-                <SelectValue>
-                  {campusTypeOptions.find((option) => option.value === selectedCampusType)?.label ?? "All campus types"}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent align="end">
-                {campusTypeOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowExplain((s) => !s)}
+              className="inline-flex items-center gap-2 rounded-full border border-foreground/15 bg-background/80 px-3 py-1.5 text-xs font-medium transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/40 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            >
+              {showExplain ? "Hide guide" : "Guide"}
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center gap-2 rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground shadow-sm transition-all hover:bg-primary/90"
+              onClick={() => window.print()}
+            >
+              Export
+            </button>
           </div>
         </div>
+        {showExplain && (
+          <div className="mt-3 rounded-md border border-foreground/10 bg-background/80 p-3 text-foreground/80 shadow-sm">
+            <ul className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+              <li>• Compare ACE vs non-ACE corridors.</li>
+              <li>• Quantify exempt share and recurring fleets.</li>
+              <li>• Use AI prompts to generate briefings.</li>
+              <li>• Switch campus type to reframe the story.</li>
+            </ul>
+          </div>
+        )}
       </section>
       <div className="grid grid-cols-1 gap-3 animate-fade-up animate-fade-up-delay-2 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
         <InsightCard
@@ -315,7 +314,35 @@ function ExecutivePageContent() {
             <Sparkline data={trendData} height={180} valueFormatter={(value) => value.toLocaleString()} />
           ) : (
             <div className="flex h-32 items-center justify-center text-xs text-muted-foreground sm:h-40">
-              No recent violations recorded for this route.
+              <div className="flex flex-col items-center gap-2">
+                <span>No recent violations recorded for this route.</span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => {
+                      const url = new URL(window.location.href);
+                      const now = new Date();
+                      const past = new Date(now);
+                      past.setMonth(now.getMonth() - 12);
+                      url.searchParams.set("start", past.toISOString());
+                      url.searchParams.set("end", now.toISOString());
+                      window.location.assign(url.toString());
+                    }}
+                    className="rounded-full border border-foreground/15 bg-background/80 px-3 py-1 text-[11px] text-foreground/80 hover:border-primary/40 hover:text-primary"
+                  >
+                    Try last 12 months
+                  </button>
+                  <button
+                    onClick={() => {
+                      const url = new URL(window.location.href);
+                      url.searchParams.set("routeId", "M15-SBS,Q46");
+                      window.location.assign(url.toString());
+                    }}
+                    className="rounded-full border border-foreground/15 bg-background/80 px-3 py-1 text-[11px] text-foreground/80 hover:border-primary/40 hover:text-primary"
+                  >
+                    Switch to M15-SBS, Q46
+                  </button>
+                </div>
+              </div>
             </div>
           )}
           <p className="text-[11px] text-muted-foreground">Tip: adjust the campus filter to compare other executive corridors.</p>
@@ -349,19 +376,7 @@ function ExecutivePageContent() {
           )}
         </ul>
       </section>
-      <div className="animate-fade-up text-xs">
-        <button
-          onClick={() => setShowExplain((s) => !s)}
-          className="inline-flex items-center gap-2 rounded-full border border-foreground/15 bg-background/80 px-3 py-1.5 font-medium transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/40 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-        >
-          {showExplain ? "Hide explanation" : "Explain this view"}
-        </button>
-        {showExplain && (
-          <div className="mt-2 rounded-md border border-foreground/10 bg-background/80 p-3 text-foreground/80 shadow-sm">
-            High-level KPIs summarize recent ACE violations and exempt shares. Generate an AI summary for context over a selected time window.
-          </div>
-        )}
-      </div>
+      <div className="animate-fade-up text-xs" />
       <ExecutiveKpis routeComparisons={routes} cbdRouteTrends={cbdRoutes} />
       <section
         aria-labelledby="exec-prompts"

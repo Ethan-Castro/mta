@@ -13,6 +13,7 @@ import {
 import { getViolationSummary } from "@/lib/data/violations";
 import { sql } from "@/lib/db";
 import { dataApiGet } from "@/lib/data-api";
+import { getNeonMCPTools } from "@/lib/mcp/neon";
 
 export const maxDuration = 30;
 export const runtime = "nodejs";
@@ -37,9 +38,9 @@ export async function POST(req: Request) {
 
   // Require AI Gateway key to be provided by environment (no hardcoded fallback)
 
-  // No MCP: tools are declared locally
-
-  const tools = {
+  // Build local tools and merge MCP tools if available
+  const mcp = await getNeonMCPTools().catch(() => null);
+  const localTools = {
     webSearch: tool({
       description: "Search the web for up-to-date information",
       inputSchema: z.object({
@@ -108,7 +109,7 @@ export async function POST(req: Request) {
     describeTable: tool({
       description: "Describe the schema of an allowed table (public schema only).",
       inputSchema: z.object({
-        table: z.enum(ALLOWED_TABLES).describe("Table name to describe"),
+        table: z.string().describe("Table name to describe (validated against allow-list)"),
       }),
       execute: async ({ table }) => {
         try {
@@ -253,6 +254,41 @@ export async function POST(req: Request) {
       },
     }),
   } as const;
+
+  // Helpful aliases: listTables and runSql (read-only)
+  const aliasTools: Record<string, any> = {
+    listTables: tool({
+      description: "List table names in the 'public' schema",
+      inputSchema: z.object({}),
+      execute: async () => {
+        const rows = await (sql as any)`
+          select table_name
+          from information_schema.tables
+          where table_schema = 'public'
+          order by table_name
+        `;
+        return { tables: (rows as any[]).map((r: any) => r.table_name) };
+      },
+    }),
+    runSql: tool({
+      description: "Execute a read-only SQL statement (SELECT/CTE only).",
+      inputSchema: z.object({ sql: z.string().describe("SQL to run (single SELECT/CTE)") }),
+      execute: async ({ sql: statement }) => {
+        try {
+          ensureSelectAllowed(statement);
+          const rows = await (sql as any).unsafe(statement);
+          return { rows };
+        } catch (error) {
+          if (error instanceof SqlToolError) {
+            return { error: error.message };
+          }
+          throw error;
+        }
+      },
+    }),
+  };
+
+  const tools = { ...(localTools as Record<string, any>), ...aliasTools, ...(mcp?.tools || {}) };
 
   const result = streamText({
     model: headerModel ?? attachmentModel ?? (model || "openai/gpt-5-mini"),

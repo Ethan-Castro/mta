@@ -1,4 +1,4 @@
-import { sql } from "@/lib/db";
+import { sql, isDbConfigured } from "@/lib/db";
 
 export type RouteComparison = {
   routeId: string;
@@ -122,6 +122,43 @@ export type SqlToolRecipe = {
 };
 
 export async function getRouteComparisons(): Promise<RouteComparison[]> {
+  if (!isDbConfigured) {
+    return [
+      {
+        routeId: "M15",
+        routeName: "M15",
+        campus: "Baruch College",
+        campusType: "Senior College",
+        aceEnforced: true,
+        averageWeekdayStudents: 1250,
+        studentShare: 0.15,
+        averageSpeedBefore: 12.5,
+        averageSpeedAfter: 14.2,
+        speedChangePct: 13.6,
+        averageMonthlyViolations: 45,
+        exemptSharePct: 23.5,
+        congestionZone: true,
+        narrative: "Route shows significant improvement after ACE implementation",
+      },
+      {
+        routeId: "B41",
+        routeName: "B41",
+        campus: "Brooklyn College",
+        campusType: "Senior College",
+        aceEnforced: true,
+        averageWeekdayStudents: 890,
+        studentShare: 0.12,
+        averageSpeedBefore: 11.8,
+        averageSpeedAfter: 13.1,
+        speedChangePct: 11.0,
+        averageMonthlyViolations: 32,
+        exemptSharePct: 18.2,
+        congestionZone: false,
+        narrative: "Consistent performance with moderate violations",
+      },
+    ];
+  }
+
   const rows = await sql`
     select
       route_id,
@@ -162,6 +199,23 @@ export async function getRouteComparisons(): Promise<RouteComparison[]> {
 }
 
 export async function getCuratedHotspots(): Promise<ViolationHotspot[]> {
+  if (!isDbConfigured) {
+    return [
+      {
+        id: "hotspot-1",
+        routeId: "M15",
+        campus: "Baruch College",
+        location: "23rd St & Lexington Ave",
+        latitude: 40.7385,
+        longitude: -73.9857,
+        averageDailyViolations: 8.5,
+        exemptSharePct: 22.1,
+        recurringVehicles: 12,
+        highlight: "High violation rate during peak hours",
+      },
+    ];
+  }
+
   const rows = await sql`
     select
       id,
@@ -193,6 +247,20 @@ export async function getCuratedHotspots(): Promise<ViolationHotspot[]> {
 }
 
 export async function getExemptRepeaterSummaries(): Promise<ExemptRepeater[]> {
+  if (!isDbConfigured) {
+    return [
+      {
+        vehicleId: "V12345",
+        company: "Transit Corp",
+        primaryReason: "Emergency vehicle",
+        violations: 15,
+        routes: ["M15", "M23"],
+        hotspots: ["23rd St & Lexington"],
+        nextAction: "Review exemption status",
+      },
+    ];
+  }
+
   const rows = await sql`
     select
       vehicle_id,
@@ -218,6 +286,27 @@ export async function getExemptRepeaterSummaries(): Promise<ExemptRepeater[]> {
 }
 
 export async function getCbdRouteTrends(): Promise<CbdRouteTrend[]> {
+  if (!isDbConfigured) {
+    return [
+      {
+        routeId: "M15",
+        routeName: "M15",
+        boroughs: "Manhattan",
+        crossesCbd: true,
+        aceGoLive: "2024-01-01",
+        prePricingViolations: 125,
+        postPricingViolations: 78,
+        violationChangePct: -37.6,
+        prePricingAverageSpeed: 11.2,
+        postPricingAverageSpeed: 13.8,
+        speedChangePct: 23.2,
+        latitude: 40.7385,
+        longitude: -73.9857,
+        highlight: "Significant improvement in CBD area",
+      },
+    ];
+  }
+
   const rows = await sql`
     select
       route_id,
@@ -259,6 +348,17 @@ export async function getCbdRouteTrends(): Promise<CbdRouteTrend[]> {
 }
 
 export async function getDocumentationLinks(): Promise<DocumentationLink[]> {
+  if (!isDbConfigured) {
+    return [
+      {
+        id: 1,
+        title: "ACE Program Overview",
+        href: "https://www.nyc.gov/html/dot/html/about/automated-bus-lane-enforcement.shtml",
+        summary: "Official MTA documentation on ACE program",
+      },
+    ];
+  }
+
   const rows = await sql`
     select id, title, href, summary
     from documentation_links
@@ -286,6 +386,18 @@ export async function getAiPrompts(category?: string): Promise<AiPrompt[]> {
 }
 
 export async function getAnalystScenarios(): Promise<AnalystScenario[]> {
+  if (!isDbConfigured) {
+    return [
+      {
+        id: 1,
+        title: "Route Performance Analysis",
+        description: "Analyze M15 route performance before and after ACE implementation",
+        expectedInputs: "Route ID, date range",
+        playbook: "1. Query route_insights table 2. Compare before/after metrics 3. Analyze trends",
+      },
+    ];
+  }
+
   const rows = await sql`
     select id, title, description, expected_inputs, playbook
     from analyst_scenarios
@@ -302,6 +414,53 @@ export async function getAnalystScenarios(): Promise<AnalystScenario[]> {
 }
 
 export async function getStudentCommuteProfiles(): Promise<StudentCommuteProfile[]> {
+  if (!isDbConfigured) {
+    return [
+      {
+        campus: "Baruch College",
+        campusType: "Senior College",
+        borough: "Manhattan",
+        avgDailyStudents: 18500,
+        aceCoverageShare: 0.85,
+        primaryRoute: {
+          id: "M15",
+          name: "M15",
+          aceEnforced: true,
+          speedChangePct: 13.6,
+          averageRideMinutes: 45,
+          reliabilityScore: "Good",
+          note: "Primary route for Baruch students",
+        },
+        comparisonRoute: {
+          id: "M23",
+          name: "M23",
+          aceEnforced: false,
+          speedChangePct: 0,
+          averageRideMinutes: 52,
+          reliabilityScore: "Fair",
+          note: "Alternative route",
+        },
+        nonAceRoute: {
+          id: "M101",
+          name: "M101",
+          aceEnforced: false,
+          speedChangePct: 0,
+          averageRideMinutes: 58,
+          reliabilityScore: "Poor",
+          note: "Non-ACE route for comparison",
+        },
+        travelTimeDelta: "13 minutes faster with ACE",
+        hotspotIds: ["hotspot-1"],
+        timeline: [
+          { label: "2023", detail: "Pre-ACE implementation" },
+          { label: "2024", detail: "ACE enforcement begins" },
+        ],
+        recommendation: "Continue ACE enforcement on M15",
+        studentVoices: ["Much faster commute now", "Reliable service"],
+      },
+    ];
+  }
+
   const rows = await sql`
     select
       campus,
@@ -339,6 +498,17 @@ export async function getStudentCommuteProfiles(): Promise<StudentCommuteProfile
 }
 
 export async function getStudentDbRecipes(): Promise<StudentDbRecipe[]> {
+  if (!isDbConfigured) {
+    return [
+      {
+        id: 1,
+        title: "Student Route Analysis",
+        description: "Analyze student ridership patterns on specific routes",
+        sql: "SELECT route_id, avg_students, peak_hours FROM student_commute_profiles WHERE campus = 'Baruch College'",
+      },
+    ];
+  }
+
   const rows = await sql`
     select id, title, description, sql
     from student_db_recipes
@@ -354,6 +524,15 @@ export async function getStudentDbRecipes(): Promise<StudentDbRecipe[]> {
 }
 
 export async function getSqlToolRecipes(): Promise<SqlToolRecipe[]> {
+  if (!isDbConfigured) {
+    return [
+      {
+        topic: "Route Performance",
+        sql: "SELECT route_id, avg_speed_before, avg_speed_after FROM route_insights WHERE campus = 'Baruch College'",
+      },
+    ];
+  }
+
   const rows = await sql`
     select topic, sql
     from sql_tool_recipes
