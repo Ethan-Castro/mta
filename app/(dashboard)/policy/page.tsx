@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { BRAND_PRIMARY_HEX } from "@/lib/ui/colors";
 
 const percent = new Intl.NumberFormat("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const integer = new Intl.NumberFormat("en-US");
@@ -170,7 +171,7 @@ export default function PolicyPage() {
           id: route.routeId,
           longitude: Number(route.longitude),
           latitude: Number(route.latitude),
-          color: route.crossesCbd ? "#2563eb" : "#f97316",
+          color: route.crossesCbd ? BRAND_PRIMARY_HEX : "#f97316",
           title: `${route.routeId} | ${route.routeName}`,
           description: `${formatChange(Number(route.speedChangePct ?? 0))} speed | ${formatChange(Number(route.violationChangePct ?? 0))} violations | ${route.boroughs}`,
         })),
@@ -289,7 +290,7 @@ export default function PolicyPage() {
         <div className="flex flex-wrap gap-3 text-xs text-foreground/80">
           {policyRoutes.map((route) => (
             <span key={route.routeId} className="inline-flex items-center gap-2 rounded-full border border-foreground/10 px-3 py-1">
-              <span style={{ backgroundColor: route.crossesCbd ? "#2563eb" : "#f97316", width: 10, height: 10, borderRadius: 9999 }} />
+              <span style={{ backgroundColor: route.crossesCbd ? BRAND_PRIMARY_HEX : "#f97316", width: 10, height: 10, borderRadius: 9999 }} />
               {route.routeId} | {route.routeName}
             </span>
           ))}

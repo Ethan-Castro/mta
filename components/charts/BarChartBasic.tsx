@@ -22,7 +22,7 @@ type Props = {
   yLabel?: string;
 };
 
-export default function BarChartBasic({ data, height = 240, color = "#08179c", yLabel = "Value" }: Props) {
+export default function BarChartBasic({ data, height = 240, color = "var(--chart-1)", yLabel = "Value" }: Props) {
   if (!data?.length) {
     return (
       <div className="flex h-[150px] items-center justify-center text-xs text-muted-foreground sm:h-[180px]">
@@ -35,7 +35,7 @@ export default function BarChartBasic({ data, height = 240, color = "#08179c", y
     <div className="h-full w-full">
       <ResponsiveContainer width="100%" height={height}>
         <BarChart data={data} margin={{ top: 12, left: 8, right: 8, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(8, 23, 156, 0.08)" />
+          <CartesianGrid strokeDasharray="3 3" stroke="color-mix(in srgb, var(--chart-1) 12%, transparent)" />
           <XAxis dataKey="label" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} interval={0} height={40} angle={-15} textAnchor="end" />
           <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={50} label={{ value: yLabel, angle: -90, position: "insideLeft", fontSize: 10 }} />
           <Tooltip
@@ -49,5 +49,4 @@ export default function BarChartBasic({ data, height = 240, color = "#08179c", y
     </div>
   );
 }
-
 

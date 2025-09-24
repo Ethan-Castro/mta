@@ -23,6 +23,7 @@ export default function InsightCard({
 }: Props) {
   const alignment = align === "center" ? "items-center text-center" : "items-start text-left";
   const textAlignment = align === "center" ? "text-center" : "text-left";
+  const trendColor = trendPositive ? "text-[color:var(--chart-3)]" : "text-[color:var(--chart-6)]";
   return (
     <div className="surface-card group animate-fade-up rounded-xl border border-foreground/10 bg-background/80 p-4 transition-colors duration-500 focus-within:ring-1 focus-within:ring-primary/40 sm:p-5">
       <span className="pointer-events-none absolute inset-px rounded-[inherit] bg-gradient-to-br from-primary/10 via-transparent to-transparent opacity-0 transition-opacity duration-700 group-hover:opacity-100" aria-hidden />
@@ -36,7 +37,7 @@ export default function InsightCard({
         </div>
         {subline && <div className={`text-sm text-foreground/70 transition-colors duration-500 ${textAlignment}`}>{subline}</div>}
         {trendLabel && trendDelta && (
-          <div className={`text-xs font-semibold tracking-wide ${trendPositive ? "text-emerald-500" : "text-rose-500"}`}>
+          <div className={`text-xs font-semibold tracking-wide ${trendColor}`}>
             {trendLabel}: {trendDelta}
           </div>
         )}

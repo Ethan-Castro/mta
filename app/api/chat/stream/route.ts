@@ -17,6 +17,14 @@ import { elevenlabs } from "@ai-sdk/elevenlabs";
 import { getNeonMCPTools } from "@/lib/mcp/neon";
 import { stackServerApp } from "@/stack/server";
 import { emailTools } from "@/lib/ai/email-tools";
+import {
+  BRAND_PRIMARY_HEX,
+  BRAND_SUCCESS_HEX,
+  BRAND_ERROR_HEX,
+  BRAND_WARNING_HEX,
+  BRAND_PURPLE_HEX,
+  BRAND_INFO_HEX,
+} from "@/lib/ui/colors";
 
 export const runtime = "nodejs";
 const TOOL_META_SENTINEL = "[[AI_TOOL_META]]";
@@ -372,15 +380,22 @@ export async function POST(req: Request) {
 
           function colorFromValue(value: unknown): string {
             if (typeof value === "number" && Number.isFinite(value)) {
-              if (value < 10) return "#10b981"; // green
-              if (value < 50) return "#f59e0b"; // amber
-              return "#ef4444"; // red
+              if (value < 10) return BRAND_SUCCESS_HEX;
+              if (value < 50) return BRAND_WARNING_HEX;
+              return BRAND_ERROR_HEX;
             }
-            if (value == null) return "#2563eb"; // default blue
+            if (value == null) return BRAND_PRIMARY_HEX;
             const s = String(value);
             let hash = 0;
             for (let i = 0; i < s.length; i++) hash = (hash << 5) - hash + s.charCodeAt(i);
-            const palette = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4"];
+            const palette = [
+              BRAND_PRIMARY_HEX,
+              BRAND_SUCCESS_HEX,
+              BRAND_WARNING_HEX,
+              BRAND_ERROR_HEX,
+              BRAND_PURPLE_HEX,
+              BRAND_INFO_HEX,
+            ];
             return palette[Math.abs(hash) % palette.length];
           }
 
@@ -392,7 +407,7 @@ export async function POST(req: Request) {
               const title = config.titleKey ? String(row?.[config.titleKey] ?? "") : `Point ${index + 1}`;
               const description = config.descriptionKey ? String(row?.[config.descriptionKey] ?? "") : "";
               const href = config.hrefKey ? String(row?.[config.hrefKey] ?? "") : undefined;
-              const color = config.colorKey ? colorFromValue(row?.[config.colorKey]) : "#2563eb";
+              const color = config.colorKey ? colorFromValue(row?.[config.colorKey]) : BRAND_PRIMARY_HEX;
               return { id: `m-${index}`, latitude: lat, longitude: lng, title, description, href, color };
             })
             .filter(Boolean) as Array<{

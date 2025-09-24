@@ -36,7 +36,7 @@ export default function GroupedBar({ data, height = 260, showLegend = true }: Pr
     <div className="h-full w-full">
       <ResponsiveContainer width="100%" height={height}>
         <BarChart data={data} margin={{ top: 12, left: 8, right: 8, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(8, 23, 156, 0.08)" />
+          <CartesianGrid strokeDasharray="3 3" stroke="color-mix(in srgb, var(--chart-1) 12%, transparent)" />
           <XAxis 
             dataKey="name" 
             tick={{ fontSize: 10 }} 
@@ -65,8 +65,8 @@ export default function GroupedBar({ data, height = 260, showLegend = true }: Pr
               wrapperStyle={{ fontSize: 11, paddingBottom: 8 }}
             />
           )}
-          <Bar dataKey="violations" name="Violations" fill="#08179c" radius={[4, 4, 0, 0]} />
-          <Bar dataKey="exempt" name="Exempt" fill="#ffcd00" radius={[4, 4, 0, 0]} />
+          <Bar dataKey="violations" name="Violations" fill="var(--chart-1)" radius={[4, 4, 0, 0]} />
+          <Bar dataKey="exempt" name="Exempt" fill="var(--chart-4)" radius={[4, 4, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>

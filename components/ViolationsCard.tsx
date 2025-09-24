@@ -60,7 +60,13 @@ export default function ViolationsCard() {
 
   return (
     <div className="max-w-md rounded-2xl border p-4 shadow-sm bg-card/90">
-      <h3 className="text-base font-semibold mb-3">🚨 Violations forecast</h3>
+      <header className="mb-3 space-y-1">
+        <h3 className="text-base font-semibold">🚨 Violations forecast</h3>
+        <p className="text-xs text-foreground/70">
+          Notebook A’s <code className="font-mono text-[11px]">/predict/violations</code> service projects near-term ACE tickets for a route.
+          Adjust the route ID and forecast window to size enforcement workloads.
+        </p>
+      </header>
 
       <div className="grid grid-cols-2 gap-3">
         <label className="text-sm col-span-2">
@@ -94,7 +100,7 @@ export default function ViolationsCard() {
         {loading ? "Predicting…" : "Predict Violations"}
       </button>
 
-      {err && <p className="mt-3 text-red-600 text-sm">Error: {err}</p>}
+      {err && <p className="mt-3 text-[color:var(--chart-6)] text-sm">Error: {err}</p>}
 
       {loading && !result && (
         <div className="mt-3 h-28 animate-pulse rounded bg-foreground/10" />
@@ -126,9 +132,9 @@ export default function ViolationsCard() {
           {series && Array.isArray(series) && series.length > 0 && (
             <div>
               <div className="mb-1 font-medium">Daily forecast</div>
-              <div className="max-h-40 overflow-auto rounded border bg-white">
+              <div className="max-h-40 overflow-auto rounded border bg-card">
                 <table className="w-full text-xs">
-                  <thead className="bg-gray-100">
+                  <thead className="bg-muted/40">
                     <tr>
                       <th className="px-2 py-1 text-left">Date</th>
                       <th className="px-2 py-1 text-right">Count</th>
@@ -136,7 +142,7 @@ export default function ViolationsCard() {
                   </thead>
                   <tbody>
                     {series.map((d, i) => (
-                      <tr key={i} className="odd:bg-gray-50">
+                      <tr key={i} className="odd:bg-muted/20">
                         <td className="px-2 py-1">{(d as any).date || i}</td>
                         <td className="px-2 py-1 text-right">{(d as any).count ?? "-"}</td>
                       </tr>
@@ -152,8 +158,10 @@ export default function ViolationsCard() {
           )}
         </div>
       )}
+
+      <footer className="mt-3 text-[11px] text-muted-foreground">
+        Source: {process.env.NEXT_PUBLIC_NOTEBOOK_A_BASE || "Notebook A API"}
+      </footer>
     </div>
   );
 }
-
-

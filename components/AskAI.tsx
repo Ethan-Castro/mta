@@ -155,6 +155,7 @@ import PieChartBasic from "@/components/charts/PieChartBasic";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import ChartErrorFallback from "@/components/ChartErrorFallback";
 import LoadingSkeleton from "@/components/LoadingSkeleton";
+import { BRAND_PRIMARY_HEX } from "@/lib/ui/colors";
 
 const DATASET_URL =
   "https://data.ny.gov/Transportation/Automated-Bus-Lane-Enforcement-Violations/kh8p-hcbm";
@@ -268,7 +269,7 @@ const ChartRenderer = memo(({ spec, data, isLoading = false }: { spec: any; data
             id: String(d.id ?? `${d.longitude},${d.latitude}`),
             longitude: Number(d.longitude ?? d.lng ?? d.lon ?? 0),
             latitude: Number(d.latitude ?? d.lat ?? 0),
-            color: d.color || "#2563eb",
+            color: d.color || BRAND_PRIMARY_HEX,
             title: d.title,
             description: d.description,
             href: d.href,
@@ -1031,8 +1032,8 @@ export default function AskAI() {
                         )}
 
                         {isRecording && (
-                          <div className="flex items-center gap-2 text-red-600 text-sm" role="status" aria-live="polite">
-                            <div className="h-2 w-2 rounded-full bg-red-600 animate-pulse" />
+                          <div className="flex items-center gap-2 status-negative text-sm" role="status" aria-live="polite">
+                            <div className="h-2 w-2 rounded-full bg-[color:var(--destructive)] animate-pulse" />
                             <span>Recording audio…</span>
                           </div>
                         )}
@@ -1443,9 +1444,10 @@ export default function AskAI() {
                 className={cn(
                   "flex h-8 w-8 items-center justify-center rounded-md border transition-colors",
                   isRecording
-                    ? "border-red-500 bg-red-50 text-red-600 hover:bg-red-100"
+                    ? "status-negative border-[color:var(--destructive)]"
                     : "border-border/60 text-muted-foreground hover:border-primary/40 hover:text-primary"
                 )}
+                style={isRecording ? { backgroundColor: "color-mix(in srgb, var(--destructive) 18%, transparent)" } : undefined}
                 title={isRecording ? "Stop recording" : "Start recording"}
                 disabled={status === "submitted" || status === "streaming"}
               >
@@ -1509,11 +1511,11 @@ export default function AskAI() {
 
       {showEmailModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+          <div className="bg-card rounded-lg p-6 w-full max-w-md mx-4 shadow-soft-lg border border-border/60">
             <h3 className="text-lg font-semibold mb-4">Email Chat Response</h3>
             <div className="space-y-4">
               <div>
-                <label htmlFor="email-input" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="email-input" className="block text-sm font-medium text-foreground/80 mb-1">
                   Email Address
                 </label>
                 <input
@@ -1522,7 +1524,7 @@ export default function AskAI() {
                   value={emailAddress}
                   onChange={(e) => setEmailAddress(e.target.value)}
                   placeholder="Enter email address"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 rounded-md border border-border focus:outline-none focus:ring-2 focus:ring-primary/40"
                   disabled={isEmailing}
                 />
               </div>
@@ -1533,7 +1535,7 @@ export default function AskAI() {
                     setEmailAddress("");
                     setError(null);
                   }}
-                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                  className="px-4 py-2 text-muted-foreground hover:text-foreground"
                   disabled={isEmailing}
                 >
                   Cancel
@@ -1546,7 +1548,7 @@ export default function AskAI() {
                     }
                   }}
                   disabled={isEmailing || !emailAddress.trim()}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isEmailing ? "Sending..." : "Send Email"}
                 </button>

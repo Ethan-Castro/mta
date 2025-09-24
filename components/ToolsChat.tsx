@@ -18,6 +18,7 @@ import PieChartBasic from "@/components/charts/PieChartBasic";
 import MapPanel from "@/components/MapPanel";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import ChartErrorFallback from "@/components/ChartErrorFallback";
+import { BRAND_PRIMARY_HEX } from "@/lib/ui/colors";
 
 export default function ToolsChat() {
   const [input, setInput] = useState("");
@@ -78,7 +79,7 @@ export default function ToolsChat() {
               id: String(d.id ?? `${d.longitude},${d.latitude}`),
               longitude: Number(d.longitude ?? d.lng ?? d.lon ?? 0),
               latitude: Number(d.latitude ?? d.lat ?? 0),
-              color: d.color || "#2563eb",
+              color: d.color || BRAND_PRIMARY_HEX,
               title: d.title,
               description: d.description,
               href: d.href,

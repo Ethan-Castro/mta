@@ -93,9 +93,9 @@ export const TaskTrigger = memo(
 
     const statusStyles = {
       pending: "text-muted-foreground",
-      in_progress: "text-blue-600",
-      completed: "text-green-600",
-      error: "text-red-600",
+      in_progress: "status-info",
+      completed: "status-positive",
+      error: "status-negative",
     } as const;
 
     const Icon = statusIcon;

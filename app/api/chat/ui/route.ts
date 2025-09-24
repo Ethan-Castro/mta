@@ -17,6 +17,14 @@ import {
 import { dataApiGet } from "@/lib/data-api";
 import { getNeonMCPTools } from "@/lib/mcp/neon";
 import { stackServerApp } from "@/stack/server";
+import {
+  BRAND_PRIMARY_HEX,
+  BRAND_SUCCESS_HEX,
+  BRAND_ERROR_HEX,
+  BRAND_WARNING_HEX,
+  BRAND_PURPLE_HEX,
+  BRAND_INFO_HEX,
+} from "@/lib/ui/colors";
 
 export const maxDuration = 30;
 export const runtime = "nodejs";
@@ -422,19 +430,26 @@ export async function POST(req: Request) {
         if (!Array.isArray(rows) || rows.length === 0) {
           return { error: "No data provided for map" };
         }
-        function colorFromValue(value: unknown): string {
-          if (typeof value === "number" && Number.isFinite(value)) {
-            if (value < 10) return "#10b981";
-            if (value < 50) return "#f59e0b";
-            return "#ef4444";
+          function colorFromValue(value: unknown): string {
+            if (typeof value === "number" && Number.isFinite(value)) {
+              if (value < 10) return BRAND_SUCCESS_HEX;
+              if (value < 50) return BRAND_WARNING_HEX;
+              return BRAND_ERROR_HEX;
+            }
+            if (value == null) return BRAND_PRIMARY_HEX;
+            const s = String(value);
+            let hash = 0;
+            for (let i = 0; i < s.length; i++) hash = (hash << 5) - hash + s.charCodeAt(i);
+            const palette = [
+              BRAND_PRIMARY_HEX,
+              BRAND_SUCCESS_HEX,
+              BRAND_WARNING_HEX,
+              BRAND_ERROR_HEX,
+              BRAND_PURPLE_HEX,
+              BRAND_INFO_HEX,
+            ];
+            return palette[Math.abs(hash) % palette.length];
           }
-          if (value == null) return "#2563eb";
-          const s = String(value);
-          let hash = 0;
-          for (let i = 0; i < s.length; i++) hash = (hash << 5) - hash + s.charCodeAt(i);
-          const palette = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4"];
-          return palette[Math.abs(hash) % palette.length];
-        }
         const markers = rows
           .map((row: any, index: number) => {
             const lat = Number(row?.[config.latitudeKey]);
@@ -443,7 +458,7 @@ export async function POST(req: Request) {
             const title = config.titleKey ? String(row?.[config.titleKey] ?? "") : `Point ${index + 1}`;
             const description = config.descriptionKey ? String(row?.[config.descriptionKey] ?? "") : "";
             const href = config.hrefKey ? String(row?.[config.hrefKey] ?? "") : undefined;
-            const color = config.colorKey ? colorFromValue(row?.[config.colorKey]) : "#2563eb";
+            const color = config.colorKey ? colorFromValue(row?.[config.colorKey]) : BRAND_PRIMARY_HEX;
             return { id: `m-${index}`, latitude: lat, longitude: lng, title, description, href, color };
           })
           .filter(Boolean) as Array<{ id: string; latitude: number; longitude: number; title?: string; description?: string; href?: string; color?: string; }>;

@@ -10,6 +10,7 @@ import {
   haversineDistanceKm,
   type LatLng,
 } from "@/lib/geo/location";
+import { BRAND_PRIMARY_HEX } from "@/lib/ui/colors";
 
 type HotspotMetricRow = {
   busRouteId: string;
@@ -140,7 +141,7 @@ export default function MapPage() {
           id: `${row.busRouteId}-${row.latitude}-${row.longitude}`,
           longitude: row.longitude,
           latitude: row.latitude,
-          color: "#2563eb",
+          color: BRAND_PRIMARY_HEX,
           title: `${row.stopName ?? "Unknown stop"} (${row.busRouteId})`,
           description: `${integer.format(row.violations)} violations | ${percent.format(share)}% exempt${row.campus ? ` | ${row.campus}` : ""}`,
           data: row,

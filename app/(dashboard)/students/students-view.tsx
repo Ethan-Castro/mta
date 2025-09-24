@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { BRAND_PRIMARY_HEX } from "@/lib/ui/colors";
 
 const percentFormatter = new Intl.NumberFormat("en-US", {
   style: "percent",
@@ -272,7 +273,7 @@ export default function StudentsView({ data }: { data: Promise<StudentsCurated> 
               id: hotspot.id,
               longitude: Number(hotspot.longitude ?? 0),
               latitude: Number(hotspot.latitude ?? 0),
-              color: hotspot.campusMatch ? "#0039a6" : "#f97316",
+              color: hotspot.campusMatch ? BRAND_PRIMARY_HEX : "#f97316",
               title: `${hotspot.location ?? "Unknown stop"} | ${hotspot.routeId}`,
               description: `${integerFormatter.format(violations)} violations/day | ${exemptPct.toFixed(1)}% exempt | ${hotspot.campus ?? "Unknown campus"}`,
             };
@@ -362,5 +363,3 @@ export default function StudentsView({ data }: { data: Promise<StudentsCurated> 
     </div>
   );
 }
-
-

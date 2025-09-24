@@ -13,19 +13,22 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import GroupedBar from "@/components/charts/GroupedBar";
+import { BRAND_PRIMARY_HEX } from "@/lib/ui/colors";
 
 const percent = new Intl.NumberFormat("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const integer = new Intl.NumberFormat("en-US");
 
 const ROUTE_COLORS: Record<string, string> = {
-  "M15-SBS": "#2563eb",
-  "Bx12-SBS": "#22c55e",
+  "M15-SBS": BRAND_PRIMARY_HEX,
+  "Bx12-SBS": "#10b981",
   Q46: "#f97316",
-  "B44-SBS": "#a855f7",
+  "B44-SBS": "#8b5cf6",
   "S79-SBS": "#0ea5e9",
-  M103: "#facc15",
+  M103: "#ffcd32",
   BxM1: "#ef4444",
 };
+
+const CAMPUS_MARKER_COLOR = ROUTE_COLORS["B44-SBS"];
 
 type RouteMetricRow = {
   busRouteId: string;
@@ -192,7 +195,7 @@ export default function OperationsView({ data }: { data: Promise<OpsData> }) {
           id: `campus-${campus.campus.replace(/\s+/g, "-").toLowerCase()}`,
           longitude: Number(campus.longitude),
           latitude: Number(campus.latitude),
-          color: "#8b5cf6",
+          color: CAMPUS_MARKER_COLOR,
           title: campus.campus,
           description: `${campus.type ?? "Campus"} | ${campus.address ?? ""}${campus.city ? `, ${campus.city}` : ""}${campus.state ? `, ${campus.state}` : ""}`,
           href: campus.website ?? undefined,
@@ -208,7 +211,7 @@ export default function OperationsView({ data }: { data: Promise<OpsData> }) {
           id: `${point.busRouteId}-${point.latitude}-${point.longitude}`,
           longitude: point.longitude,
           latitude: point.latitude,
-          color: ROUTE_COLORS[point.busRouteId] || "#2563eb",
+          color: ROUTE_COLORS[point.busRouteId] || BRAND_PRIMARY_HEX,
           title: `${point.stopName ?? "Unknown stop"} (${point.busRouteId})`,
           description: `${integer.format(point.violations)} violations | ${formatPercentValue(share)} exempt | ${point.campus}`,
         };
@@ -426,7 +429,7 @@ export default function OperationsView({ data }: { data: Promise<OpsData> }) {
                   />
                   <span className="inline-flex items-center gap-2">
                     <span
-                      style={{ backgroundColor: ROUTE_COLORS[route.routeId] || "#2563eb" }}
+                      style={{ backgroundColor: ROUTE_COLORS[route.routeId] || BRAND_PRIMARY_HEX }}
                       className="h-2.5 w-2.5 rounded-full shadow-[0_0_0_4px_rgba(8,23,156,0.08)]"
                     />
                     {route.routeId} | {route.routeName}
@@ -579,5 +582,4 @@ export default function OperationsView({ data }: { data: Promise<OpsData> }) {
     </div>
   );
 }
-
 

@@ -14,7 +14,16 @@ type Props = {
   showLegend?: boolean;
 };
 
-const DEFAULT_COLORS = ["#08179c", "#ffcd00", "#22c55e", "#e11d48", "#06b6d4", "#a855f7", "#f97316", "#475569"];
+const DEFAULT_COLORS = [
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
+  "var(--chart-6)",
+  "var(--chart-7)",
+  "var(--chart-8)",
+];
 
 export default function PieChartBasic({ data, height = 240, colors = DEFAULT_COLORS, showLegend = true }: Props) {
   if (!data?.length) {
@@ -49,5 +58,4 @@ export default function PieChartBasic({ data, height = 240, colors = DEFAULT_COL
     </div>
   );
 }
-
 

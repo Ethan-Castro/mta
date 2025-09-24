@@ -5,6 +5,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import "mapbox-gl/dist/mapbox-gl.css";
 import type { MapRef } from "react-map-gl/mapbox";
 import type { FeatureCollection, Feature, Point } from "geojson";
+import {
+  BRAND_PRIMARY_HEX,
+  MAP_CLUSTER_COLORS,
+  MAP_CLUSTER_STROKE_HEX,
+  MAP_CLUSTER_TEXT_HEX,
+} from "@/lib/ui/colors";
 
 type Props = {
   height?: number;
@@ -57,6 +63,8 @@ export default function MapPanel({
     map.flyTo({ center: [userLocation.longitude, userLocation.latitude], zoom: Math.max(zoom, 12) });
   }, [userLocation?.longitude, userLocation?.latitude, zoom]);
 
+  const [clusterLow, clusterMid, clusterHigh, clusterMax] = MAP_CLUSTER_COLORS;
+
   const geojson: FeatureCollection<Point> = useMemo(() => {
     return {
       type: "FeatureCollection",
@@ -67,7 +75,7 @@ export default function MapPanel({
           title: m.title,
           description: m.description,
           href: m.href,
-          color: m.color || "#2563eb",
+          color: m.color || BRAND_PRIMARY_HEX,
         },
         geometry: { type: "Point", coordinates: [m.longitude, m.latitude] },
       })),
@@ -147,13 +155,13 @@ export default function MapPanel({
                       tabIndex={0}
                       aria-label={m.title ? `Open ${m.title}` : `Open ${m.id}`}
                       style={{
-                        backgroundColor: m.color || "#2563eb",
+                        backgroundColor: m.color || BRAND_PRIMARY_HEX,
                         width: baseSize,
                         height: baseSize,
                         borderRadius: 9999,
-                        border: `2px solid ${m.id.startsWith("campus-") ? "#ffffff" : "white"}`,
+                        border: `2px solid ${m.id.startsWith("campus-") ? MAP_CLUSTER_STROKE_HEX : MAP_CLUSTER_STROKE_HEX}`,
                         boxShadow: m.id.startsWith("campus-")
-                          ? "0 0 0 2px rgba(139, 92, 246, 0.3), 0 0 0 1px rgba(0,0,0,0.2)"
+                          ? "0 0 0 2px rgba(139, 92, 246, 0.25), 0 0 0 1px rgba(0,0,0,0.2)"
                           : "0 0 0 1px rgba(0,0,0,0.2)",
                         transform: isActive ? "scale(1.2)" : "scale(1)",
                         transition: "transform 0.3s var(--ease-smooth), box-shadow 0.3s var(--ease-smooth)",
@@ -189,17 +197,17 @@ export default function MapPanel({
                   "circle-color": [
                     "step",
                     ["get", "point_count"],
-                    "#93c5fd",
+                    clusterLow,
                     10,
-                    "#60a5fa",
+                    clusterMid,
                     25,
-                    "#3b82f6",
+                    clusterHigh,
                     50,
-                    "#1d4ed8",
+                    clusterMax,
                   ] as any,
                   "circle-radius": ["step", ["get", "point_count"], 14, 10, 18, 25, 22, 50, 28] as any,
                   "circle-stroke-width": 1,
-                  "circle-stroke-color": "#ffffff",
+                  "circle-stroke-color": MAP_CLUSTER_STROKE_HEX,
                 } as any}
               />
               <Layer
@@ -210,7 +218,7 @@ export default function MapPanel({
                   "text-field": ["get", "point_count_abbreviated"],
                   "text-size": 12,
                 } as any}
-                paint={{ "text-color": "#0f172a" } as any}
+                paint={{ "text-color": MAP_CLUSTER_TEXT_HEX } as any}
               />
               <Layer
                 id="unclustered-point"
@@ -227,7 +235,7 @@ export default function MapPanel({
                     5,
                   ] as any,
                   "circle-stroke-width": 2,
-                  "circle-stroke-color": "#ffffff",
+                  "circle-stroke-color": MAP_CLUSTER_STROKE_HEX,
                 } as any}
               />
             </Source>

@@ -45,8 +45,14 @@ export default function RouteAnalysisCard() {
   }, []);
 
   return (
-    <div className="max-w-md rounded-2xl border p-4 shadow-sm bg-white">
-      <h3 className="text-lg font-semibold mb-3">🧭 Route Analysis</h3>
+    <div className="max-w-md rounded-2xl border p-4 shadow-sm bg-card">
+      <header className="mb-3 space-y-1">
+        <h3 className="text-lg font-semibold">🧭 Route analysis</h3>
+        <p className="text-xs text-foreground/70">
+          Notebook A’s <code className="font-mono text-[11px]">/analyze/route</code> blends the speed and violation models into a quick explainer.
+          Use it to brief ops teams on today’s risk and recommended actions for a corridor.
+        </p>
+      </header>
 
       <div className="grid grid-cols-2 gap-3">
         <label className="text-sm col-span-2">
@@ -63,15 +69,15 @@ export default function RouteAnalysisCard() {
       <button
         onClick={analyze}
         disabled={loading}
-        className="mt-3 w-full rounded-lg bg-black text-white py-2 font-medium disabled:opacity-70"
+        className="mt-3 w-full rounded-lg bg-primary text-primary-foreground py-2 font-medium shadow-sm transition-colors hover:bg-primary/90 disabled:opacity-70"
       >
         {loading ? "Analyzing…" : "Analyze Route"}
       </button>
 
-      {err && <p className="mt-3 text-red-600 text-sm">Error: {err}</p>}
+      {err && <p className="mt-3 status-negative text-sm">Error: {err}</p>}
 
       {result && (
-        <div className="mt-3 rounded bg-gray-50 p-3 text-sm space-y-3">
+        <div className="mt-3 rounded border border-border/60 bg-background/85 p-3 text-sm space-y-3">
           {result.summary && (
             <div>
               <div className="mb-1 font-medium">Summary</div>
@@ -109,8 +115,10 @@ export default function RouteAnalysisCard() {
           )}
         </div>
       )}
+
+      <footer className="mt-3 text-[11px] text-muted-foreground">
+        Source: {process.env.NEXT_PUBLIC_NOTEBOOK_A_BASE || "Notebook A API"}
+      </footer>
     </div>
   );
 }
-
-

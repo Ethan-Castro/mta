@@ -51,6 +51,9 @@ export default function DataSciencePage() {
   const DEFAULT_AVG_SPEED = 8.5;
   const DEFAULT_TRIPS_PER_HOUR = 22;
 
+  const notebookBBaseLabel =
+    process.env.NEXT_PUBLIC_NOTEBOOK_B_BASE || process.env.NEXT_PUBLIC_ACE_API_BASE || "Notebook B API";
+
   const modelApiRef = useRef<null | typeof import("@/lib/aceApi").aceApi>(null);
   const [modelReady, setModelReady] = useState(false);
   const [modelError, setModelError] = useState<string | null>(null);
@@ -175,8 +178,13 @@ export default function DataSciencePage() {
       setForecastLoading(true);
       try {
         const data = await modelApiRef.current.forecast(normalized);
-        setForecastData(data);
-        setForecastError(null);
+        if (!data) {
+          setForecastData(null);
+          setForecastError(`No forecast available for ${normalized}. Try another route.`);
+        } else {
+          setForecastData(data);
+          setForecastError(null);
+        }
       } catch (error) {
         console.error("Failed to load forecast", error);
         setForecastError("Unable to load forecast right now.");
@@ -408,7 +416,16 @@ export default function DataSciencePage() {
     }
   }
 
-  const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8", "#82CA9D", "#FFC658", "#FF7C7C"];
+  const COLORS = [
+    "var(--chart-1)",
+    "var(--chart-3)",
+    "var(--chart-4)",
+    "var(--chart-2)",
+    "var(--chart-5)",
+    "var(--chart-8)",
+    "var(--chart-7)",
+    "var(--chart-6)",
+  ];
 
   const mlMetrics = [
     { name: "Accuracy", value: 87, target: 90, color: "green" },
@@ -443,9 +460,9 @@ export default function DataSciencePage() {
             </p>
           </div>
           <div className="flex gap-2">
-            <Badge variant="default" className="bg-green-100 text-green-800">ML Agent: Ready</Badge>
-            <Badge variant="default" className="bg-blue-100 text-blue-800">NL Query: Ready</Badge>
-            <Badge variant="default" className="bg-purple-100 text-purple-800">Workflow: Ready</Badge>
+            <Badge variant="default" className="badge-positive">ML Agent: Ready</Badge>
+            <Badge variant="default" className="badge-info">NL Query: Ready</Badge>
+            <Badge variant="default" className="badge-accent">Workflow: Ready</Badge>
           </div>
         </div>
       </section>
@@ -546,8 +563,8 @@ export default function DataSciencePage() {
                     <XAxis dataKey="name" />
                     <YAxis domain={[0, 100]} />
                     <Tooltip />
-                    <Bar dataKey="value" fill="#8884d8" name="Current" />
-                    <Bar dataKey="target" fill="#82ca9d" name="Target" />
+                    <Bar dataKey="value" fill="var(--chart-5)" name="Current" />
+                    <Bar dataKey="target" fill="var(--chart-3)" name="Target" />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -570,7 +587,7 @@ export default function DataSciencePage() {
                       labelLine={false}
                       label={({ name, percentage }) => `${name}: ${percentage}%`}
                       outerRadius={80}
-                      fill="#8884d8"
+                      fill="var(--chart-5)"
                       dataKey="count"
                     >
                       {queryComplexity.map((entry, index) => (
@@ -589,7 +606,9 @@ export default function DataSciencePage() {
           <section className="space-y-4">
             <div>
               <h3 className="text-sm font-semibold text-foreground">Model API insights</h3>
-              <p className="text-xs text-foreground/60">Forecasts, risk rankings, and hotspots pulled live from the external model service.</p>
+              <p className="text-xs text-foreground/60">
+                Forecasts, risk rankings, and hotspots stream from {notebookBBaseLabel}. Each card notes the endpoint it calls so analysts know exactly where the numbers come from.
+              </p>
             </div>
             {modelError ? (
               <div className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-xs text-destructive">
@@ -609,6 +628,9 @@ export default function DataSciencePage() {
                         <span>Route forecast</span>
                         <span className="text-xs font-normal text-foreground/60">Route: {forecastRouteId || "—"}</span>
                       </CardTitle>
+                      <p className="mt-1 text-xs text-foreground/60">
+                        Notebook B <code className="font-mono text-[11px]">/forecast/:route</code> blends historical ACE violations with a short-term projection. Pair with leadership briefings or service alerts.
+                      </p>
                     </CardHeader>
                     <CardContent>
                       <form onSubmit={handleForecastSubmit} className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end">
@@ -654,8 +676,8 @@ export default function DataSciencePage() {
                               <XAxis dataKey="date" tick={{ fontSize: 11 }} />
                               <YAxis tick={{ fontSize: 11 }} />
                               <Tooltip />
-                              <Line type="monotone" dataKey="history" stroke="#2563eb" dot={false} name="History" />
-                              <Line type="monotone" dataKey="forecast" stroke="#22c55e" strokeDasharray="5 3" dot={false} name="Forecast" />
+                              <Line type="monotone" dataKey="history" stroke="var(--chart-1)" dot={false} name="History" />
+                              <Line type="monotone" dataKey="forecast" stroke="var(--chart-3)" strokeDasharray="5 3" dot={false} name="Forecast" />
                             </LineChart>
                           </ResponsiveContainer>
                         ) : (
@@ -664,6 +686,7 @@ export default function DataSciencePage() {
                           </div>
                         )}
                       </div>
+                      <p className="mt-3 text-[11px] text-muted-foreground">Source: {notebookBBaseLabel}</p>
                     </CardContent>
                   </Card>
 
@@ -673,6 +696,9 @@ export default function DataSciencePage() {
                         <span>Risk leaderboard</span>
                         <span className="text-xs font-normal text-foreground/60">{totalRiskRoutes} routes</span>
                       </CardTitle>
+                      <p className="mt-1 text-xs text-foreground/60">
+                        Notebook B <code className="font-mono text-[11px]">/risk/top</code> surfaces the highest-risk stop-hours. Refresh after schedule changes to keep camera placements aligned with current demand.
+                      </p>
                     </CardHeader>
                     <CardContent>
                       <form onSubmit={handleRiskTopSubmit} className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end">
@@ -723,7 +749,7 @@ export default function DataSciencePage() {
                               <XAxis dataKey="label" tick={{ fontSize: 11 }} interval={0} angle={-30} textAnchor="end" height={70} />
                               <YAxis tick={{ fontSize: 11 }} />
                               <Tooltip />
-                              <Bar dataKey="score" fill="#f97316" name="Risk score" />
+                              <Bar dataKey="score" fill="var(--chart-2)" name="Risk score" />
                             </BarChart>
                           </ResponsiveContainer>
                         ) : (
@@ -733,6 +759,7 @@ export default function DataSciencePage() {
                         )}
                       </div>
                       <p className="mt-2 text-xs text-foreground/60">Showing the strongest stop-hour per route across {riskRows.length} ranked rows.</p>
+                      <p className="mt-2 text-[11px] text-muted-foreground">Source: {notebookBBaseLabel}</p>
                     </CardContent>
                   </Card>
                 </div>
@@ -741,6 +768,9 @@ export default function DataSciencePage() {
                   <Card>
                     <CardHeader>
                       <CardTitle className="text-sm">Scenario risk scoring</CardTitle>
+                      <p className="mt-1 text-xs text-foreground/60">
+                        Notebook B <code className="font-mono text-[11px]">/risk/score</code> quantifies enforcement pressure for a single what-if. Use it during tabletop exercises or policy discussions.
+                      </p>
                     </CardHeader>
                     <CardContent>
                       <form onSubmit={handleRiskScoreSubmit} className="mb-3 grid gap-2 sm:grid-cols-3">
@@ -810,13 +840,14 @@ export default function DataSciencePage() {
                               <XAxis dataKey="label" hide />
                               <YAxis hide domain={[0, Math.max(riskScoreValue * 1.2, 1)]} />
                               <Tooltip />
-                              <Bar dataKey="value" fill="#22c55e" />
+                              <Bar dataKey="value" fill="var(--chart-3)" />
                             </BarChart>
                           </ResponsiveContainer>
                         ) : (
                           <div className="text-xs text-foreground/60">Submit a scenario to preview the score.</div>
                         )}
                       </div>
+                      <p className="mt-3 text-[11px] text-muted-foreground">Source: {notebookBBaseLabel}</p>
                     </CardContent>
                   </Card>
 
@@ -826,6 +857,9 @@ export default function DataSciencePage() {
                         <span>Hotspot histogram</span>
                         <span className="text-xs font-normal text-foreground/60">{totalHotspotCount} features</span>
                       </CardTitle>
+                      <p className="mt-1 text-xs text-foreground/60">
+                        Notebook B <code className="font-mono text-[11px]">/hotspots.geojson</code> clusters ACE violations. Pair the counts with the map view to dispatch teams where density is highest.
+                      </p>
                     </CardHeader>
                     <CardContent>
                       <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -864,7 +898,7 @@ export default function DataSciencePage() {
                               <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                               <YAxis tick={{ fontSize: 11 }} />
                               <Tooltip />
-                              <Bar dataKey="value" fill="#6366f1" name="Count" />
+                              <Bar dataKey="value" fill="var(--chart-5)" name="Count" />
                             </BarChart>
                           </ResponsiveContainer>
                         ) : (
@@ -873,6 +907,7 @@ export default function DataSciencePage() {
                           </div>
                         )}
                       </div>
+                      <p className="mt-3 text-[11px] text-muted-foreground">Source: {notebookBBaseLabel}</p>
                     </CardContent>
                   </Card>
                 </div>

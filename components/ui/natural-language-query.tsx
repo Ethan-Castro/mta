@@ -171,10 +171,14 @@ export default function NaturalLanguageQuery() {
 
   const getStatusColor = (status: QueryResult["status"]) => {
     switch (status) {
-      case "completed": return "bg-green-100 text-green-800";
-      case "processing": return "bg-blue-100 text-blue-800";
-      case "error": return "bg-red-100 text-red-800";
-      default: return "bg-gray-100 text-gray-800";
+      case "completed":
+        return "badge-positive";
+      case "processing":
+        return "badge-info";
+      case "error":
+        return "badge-negative";
+      default:
+        return "bg-muted/40 text-muted-foreground";
     }
   };
 
@@ -370,7 +374,7 @@ export default function NaturalLanguageQuery() {
                   )}
 
                   {queryResult.status === "error" && (
-                    <div className="text-xs text-red-600">
+                    <div className="text-xs status-negative">
                       Error processing query. Please try again.
                     </div>
                   )}
@@ -397,7 +401,7 @@ export default function NaturalLanguageQuery() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {AGENT_TYPES.map((agent) => (
               <div key={agent.id} className="flex items-center gap-3 p-3 border rounded-lg">
-                <div className="text-green-600">{agent.icon}</div>
+                <div className="status-positive">{agent.icon}</div>
                 <div>
                   <div className="text-sm font-medium">{agent.name}</div>
                   <div className="text-xs text-muted-foreground">{agent.description}</div>

@@ -3,13 +3,16 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { postJSON } from "@/lib/mta";
 
+type SpeedPrediction = {
+  speed_mph?: number;
+  confidence_interval?: [number, number];
+  traffic_level?: "smooth" | "moderate" | "congested";
+};
+
 type SpeedResponse = {
-  success: boolean;
-  prediction: {
-    speed_mph: number;
-    confidence_interval: [number, number];
-    traffic_level: "smooth" | "moderate" | "congested";
-  };
+  success?: boolean;
+  prediction?: SpeedPrediction | null;
+  error?: string;
 };
 
 export default function SpeedCard() {
@@ -53,9 +56,24 @@ export default function SpeedCard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const prediction = result?.prediction ?? null;
+  const speedValue = typeof prediction?.speed_mph === "number" ? `${prediction.speed_mph} mph` : "—";
+  const confidenceInterval = Array.isArray(prediction?.confidence_interval)
+    ? (prediction!.confidence_interval as [number, number])
+    : null;
+  const [ciLow, ciHigh] = confidenceInterval ?? [null, null];
+  const trafficLabel = prediction?.traffic_level ?? "unknown";
+  const hasPrediction = Boolean(prediction);
+
   return (
     <div className="max-w-md rounded-2xl border p-4 shadow-sm bg-card/90">
-      <h3 className="text-base font-semibold mb-3">🚌 Speed prediction</h3>
+      <header className="mb-3 space-y-1">
+        <h3 className="text-base font-semibold">🚌 Speed prediction</h3>
+        <p className="text-xs text-foreground/70">
+          Notebook A’s <code className="font-mono text-[11px]">/predict/speed</code> model estimates curbside bus speed for the scenario below.
+          Tune hour, weekend status, and distance inputs to stress-test operations.
+        </p>
+      </header>
 
       <div className="grid grid-cols-2 gap-3">
         <label className="text-sm">
@@ -99,37 +117,50 @@ export default function SpeedCard() {
         {loading ? "Predicting…" : "Predict Speed"}
       </button>
 
-      {err && <p className="mt-3 text-red-600 text-sm">Error: {err}</p>}
+      {err && <p className="mt-3 status-negative text-sm">Error: {err}</p>}
 
       {loading && !result && (
         <div className="mt-3 h-24 animate-pulse rounded bg-foreground/10" />
       )}
 
       {result && (
-        <div className="mt-3 rounded border border-border/60 bg-background/80 p-3 text-sm">
-          <div className="flex justify-between">
-            <span>Predicted speed</span>
-            <strong>{result.prediction.speed_mph} mph</strong>
+        hasPrediction ? (
+          <div className="mt-3 rounded border border-border/60 bg-background/80 p-3 text-sm space-y-2">
+            <div className="flex justify-between">
+              <span>Predicted speed</span>
+              <strong>{speedValue}</strong>
+            </div>
+            <div className="flex justify-between">
+              <span>Traffic</span>
+              <strong
+                className={
+                  trafficLabel === "smooth"
+                    ? "status-positive"
+                    : trafficLabel === "moderate"
+                    ? "status-warning"
+                    : "status-negative"
+                }
+              >
+                {trafficLabel}
+              </strong>
+            </div>
+            <div className="flex justify-between">
+              <span>Confidence</span>
+              <span>
+                {ciLow != null && ciHigh != null ? `${ciLow} – ${ciHigh} mph` : "—"}
+              </span>
+            </div>
           </div>
-          <div className="flex justify-between">
-            <span>Traffic</span>
-            <strong className={
-              result.prediction.traffic_level === "smooth" ? "text-green-600" :
-              result.prediction.traffic_level === "moderate" ? "text-amber-600" : "text-red-600"
-            }>
-              {result.prediction.traffic_level}
-            </strong>
+        ) : (
+          <div className="mt-3 rounded border border-border/60 bg-background/80 p-3 text-sm text-muted-foreground">
+            {result?.error || "No prediction available for the current parameters."}
           </div>
-          <div className="flex justify-between">
-            <span>Confidence</span>
-            <span>
-              {result.prediction.confidence_interval[0]} – {result.prediction.confidence_interval[1]} mph
-            </span>
-          </div>
-        </div>
+        )
       )}
+
+      <footer className="mt-3 text-[11px] text-muted-foreground">
+        Source: {process.env.NEXT_PUBLIC_NOTEBOOK_A_BASE || "Notebook A API"}
+      </footer>
     </div>
   );
 }
-
-

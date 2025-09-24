@@ -1,66 +1,96 @@
 import { tool } from "ai";
 import { z } from "zod";
 import type { FeatureCollection } from "geojson";
-import type { ForecastPayload, RiskRow } from "@/lib/aceApi";
+import {
+  analyzeRoute,
+  type AnalyzeRouteInput,
+  health as healthA,
+  predictSpeed,
+  type PredictSpeedInput,
+} from "@/lib/nbA";
+import {
+  forecast as fetchForecast,
+  health as healthB,
+  hotspots as fetchHotspots,
+  riskScore as fetchRiskScore,
+  riskTop as fetchRiskTop,
+  survivalCox as fetchSurvivalCox,
+  survivalKm as fetchSurvivalKm,
+  type NotebookBHealth,
+} from "@/lib/nbB";
 
-const TOOL_ARTIFACT_MAP: Record<string, string> = {
-  forecastRoute: "forecast",
-  riskTop: "risk_top",
-  riskScore: "risk_score",
-  hotspotsMap: "hotspots",
-  survivalKm: "survival_km",
-  survivalCox: "survival_cox",
-  createDocument: "document",
+const B_REQUIREMENTS: Record<string, string[]> = {
+  forecastRoute: ["forecasts"],
+  riskTop: ["xgb", "xgb_meta"],
+  riskScore: ["xgb", "xgb_meta"],
+  hotspotsMap: ["hotspots"],
+  survivalKm: ["survival"],
+  survivalCox: ["survival"],
 };
 
-type HealthSnapshot = {
+const A_REQUIREMENTS: Record<string, string[]> = {
+  predictSpeedNow: ["speed_model", "speed_scaler"],
+  analyzeRouteNow: ["speed_model", "violation_model"],
+};
+
+type NotebookAHealth = {
   ok?: boolean;
-  artifacts?: Record<string, boolean>;
+  speed_model?: boolean;
+  speed_scaler?: boolean;
+  violation_model?: boolean;
+  [key: string]: unknown;
 };
 
-function normalizeBase(raw: string | undefined): string | null {
-  if (!raw) return null;
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
-  return trimmed.replace(/\/$/, "");
-}
-
-async function fetchHealth(base: string): Promise<HealthSnapshot | null> {
-  try {
-    const res = await fetch(`${base}/health`, { cache: "no-store" });
-    if (!res.ok) return null;
-    const json = (await res.json()) as HealthSnapshot;
-    return json ?? null;
-  } catch (error) {
-    console.warn("ACE health probe failed", error);
-    return null;
-  }
-}
-
-function shouldRegister(toolName: string, health: HealthSnapshot | null): boolean {
-  const key = TOOL_ARTIFACT_MAP[toolName];
-  if (!key) return true;
-  const artifacts = health?.artifacts;
+function hasArtifacts(artifacts: Record<string, boolean> | undefined | null, requirements: string[]): boolean {
+  if (!requirements.length) return true;
   if (!artifacts) return true;
-  if (key in artifacts && artifacts[key] === false) {
-    return false;
-  }
-  return true;
+  return requirements.every((key) => artifacts[key] !== false);
 }
 
 function toFriendlyError(message: string) {
   return { text: message };
 }
 
+type ForecastPayload = {
+  history?: { date?: string[]; history?: Array<number | null> };
+  forecast?: { date?: string[]; forecast?: Array<number | null> };
+  ci_low?: { date?: string[]; ci_low?: Array<number | null> };
+  ci_high?: { date?: string[]; ci_high?: Array<number | null> };
+};
+
+type RiskRow = {
+  route_id: string;
+  hour_of_day: number;
+  risk_score: number;
+  [key: string]: unknown;
+};
+
 function mapForecastToSeries(routeId: string, payload: ForecastPayload | null | undefined) {
-  const rows = new Map<string, { label: string; History?: number | null; Forecast?: number | null; ciLow?: number | null; ciHigh?: number | null }>();
+  const rows = new Map<
+    string,
+    {
+      label: string;
+      History?: number | null;
+      Forecast?: number | null;
+      ciLow?: number | null;
+      ciHigh?: number | null;
+    }
+  >();
+
   const ensureRow = (label: string) => {
-    const existing = rows.get(label);
-    if (existing) return existing;
-    const entry = { label } as { label: string; History?: number | null; Forecast?: number | null; ciLow?: number | null; ciHigh?: number | null };
-    rows.set(label, entry);
-    return entry;
+    const entry = rows.get(label);
+    if (entry) return entry;
+    const next = { label } as {
+      label: string;
+      History?: number | null;
+      Forecast?: number | null;
+      ciLow?: number | null;
+      ciHigh?: number | null;
+    };
+    rows.set(label, next);
+    return next;
   };
+
   const addSeries = (
     dates: string[] | undefined,
     values: Array<number | null | undefined> | undefined,
@@ -71,10 +101,8 @@ function mapForecastToSeries(routeId: string, payload: ForecastPayload | null | 
     for (let i = 0; i < limit; i += 1) {
       const label = String(dates[i] ?? "");
       if (!label) continue;
-      const value = values[i];
-      const entry = ensureRow(label);
-      const numeric = typeof value === "number" && Number.isFinite(value) ? value : null;
-      entry[key] = numeric;
+      const numeric = typeof values[i] === "number" && Number.isFinite(values[i]) ? (values[i] as number) : null;
+      ensureRow(label)[key] = numeric;
     }
   };
 
@@ -82,7 +110,7 @@ function mapForecastToSeries(routeId: string, payload: ForecastPayload | null | 
     return {
       chart: {
         type: "multi-line" as const,
-        title: `Route ${routeId} violations forecast` as string,
+        title: `Route ${routeId} violations forecast`,
         series: ["History", "Forecast"],
         yLabel: "Violations per day",
       },
@@ -112,26 +140,18 @@ function mapForecastToSeries(routeId: string, payload: ForecastPayload | null | 
 }
 
 function buildRiskBarData(rows: RiskRow[]) {
-  const mapped = (rows || []).map((row) => {
-    const label = `${row.route_id}@${row.hour_of_day.toString().padStart(2, "0")}:00`;
-    return {
-      ...row,
-      label,
-      value: Number.isFinite(row.risk_score) ? Number(row.risk_score) : 0,
-    };
-  });
-  return mapped;
+  return (rows || []).map((row) => ({
+    ...row,
+    label: `${row.route_id}@${row.hour_of_day.toString().padStart(2, "0")}:00`,
+    value: Number.isFinite(row.risk_score) ? Number(row.risk_score) : 0,
+  }));
 }
 
 function collectHotspotBars(geojson: FeatureCollection | null | undefined) {
-  const features = Array.isArray(geojson?.features) ? geojson!.features : [];
+  const features = Array.isArray(geojson?.features) ? geojson.features : [];
   const counts = features
-    .map((feature) => {
-      const raw = (feature as any)?.properties?.count;
-      const value = Number(raw ?? 0);
-      return Number.isFinite(value) ? value : 0;
-    })
-    .filter((value) => value > 0)
+    .map((feature) => Number((feature as any)?.properties?.count ?? 0))
+    .filter((value) => Number.isFinite(value) && value > 0)
     .sort((a, b) => b - a)
     .slice(0, 15);
   const rows = counts.map((value, index) => ({ label: `#${index + 1}`, value }));
@@ -139,269 +159,322 @@ function collectHotspotBars(geojson: FeatureCollection | null | undefined) {
 }
 
 function mapSurvivalSeries(data: Array<Record<string, unknown>>) {
-  const rows = (data || []).map((row) => {
-    const label = String((row.time ?? row.label ?? "") || "");
-    const survival = Number((row.survival ?? row.survival_prob ?? row.value) ?? 0);
-    return {
-      ...row,
-      label,
-      value: Number.isFinite(survival) ? survival : 0,
-    };
-  });
-  return rows;
+  return (data || []).map((row) => ({
+    ...row,
+    label: String((row.time ?? row.label ?? "") || ""),
+    value: Number.isFinite(Number(row.survival ?? row.survival_prob ?? row.value))
+      ? Number(row.survival ?? row.survival_prob ?? row.value)
+      : 0,
+  }));
+}
+
+function gateB(health: NotebookBHealth | null, toolName: keyof typeof B_REQUIREMENTS) {
+  if (!health) return false;
+  if (health.ok === false) return false;
+  return hasArtifacts(health.artifacts, B_REQUIREMENTS[toolName] ?? []);
+}
+
+function gateA(health: NotebookAHealth | null, toolName: keyof typeof A_REQUIREMENTS) {
+  if (!health) return false;
+  if (health.ok === false) return false;
+  return A_REQUIREMENTS[toolName].every((key) => (health as Record<string, unknown>)[key] !== false);
 }
 
 export async function buildAceTools(): Promise<Record<string, any>> {
-  const base = normalizeBase(process.env.NEXT_PUBLIC_ACE_API_BASE);
-  if (!base) return {};
-
-  const health = await fetchHealth(base);
+  const [aResult, bResult] = await Promise.allSettled([healthA(), healthB()]);
+  const nbAHealth = aResult.status === "fulfilled" ? aResult.value : null;
+  const nbBHealth = bResult.status === "fulfilled" ? bResult.value : null;
   const tools: Record<string, any> = {};
 
   const register = (name: string, factory: () => any) => {
-    if (!shouldRegister(name, health)) return;
     tools[name] = factory();
   };
 
-  register("forecastRoute", () =>
-    tool({
-      description: "Show route-level violations trend with near-term forecast.",
-      inputSchema: z.object({ routeId: z.string().min(1) }),
-      execute: async ({ routeId }) => {
-        try {
-          const res = await fetch(`${base}/forecast/${encodeURIComponent(routeId)}`, { cache: "no-store" });
-          if (!res.ok) {
-            if (res.status === 404 || res.status === 503) {
+  if (gateB(nbBHealth, "forecastRoute")) {
+    register("forecastRoute", () =>
+      tool({
+        description: "Show route-level violations trend with near-term forecast.",
+        inputSchema: z.object({ routeId: z.string().min(1) }),
+        execute: async ({ routeId }) => {
+          try {
+            const payload = await fetchForecast<ForecastPayload>(routeId);
+            return mapForecastToSeries(routeId, payload);
+          } catch (error: any) {
+            const message = error instanceof Error ? error.message : String(error);
+            if (/404/.test(message)) {
               return toFriendlyError(`Forecast for ${routeId} is not available right now.`);
             }
-            return toFriendlyError(`Forecast request failed (${res.status}).`);
+            return toFriendlyError(`Forecast request failed (${message}).`);
           }
-          const payload = (await res.json()) as ForecastPayload | { chart?: unknown; data?: unknown };
-          if (payload && typeof payload === "object" && "chart" in payload && "data" in payload) {
-            return payload as { chart: unknown; data: unknown };
-          }
-          const packed = mapForecastToSeries(routeId, payload as ForecastPayload);
-          return packed;
-        } catch (error) {
-          return toFriendlyError(`Forecast request failed: ${(error as Error)?.message ?? "unknown error"}`);
-        }
-      },
-    })
-  );
+        },
+      })
+    );
+  }
 
-  register("riskTop", () =>
-    tool({
-      description: "Rank stop-hours for ACE camera placement by risk score.",
-      inputSchema: z.object({ limit: z.number().int().min(1).max(200).optional().default(50) }),
-      execute: async ({ limit }) => {
-        const capped = Math.min(200, Math.max(1, Number(limit ?? 50)));
-        try {
-          const res = await fetch(`${base}/risk/top?limit=${capped}`, { cache: "no-store" });
-          if (!res.ok) {
-            return toFriendlyError(res.status === 404 ? "Risk leaderboard is not available." : `Risk leaderboard request failed (${res.status}).`);
+  if (gateB(nbBHealth, "riskTop")) {
+    register("riskTop", () =>
+      tool({
+        description: "Rank stop-hours for ACE camera placement by risk score.",
+        inputSchema: z.object({ limit: z.number().int().min(1).max(200).optional().default(50) }),
+        execute: async ({ limit }) => {
+          try {
+            const rows = await fetchRiskTop<RiskRow[]>(limit ?? 50);
+            const data = buildRiskBarData(Array.isArray(rows) ? rows : []);
+            return {
+              chart: {
+                type: "bar" as const,
+                title: "Top candidate placements by risk",
+                yLabel: "Risk score",
+              },
+              data,
+            };
+          } catch (error: any) {
+            const message = error instanceof Error ? error.message : String(error);
+            return toFriendlyError(`Risk leaderboard request failed (${message}).`);
           }
-          const rows = (await res.json()) as RiskRow[] | { chart?: unknown; data?: unknown };
-          if (rows && typeof rows === "object" && "chart" in rows && "data" in rows) {
-            return rows as { chart: unknown; data: unknown };
-          }
-          const enriched = buildRiskBarData(Array.isArray(rows) ? rows : []);
-          return {
-            chart: {
-              type: "bar" as const,
-              title: "Top candidate placements by risk",
-              yLabel: "Risk score",
-            },
-            data: enriched,
-          };
-        } catch (error) {
-          return toFriendlyError(`Risk leaderboard request failed: ${(error as Error)?.message ?? "unknown error"}`);
-        }
-      },
-    })
-  );
+        },
+      })
+    );
+  }
 
-  register("riskScore", () =>
-    tool({
-      description: "Score a scenario with avg_speed_mph and trips_per_hour inputs.",
-      inputSchema: z.object({
-        avg_speed_mph: z.number().nonnegative(),
-        trips_per_hour: z.number().nonnegative(),
-      }),
-      execute: async ({ avg_speed_mph, trips_per_hour }) => {
-        try {
-          const qs = new URLSearchParams({
-            avg_speed_mph: String(avg_speed_mph),
-            trips_per_hour: String(trips_per_hour),
-          }).toString();
-          const res = await fetch(`${base}/risk/score?${qs}`, { cache: "no-store" });
-          if (!res.ok) {
-            if (res.status === 503) {
+  if (gateB(nbBHealth, "riskScore")) {
+    register("riskScore", () =>
+      tool({
+        description: "Score a scenario: avg_speed_mph & trips_per_hour.",
+        inputSchema: z.object({
+          avg_speed_mph: z.number().nonnegative(),
+          trips_per_hour: z.number().nonnegative(),
+        }),
+        execute: async ({ avg_speed_mph, trips_per_hour }) => {
+          try {
+            const result = await fetchRiskScore<Record<string, unknown>>(avg_speed_mph, trips_per_hour);
+            const value = Number((result as any)?.risk_score ?? NaN);
+            if (!Number.isFinite(value)) {
+              return toFriendlyError("Risk scoring returned an invalid value.");
+            }
+            return {
+              text: `Scenario risk score: **${value.toFixed(3)}**`,
+              chart: {
+                type: "bar" as const,
+                title: "Scenario risk score",
+                yLabel: "Risk score",
+              },
+              data: [
+                {
+                  label: "Risk score",
+                  value,
+                },
+              ],
+              meta: result,
+            };
+          } catch (error: any) {
+            const message = error instanceof Error ? error.message : String(error);
+            if (/503/.test(message)) {
               return toFriendlyError("Risk scoring model is warming up. Try again later.");
             }
-            return toFriendlyError(`Risk scoring failed (${res.status}).`);
+            return toFriendlyError(`Risk scoring failed (${message}).`);
           }
-          const payload = (await res.json()) as Record<string, unknown> & { risk_score?: number };
-          const scoreValue = Number(payload?.risk_score ?? NaN);
-          if (!Number.isFinite(scoreValue)) {
-            return toFriendlyError("Risk scoring returned an invalid value.");
-          }
-          const chartData = [
-            {
-              label: "Risk score",
-              value: scoreValue,
-            },
-          ];
-          return {
-            text: `Scenario risk score: **${scoreValue.toFixed(3)}**`,
-            chart: {
-              type: "bar" as const,
-              title: "Scenario risk score",
-              yLabel: "Risk score",
-            },
-            data: chartData.map((row) => ({ ...row, ...payload })),
-          };
-        } catch (error) {
-          return toFriendlyError(`Risk scoring failed: ${(error as Error)?.message ?? "unknown error"}`);
-        }
-      },
-    })
-  );
+        },
+      })
+    );
+  }
 
-  register("hotspotsMap", () =>
-    tool({
-      description: "Fetch ACE hotspots GeoJSON clusters with a quick histogram.",
-      inputSchema: z.object({}),
-      execute: async () => {
-        try {
-          const res = await fetch(`${base}/hotspots.geojson`, { cache: "no-store" });
-          if (!res.ok) {
-            return toFriendlyError(res.status === 404 ? "No hotspots available right now." : `Hotspots request failed (${res.status}).`);
-          }
-          const geojson = (await res.json()) as FeatureCollection | { chart?: unknown; data?: unknown };
-          if (geojson && typeof geojson === "object" && "chart" in geojson && "data" in geojson) {
-            return geojson as { chart: unknown; data: unknown };
-          }
-          const { rows, total } = collectHotspotBars(geojson as FeatureCollection);
-          return {
-            chart: {
-              type: "bar" as const,
-              title: "Hotspot cluster counts (top 15)",
-              yLabel: "Count",
-              meta: {
-                totalClusters: total,
+  if (gateB(nbBHealth, "hotspotsMap")) {
+    register("hotspotsMap", () =>
+      tool({
+        description: "Fetch ACE hotspots GeoJSON clusters with a quick histogram.",
+        inputSchema: z.object({}),
+        execute: async () => {
+          try {
+            const geojson = await fetchHotspots<FeatureCollection>();
+            const { rows, total } = collectHotspotBars(geojson);
+            return {
+              chart: {
+                type: "bar" as const,
+                title: "Hotspot cluster counts",
+                yLabel: "Count",
+                meta: { totalClusters: total },
               },
-            },
-            data: { rows, geojson },
-          };
-        } catch (error) {
-          return toFriendlyError(`Hotspots request failed: ${(error as Error)?.message ?? "unknown error"}`);
-        }
-      },
-    })
-  );
+              data: { rows, geojson },
+            };
+          } catch (error: any) {
+            const message = error instanceof Error ? error.message : String(error);
+            if (/404/.test(message)) {
+              return toFriendlyError("No hotspots available right now.");
+            }
+            return toFriendlyError(`Hotspots request failed (${message}).`);
+          }
+        },
+      })
+    );
+  }
 
-  register("survivalKm", () =>
-    tool({
-      description: "Visualize time-to-repeat violation via Kaplan-Meier survival curve.",
-      inputSchema: z.object({}),
-      execute: async () => {
-        try {
-          const res = await fetch(`${base}/survival/km`, { cache: "no-store" });
-          if (!res.ok) {
-            if (res.status === 404) {
+  if (gateB(nbBHealth, "survivalKm")) {
+    register("survivalKm", () =>
+      tool({
+        description: "Visualize time-to-repeat violation via survival curve.",
+        inputSchema: z.object({}),
+        execute: async () => {
+          try {
+            const response = await fetchSurvivalKm<any>();
+            const rows = Array.isArray(response?.data) ? response.data : Array.isArray(response) ? response : [];
+            return {
+              chart: {
+                type: "line" as const,
+                title: "Time to repeat violation",
+                yLabel: "Survival probability",
+              },
+              data: mapSurvivalSeries(rows),
+            };
+          } catch (error: any) {
+            const message = error instanceof Error ? error.message : String(error);
+            if (/404/.test(message)) {
               return toFriendlyError("Survival curve is not available right now.");
             }
-            return toFriendlyError(`Survival curve request failed (${res.status}).`);
+            return toFriendlyError(`Survival curve request failed (${message}).`);
           }
-          const payload = (await res.json()) as { data?: Array<Record<string, unknown>>; chart?: unknown } | Array<Record<string, unknown>>;
-          if (payload && typeof payload === "object" && "chart" in payload && "data" in payload) {
-            return payload as { chart: unknown; data: unknown };
-          }
-          const rowsArray = Array.isArray(payload) ? payload : Array.isArray(payload?.data) ? payload.data : [];
-          const data = mapSurvivalSeries(rowsArray);
-          return {
-            chart: {
-              type: "line" as const,
-              title: "Time to repeat violation",
-              yLabel: "Survival probability",
-            },
-            data,
-          };
-        } catch (error) {
-          return toFriendlyError(`Survival curve request failed: ${(error as Error)?.message ?? "unknown error"}`);
-        }
-      },
-    })
-  );
+        },
+      })
+    );
+  }
 
-  register("survivalCox", () =>
-    tool({
-      description: "Summarize covariate effects on repeat behavior (Cox model).",
-      inputSchema: z.object({}),
-      execute: async () => {
-        try {
-          const res = await fetch(`${base}/survival/cox_summary`, { cache: "no-store" });
-          if (!res.ok) {
-            if (res.status === 404) {
+  if (gateB(nbBHealth, "survivalCox")) {
+    register("survivalCox", () =>
+      tool({
+        description: "Summarize covariate effects on repeat behavior (Cox model).",
+        inputSchema: z.object({}),
+        execute: async () => {
+          try {
+            const result = await fetchSurvivalCox<any>();
+            const rows = Array.isArray(result?.rows) ? result.rows : Array.isArray(result) ? result : [];
+            return {
+              chart: {
+                type: "table",
+                title: "Cox model coefficients",
+              },
+              data: rows,
+            };
+          } catch (error: any) {
+            const message = error instanceof Error ? error.message : String(error);
+            if (/404/.test(message)) {
               return toFriendlyError("Cox model summary is not available right now.");
             }
-            return toFriendlyError(`Cox model summary failed (${res.status}).`);
+            return toFriendlyError(`Cox model summary failed (${message}).`);
           }
-          const payload = (await res.json()) as { columns?: string[]; rows?: Array<Record<string, unknown>> } | Record<string, unknown>;
-          if (payload && typeof payload === "object" && "chart" in payload && "data" in payload) {
-            return payload as { chart: unknown; data: unknown };
-          }
-          const rows = Array.isArray((payload as any)?.rows)
-            ? (payload as any).rows
-            : Array.isArray(payload)
-            ? (payload as any)
-            : [];
-          return {
-            chart: {
-              type: "table" as const,
-              title: "Cox model coefficients",
-            },
-            data: rows,
-          };
-        } catch (error) {
-          return toFriendlyError(`Cox model summary failed: ${(error as Error)?.message ?? "unknown error"}`);
-        }
-      },
-    })
-  );
+        },
+      })
+    );
+  }
 
-  register("createDocument", () =>
-    tool({
-      description: "Create a structured document with title, content, and optional actions using the Artifact component.",
-      inputSchema: z.object({
-        title: z.string().min(1).describe("The document title"),
-        description: z.string().optional().describe("Optional description or subtitle"),
-        content: z.string().min(1).describe("The main document content (supports markdown)"),
-        actions: z.array(z.object({
-          label: z.string().describe("Action button label"),
-          tooltip: z.string().optional().describe("Tooltip text for the action"),
-          type: z.enum(["copy", "download", "share", "edit"]).optional().describe("Type of action for default behavior")
-        })).optional().describe("Optional array of action buttons")
-      }),
-      execute: async ({ title, description, content, actions = [] }) => {
-        const formattedActions = actions.map(action => ({
-          label: action.label,
-          tooltip: action.tooltip || action.label,
-          type: action.type || "copy"
-        }));
-
-        return {
-          artifact: {
-            title,
-            description,
-            content,
-            actions: formattedActions,
-            timestamp: new Date().toISOString()
+  if (gateA(nbAHealth, "predictSpeedNow")) {
+    register("predictSpeedNow", () =>
+      tool({
+        description: "Predict bus speed under specified conditions.",
+        inputSchema: z.object({
+          month: z.number().int().min(1).max(12),
+          hour: z.number().int().min(0).max(23),
+          is_weekend: z.union([z.boolean(), z.number().int().min(0).max(1)]),
+          road_distance: z.number().nonnegative(),
+          distance_to_cuny: z.number().nonnegative(),
+        }),
+        execute: async (input: PredictSpeedInput) => {
+          try {
+            const result = await predictSpeed<Record<string, any>>(input);
+            const speed = Number(result?.prediction?.speed_mph ?? result?.prediction?.speed ?? NaN);
+            if (!Number.isFinite(speed)) {
+              return toFriendlyError("Speed model returned an invalid value.");
+            }
+            const label = String(result?.prediction?.traffic_level ?? "speed");
+            const range = result?.prediction?.confidence_interval;
+            const textParts = [`Estimated speed: **${speed.toFixed(2)} mph** (${label})`];
+            if (Array.isArray(range) && range.length === 2) {
+              textParts.push(`95% CI: ${range[0]} – ${range[1]} mph`);
+            }
+            return {
+              text: textParts.join(" | "),
+              chart: {
+                type: "bar" as const,
+                title: "Predicted speed",
+                yLabel: "mph",
+              },
+              data: [
+                {
+                  label: "Speed",
+                  value: speed,
+                },
+              ],
+              meta: result,
+            };
+          } catch (error: any) {
+            const message = error instanceof Error ? error.message : String(error);
+            return toFriendlyError(`Speed prediction failed (${message}).`);
           }
-        };
-      },
-    })
-  );
+        },
+      })
+    );
+  }
+
+  if (gateA(nbAHealth, "analyzeRouteNow")) {
+    register("analyzeRouteNow", () =>
+      tool({
+        description: "Run a quick analysis for a specified route (speed + expected violations).",
+        inputSchema: z.object({
+          route_id: z.string().min(1),
+        }),
+        execute: async ({ route_id }: AnalyzeRouteInput) => {
+          try {
+            const result = await analyzeRoute<Record<string, any>>({ route_id });
+            const analysis = result?.analysis ?? {};
+            const speedValue = Number(analysis?.predictions?.current_speed?.value ?? NaN);
+            const violationsValue = Number(analysis?.predictions?.expected_violations_today?.value ?? NaN);
+            const bullets: string[] = [];
+            const recommendations: Array<Record<string, unknown>> = Array.isArray(analysis?.recommendations)
+              ? (analysis.recommendations as Array<Record<string, unknown>>)
+              : [];
+            if (Array.isArray(recommendations) && recommendations.length) {
+              for (const rec of recommendations) {
+                const action = rec?.action ? `**${String(rec.action)}**` : "Recommendation";
+                const reason = rec?.reason ? ` — ${String(rec.reason)}` : "";
+                bullets.push(`${action}${reason}`);
+              }
+            }
+            if (!bullets.length) {
+              bullets.push("No specific recommendations were returned.");
+            }
+
+            const metrics = [
+              Number.isFinite(speedValue)
+                ? { label: "Speed (mph)", value: speedValue }
+                : null,
+              Number.isFinite(violationsValue)
+                ? { label: "Expected violations", value: violationsValue }
+                : null,
+            ].filter(Boolean) as Array<{ label: string; value: number }>;
+
+            return {
+              text: bullets.join("\n"),
+              chart: metrics.length
+                ? {
+                    type: "bar" as const,
+                    title: "Route analysis",
+                    yLabel: metrics.length === 1 ? metrics[0]!.label : undefined,
+                  }
+                : undefined,
+              data: metrics.length
+                ? metrics.map((metric) => ({ label: metric.label, value: metric.value }))
+                : [],
+              meta: result,
+            };
+          } catch (error: any) {
+            const message = error instanceof Error ? error.message : String(error);
+            return toFriendlyError(`Route analysis failed (${message}).`);
+          }
+        },
+      })
+    );
+  }
 
   return tools;
 }
+
+export default buildAceTools;

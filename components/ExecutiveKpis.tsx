@@ -44,12 +44,21 @@ type RouteRow = {
   lastSeen: string | null;
 };
 
-const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8", "#82CA9D", "#FFC658", "#FF7C7C"];
+const COLORS = [
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
+  "var(--chart-6)",
+  "var(--chart-7)",
+  "var(--chart-8)",
+];
 const TREND_COLORS = {
-  violations: "#EF4444",
-  exempt: "#F97316",
-  speed: "#10B981",
-  students: "#3B82F6",
+  violations: "var(--chart-6)",
+  exempt: "var(--chart-2)",
+  speed: "var(--chart-3)",
+  students: "var(--chart-7)",
 };
 
 type ExecutiveKpisProps = {
@@ -216,7 +225,7 @@ export default function ExecutiveKpis({ routeComparisons, cbdRouteTrends }: Exec
   return (
     <div className="space-y-4 sm:space-y-6">
       <div className="grid grid-cols-1 gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <Card className="border-l-4 border-l-red-500">
+        <Card className="border-l-4 [border-color:var(--chart-6)]">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
               <div className="inline-flex items-center gap-2">
@@ -232,9 +241,9 @@ export default function ExecutiveKpis({ routeComparisons, cbdRouteTrends }: Exec
               </div>
             </CardTitle>
             {violationsDelta && (violationsDelta.abs >= 0 ? (
-              <TrendingUp className="h-4 w-4 text-rose-500" />
+              <TrendingUp className="h-4 w-4 text-[color:var(--chart-6)]" />
             ) : (
-              <TrendingDown className="h-4 w-4 text-emerald-500" />
+              <TrendingDown className="h-4 w-4 text-[color:var(--chart-3)]" />
             ))}
           </CardHeader>
           <CardContent>
@@ -244,7 +253,7 @@ export default function ExecutiveKpis({ routeComparisons, cbdRouteTrends }: Exec
             <div className="flex items-center justify-between text-xs text-muted-foreground">
               <span>{exemptShare}% exempt rate</span>
               {violationsDelta && (
-                <span className={violationsDelta.abs >= 0 ? "text-rose-600" : "text-emerald-600"}>
+                <span className={violationsDelta.abs >= 0 ? "text-[color:var(--chart-6)]" : "text-[color:var(--chart-3)]"}>
                   {violationsDelta.abs >= 0 ? "+" : ""}{Math.round(violationsDelta.pct * 10) / 10}% vs prev mo
                 </span>
               )}
@@ -260,7 +269,7 @@ export default function ExecutiveKpis({ routeComparisons, cbdRouteTrends }: Exec
                     <XAxis dataKey="month" hide />
                     <YAxis hide />
                     <Tooltip />
-                    <Area type="monotone" dataKey="violations" stroke="#EF4444" fill="#EF4444" fillOpacity={0.2} />
+                    <Area type="monotone" dataKey="violations" stroke="var(--chart-6)" fill="var(--chart-6)" fillOpacity={0.2} />
                   </AreaChart>
                 </ResponsiveContainer>
               )}
@@ -268,7 +277,7 @@ export default function ExecutiveKpis({ routeComparisons, cbdRouteTrends }: Exec
           </CardContent>
         </Card>
 
-        <Card className="border-l-4 border-l-blue-500">
+        <Card className="border-l-4 [border-color:var(--chart-1)]">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
               <div className="inline-flex items-center gap-2">
@@ -283,7 +292,7 @@ export default function ExecutiveKpis({ routeComparisons, cbdRouteTrends }: Exec
                 </Tooltip>
               </div>
             </CardTitle>
-            <Shield className="h-4 w-4 text-blue-600" />
+            <Shield className="h-4 w-4 text-[color:var(--chart-1)]" />
           </CardHeader>
           <CardContent>
             <div className="text-xl font-bold sm:text-2xl" aria-live="polite">{loading ? "—" : routeCount}</div>
@@ -302,7 +311,7 @@ export default function ExecutiveKpis({ routeComparisons, cbdRouteTrends }: Exec
           </CardContent>
         </Card>
 
-        <Card className="border-l-4 border-l-green-600 sm:col-span-2 lg:col-span-1">
+        <Card className="border-l-4 [border-color:var(--chart-3)] sm:col-span-2 lg:col-span-1">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
               <div className="inline-flex items-center gap-2">
@@ -317,7 +326,7 @@ export default function ExecutiveKpis({ routeComparisons, cbdRouteTrends }: Exec
                 </Tooltip>
               </div>
             </CardTitle>
-            <TrendingUp className="h-4 w-4 text-green-600" />
+            <TrendingUp className="h-4 w-4 text-[color:var(--chart-3)]" />
           </CardHeader>
           <CardContent>
             <div className="text-xl font-bold sm:text-2xl">{avgSpeedGain >= 0 ? "+" : ""}{avgSpeedGain.toFixed(1)}%</div>
@@ -463,7 +472,7 @@ export default function ExecutiveKpis({ routeComparisons, cbdRouteTrends }: Exec
         </TabsContent>
       </Tabs>
 
-      {error && <div className="text-xs text-red-500">Couldn&apos;t load KPIs. Refresh or try later.</div>}
+      {error && <div className="text-xs text-[color:var(--chart-6)]">Couldn&apos;t load KPIs. Refresh or try later.</div>}
     </div>
   );
 }

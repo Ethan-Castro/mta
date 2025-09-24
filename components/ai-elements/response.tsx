@@ -18,6 +18,7 @@ import MapPanel from "@/components/MapPanel";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import ChartErrorFallback from "@/components/ChartErrorFallback";
 import { CodeBlock, CodeBlockCopyButton } from "@/components/ai-elements/code-block";
+import { BRAND_PRIMARY_HEX } from "@/lib/ui/colors";
 import {
   Task,
   TaskContent,
@@ -135,7 +136,7 @@ function VisualizationRenderer({ spec, data }: { spec: any; data: any }) {
                 id: String(d.id ?? `${d.longitude},${d.latitude}`),
                 longitude: Number(d.longitude ?? d.lng ?? d.lon ?? 0),
                 latitude: Number(d.latitude ?? d.lat ?? 0),
-                color: d.color || "#2563eb",
+                color: d.color || BRAND_PRIMARY_HEX,
                 title: d.title,
                 description: d.description,
                 href: d.href,
@@ -480,40 +481,44 @@ export const Response = memo(
         },
 
         // Custom callout component used in docs: <Note>...</Note>
-        Note: ({ type, className, children, ...rest }: any) => (
-          <div
-            {...rest}
-            className={cn(
-              "my-4 flex gap-3 rounded-md border p-3 text-sm",
-              type === "warning"
-                ? "border-amber-400/40 bg-amber-100/50 text-amber-900 dark:bg-amber-400/10 dark:text-amber-200"
-                : "border-primary/30 bg-primary/5 text-foreground",
-              className
-            )}
-          >
-            <div className="mt-0.5 font-medium">
-              {type === "warning" ? "Warning" : "Note"}
+        Note: ({ type, className, children, ...rest }: any) => {
+          const warning = type === "warning";
+          return (
+            <div
+              {...rest}
+              className={cn(
+                "my-4 flex gap-3 rounded-md border p-3 text-sm",
+                warning ? "status-warning border-[color:var(--warning)]" : "border-primary/30 bg-primary/5 text-foreground",
+                className
+              )}
+              style={warning ? { backgroundColor: "color-mix(in srgb, var(--warning) 18%, transparent)" } : undefined}
+            >
+              <div className="mt-0.5 font-medium">
+                {warning ? "Warning" : "Note"}
+              </div>
+              <div className="min-w-0 flex-1">{children}</div>
             </div>
-            <div className="min-w-0 flex-1">{children}</div>
-          </div>
-        ),
-        note: ({ type, className, children, ...rest }: any) => (
-          <div
-            {...rest}
-            className={cn(
-              "my-4 flex gap-3 rounded-md border p-3 text-sm",
-              type === "warning"
-                ? "border-amber-400/40 bg-amber-100/50 text-amber-900 dark:bg-amber-400/10 dark:text-amber-200"
-                : "border-primary/30 bg-primary/5 text-foreground",
-              className
-            )}
-          >
-            <div className="mt-0.5 font-medium">
-              {type === "warning" ? "Warning" : "Note"}
+          );
+        },
+        note: ({ type, className, children, ...rest }: any) => {
+          const warning = type === "warning";
+          return (
+            <div
+              {...rest}
+              className={cn(
+                "my-4 flex gap-3 rounded-md border p-3 text-sm",
+                warning ? "status-warning border-[color:var(--warning)]" : "border-primary/30 bg-primary/5 text-foreground",
+                className
+              )}
+              style={warning ? { backgroundColor: "color-mix(in srgb, var(--warning) 18%, transparent)" } : undefined}
+            >
+              <div className="mt-0.5 font-medium">
+                {warning ? "Warning" : "Note"}
+              </div>
+              <div className="min-w-0 flex-1">{children}</div>
             </div>
-            <div className="min-w-0 flex-1">{children}</div>
-          </div>
-        ),
+          );
+        },
 
         // Custom docs helper: <ExampleLinks examples={[{title, link}]} />
         ExampleLinks: ({ examples }: any) => {

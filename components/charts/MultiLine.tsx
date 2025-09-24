@@ -31,13 +31,14 @@ type Props = {
 };
 
 const DEFAULT_COLORS = [
-  "#0ea5e9",
-  "#22c55e",
-  "#f59e0b",
-  "#ef4444",
-  "#a855f7",
-  "#06b6d4",
-  "#84cc16",
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
+  "var(--chart-6)",
+  "var(--chart-7)",
+  "var(--chart-8)",
 ];
 
 export default function MultiLine({
@@ -47,7 +48,7 @@ export default function MultiLine({
   yLabel,
   marker = null,
 }: Props) {
-  const axisColor = "rgba(8, 23, 156, 0.25)";
+  const axisColor = "color-mix(in srgb, var(--chart-1) 25%, transparent)";
 
   if (!Array.isArray(data) || data.length === 0 || !Array.isArray(series) || series.length === 0) {
     return (
@@ -85,12 +86,16 @@ export default function MultiLine({
             />
           ))}
           {marker?.x ? (
-            <ReferenceLine x={marker.x} stroke="#64748b" strokeDasharray="6 6" label={{ value: marker.label ?? marker.x, position: "insideTopLeft", fontSize: 10, fill: "#64748b" }} />
+            <ReferenceLine
+              x={marker.x}
+              stroke="var(--neutral)"
+              strokeDasharray="6 6"
+              label={{ value: marker.label ?? marker.x, position: "insideTopLeft", fontSize: 10, fill: "var(--neutral)" }}
+            />
           ) : null}
         </LineChart>
       </ResponsiveContainer>
     </div>
   );
 }
-
 
