@@ -109,7 +109,7 @@ export async function getNeonMCPTools(): Promise<MCPToolsBundle> {
 
   const localGetConnectionString = tool({
     description: "Return the configured database connection string (local fallback).",
-    inputSchema: z.object({}).optional(),
+    inputSchema: z.object({}),
     execute: async () => ({ connectionString: process.env.DATABASE_URL ?? null }),
   });
 
@@ -160,6 +160,10 @@ export async function getNeonMCPTools(): Promise<MCPToolsBundle> {
       tools[name] = impl;
     }
   }
+
+  // Always override `get_connection_string` with local wrapper to ensure
+  // parameters schema is an OBJECT for AI Gateway/Gemini compatibility
+  tools["get_connection_string"] = localGetConnectionString;
 
   // Tag each tool name as MCP-origin for UI filtering if needed
   // (keeps same callable interface; metadata can be inspected by the caller)
