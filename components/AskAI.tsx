@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, memo, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { nanoid } from "nanoid";
 import type { ChatStatus } from "ai";
+import { useUser } from "@stackframe/stack";
 import {
   Actions,
   Action,
@@ -33,6 +34,13 @@ import {
   ChainOfThoughtSearchResults,
   ChainOfThoughtSearchResult,
 } from "@/components/ai-elements/chain-of-thought";
+import {
+  Task,
+  TaskContent,
+  TaskItem,
+  TaskItemFile,
+  TaskTrigger,
+} from "@/components/ai-elements/task";
 import {
   CodeBlock,
   CodeBlockCopyButton,
@@ -81,6 +89,7 @@ import {
   ReasoningContent,
 } from "@/components/ai-elements/reasoning";
 import { Response } from "@/components/ai-elements/response";
+import MapPanel from "@/components/MapPanel";
 import {
   Sources,
   SourcesTrigger,
@@ -120,6 +129,13 @@ import {
   RefreshCcwIcon,
   SquarePenIcon,
   BarChart3Icon,
+  DownloadIcon,
+  ShareIcon,
+  EditIcon,
+  MicIcon,
+  MicOffIcon,
+  UploadIcon,
+  MailIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -131,6 +147,14 @@ import {
   type SummaryStats,
   type ToolLogEntry,
 } from "@/lib/ai/assistant-utils";
+import Sparkline from "@/components/charts/Sparkline";
+import MultiLine from "@/components/charts/MultiLine";
+import GroupedBar from "@/components/charts/GroupedBar";
+import BarChartBasic from "@/components/charts/BarChartBasic";
+import PieChartBasic from "@/components/charts/PieChartBasic";
+import ErrorBoundary from "@/components/ErrorBoundary";
+import ChartErrorFallback from "@/components/ChartErrorFallback";
+import LoadingSkeleton from "@/components/LoadingSkeleton";
 
 const DATASET_URL =
   "https://data.ny.gov/Transportation/Automated-Bus-Lane-Enforcement-Violations/kh8p-hcbm";
@@ -173,6 +197,110 @@ const personaOptions = [
   { value: "dataScience", label: "Data Science" },
   { value: "student", label: "CUNY" },
 ] as const;
+
+const ChartRenderer = memo(({ spec, data, isLoading = false }: { spec: any; data: any; isLoading?: boolean }) => {
+  if (isLoading) {
+    return <LoadingSkeleton variant="chart" className="h-[220px]" />;
+  }
+
+  const extractRows = (input: unknown) => {
+    if (Array.isArray(input)) return input;
+    if (input && typeof input === "object") {
+      const candidate = input as Record<string, unknown>;
+      if (Array.isArray(candidate.rows)) return candidate.rows;
+      if (Array.isArray(candidate.data)) return candidate.data;
+      if (Array.isArray(candidate.points)) return candidate.points;
+    }
+    return [] as any[];
+  };
+
+  return (
+    <ErrorBoundary fallback={ChartErrorFallback}>
+      {(() => {
+        if (spec?.type === "line") {
+          const points = extractRows(data).map((d: any) => ({ label: String(d.label ?? ""), value: Number(d.value ?? 0) }));
+          return (
+            <div role="img" aria-label={spec?.title || "Line chart"}>
+              <Sparkline data={points} height={220} />
+            </div>
+          );
+        }
+        if (spec?.type === "multi-line") {
+          const rows = extractRows(data);
+          const series = Array.isArray(spec?.series) ? spec.series : [];
+          const marker = spec?.marker ?? null;
+          return (
+            <div role="img" aria-label={spec?.title || "Multi-line chart"}>
+              <MultiLine data={rows} series={series} height={260} yLabel={spec?.yLabel} marker={marker} />
+            </div>
+          );
+        }
+        if (spec?.type === "grouped-bar") {
+          const rows = extractRows(data).map((d: any) => ({
+            name: String(d.name ?? d.label ?? ""),
+            violations: Number(d.violations ?? d.value ?? 0),
+            exempt: Number(d.exempt ?? d.exempt_count ?? 0),
+          }));
+          return (
+            <div role="img" aria-label={spec?.title || "Grouped bar chart"}>
+              <GroupedBar data={rows} height={260} />
+            </div>
+          );
+        }
+        if (spec?.type === "bar") {
+          const rows = extractRows(data).map((d: any) => ({ label: String(d.label ?? d.name ?? ""), value: Number(d.value ?? d.count ?? 0) }));
+          return (
+            <div role="img" aria-label={spec?.title || "Bar chart"}>
+              <BarChartBasic data={rows} height={240} yLabel={spec?.yLabel || "Count"} />
+            </div>
+          );
+        }
+        if (spec?.type === "pie") {
+          const rows = extractRows(data).map((d: any) => ({ label: String(d.label ?? d.name ?? ""), value: Number(d.value ?? d.count ?? 0) }));
+          return (
+            <div role="img" aria-label={spec?.title || "Pie chart"}>
+              <PieChartBasic data={rows} height={240} />
+            </div>
+          );
+        }
+        if (spec?.type === "map") {
+          const markers = extractRows(data).map((d: any) => ({
+            id: String(d.id ?? `${d.longitude},${d.latitude}`),
+            longitude: Number(d.longitude ?? d.lng ?? d.lon ?? 0),
+            latitude: Number(d.latitude ?? d.lat ?? 0),
+            color: d.color || "#2563eb",
+            title: d.title,
+            description: d.description,
+            href: d.href,
+          }));
+          const center: [number, number] | undefined = Array.isArray(spec?.center) && spec.center.length === 2
+            ? [Number(spec.center[0]), Number(spec.center[1])] as [number, number]
+            : undefined;
+          return (
+            <div className="space-y-2" role="img" aria-label={spec?.title || "Map visualization"}>
+              {spec?.title && <div className="text-sm font-medium text-foreground">{spec.title}</div>}
+              <MapPanel
+                height={320}
+                markers={markers}
+                center={center}
+                zoom={Number(spec?.zoom ?? 10)}
+                cluster={spec?.cluster ?? true}
+                hoverPopups
+              />
+            </div>
+          );
+        }
+        return (
+          <pre className="overflow-x-auto rounded-md bg-muted/30 p-2 text-xs">
+            {JSON.stringify({ spec, data }, null, 2)}
+          </pre>
+        );
+      })()}
+    </ErrorBoundary>
+  );
+});
+
+ChartRenderer.displayName = "ChartRenderer";
 
 type ChatMessage = {
   id: string;
@@ -339,6 +467,7 @@ function deriveToolState(toolLogs: ToolLogEntry[], baseInput: Record<string, unk
 }
 
 export default function AskAI() {
+  const user = useUser();
   const [inputValue, setInputValue] = useState("");
   const [model, setModel] = useState("openai/gpt-5-mini");
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -351,6 +480,12 @@ export default function AskAI() {
   const [activePersona, setActivePersona] = useState<(typeof personaOptions)[number]["value"]>("executive");
   const activePrompts = useMemo(() => personaPromptMap[activePersona], [activePersona]);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+  const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [emailAddress, setEmailAddress] = useState("");
+  const [isEmailing, setIsEmailing] = useState(false);
   const sp = useSearchParams();
   const scopeChips = useMemo(() => {
     const start = sp.get("start") || "";
@@ -420,11 +555,20 @@ export default function AskAI() {
       let toolMetaApplied = false;
 
       try {
+        // Attach Neon Auth (Stack) JWT when available so server can query Neon Data API with RLS
+        let authHeader: Record<string, string> = {};
+        try {
+          const auth = await (user as any)?.getAuthJson?.();
+          const accessToken = auth?.accessToken as string | undefined;
+          if (accessToken) authHeader = { Authorization: `Bearer ${accessToken}` };
+        } catch {}
+
         const response = await fetch("/api/chat/stream", {
           method: "POST",
           headers: {
             "content-type": "application/json",
             ...(currentConversationId ? { "x-conversation-id": currentConversationId } : {}),
+            ...authHeader,
           },
         body: JSON.stringify({ question: scopedQuestion, model: selectedModel, conversationId: currentConversationId }),
         });
@@ -440,27 +584,35 @@ export default function AskAI() {
         let buffer = "";
         let latestDisplay = "";
         let toolMetaPayload: string | null = null;
+        let collectingMeta = false;
 
         while (true) {
           const { value, done } = await reader.read();
           if (value) {
-            buffer += decoder.decode(value, { stream: !done });
-            let displayBuffer = buffer;
-            // Use last occurrence to avoid accidental matches in assistant text
-            const sentinelIndex = buffer.lastIndexOf(TOOL_META_SENTINEL);
-            if (sentinelIndex >= 0) {
-              displayBuffer = buffer.slice(0, sentinelIndex);
-              toolMetaPayload = buffer.slice(sentinelIndex + TOOL_META_SENTINEL.length);
-              buffer = displayBuffer;
+            const chunk = decoder.decode(value, { stream: !done });
+            if (collectingMeta) {
+              toolMetaPayload = (toolMetaPayload ?? "") + chunk;
+            } else {
+              buffer += chunk;
+              let displayBuffer = buffer;
+              // Use last occurrence to avoid accidental matches in assistant text
+              const sentinelIndex = buffer.lastIndexOf(TOOL_META_SENTINEL);
+              if (sentinelIndex >= 0) {
+                displayBuffer = buffer.slice(0, sentinelIndex);
+                const payloadChunk = buffer.slice(sentinelIndex + TOOL_META_SENTINEL.length);
+                toolMetaPayload = (toolMetaPayload ?? "") + payloadChunk;
+                buffer = displayBuffer;
+                collectingMeta = true;
+              }
+              latestDisplay = displayBuffer;
+              setMessages((prev) =>
+                prev.map((message) =>
+                  message.id === assistantId
+                    ? { ...message, content: displayBuffer }
+                    : message
+                )
+              );
             }
-            latestDisplay = displayBuffer;
-            setMessages((prev) =>
-              prev.map((message) =>
-                message.id === assistantId
-                  ? { ...message, content: displayBuffer }
-                  : message
-              )
-            );
           }
           if (done) {
             break;
@@ -617,6 +769,109 @@ export default function AskAI() {
     }
   }, []);
 
+  const startRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks: Blob[] = [];
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          chunks.push(event.data);
+        }
+      };
+
+      recorder.onstop = async () => {
+        const audioBlob = new Blob(chunks, { type: 'audio/wav' });
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          const base64Audio = reader.result as string;
+          // Send the audio for transcription
+          await submitQuestion(`Please transcribe this audio: ${base64Audio}`);
+        };
+        reader.readAsDataURL(audioBlob);
+        
+        // Stop all tracks to release microphone
+        stream.getTracks().forEach(track => track.stop());
+        setAudioChunks([]);
+      };
+
+      recorder.start();
+      setMediaRecorder(recorder);
+      setAudioChunks(chunks);
+      setIsRecording(true);
+    } catch (error) {
+      console.error("Error starting recording:", error);
+      setError("Failed to access microphone. Please check permissions.");
+    }
+  }, [submitQuestion]);
+
+  const stopRecording = useCallback(() => {
+    if (mediaRecorder && isRecording) {
+      mediaRecorder.stop();
+      setIsRecording(false);
+      setMediaRecorder(null);
+    }
+  }, [mediaRecorder, isRecording]);
+
+  const handleFileUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('audio/')) {
+      setError("Please select an audio file");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const base64Audio = reader.result as string;
+      await submitQuestion(`Please transcribe this audio file: ${base64Audio}`);
+    };
+    reader.readAsDataURL(file);
+  }, [submitQuestion]);
+
+  const handleEmailChat = useCallback(async (messageContent: string, conversationId: string | null) => {
+    if (!emailAddress.trim()) {
+      setError("Please enter an email address");
+      return;
+    }
+
+    setIsEmailing(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/email/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          to: emailAddress,
+          subject: "AI Chat Response from MTA Data Assistant",
+          conversationId,
+          messageContent,
+          userEmail: user?.primaryEmail,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setShowEmailModal(false);
+        setEmailAddress("");
+        // You could show a success toast here
+        alert("Email sent successfully!");
+      } else {
+        setError(result.error || "Failed to send email");
+      }
+    } catch (err) {
+      setError("Failed to send email. Please try again.");
+    } finally {
+      setIsEmailing(false);
+    }
+  }, [emailAddress, user?.primaryEmail]);
+
   return (
     <div className="flex h-full flex-col space-y-6 rounded-2xl border border-border/60 bg-card/70 p-6 shadow-xl backdrop-blur">
       <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
@@ -748,6 +1003,12 @@ export default function AskAI() {
                               <CopyIcon className="size-4" />
                             </Action>
                             <Action
+                              tooltip="Email this response"
+                              onClick={() => setShowEmailModal(true)}
+                            >
+                              <MailIcon className="size-4" />
+                            </Action>
+                            <Action
                               tooltip="Reuse answer as prompt"
                               onClick={() => setInputValue(message.content)}
                             >
@@ -763,9 +1024,16 @@ export default function AskAI() {
                         </div>
 
                         {activeAssistantId === message.id && isStreaming && (
-                          <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                          <div className="flex items-center gap-2 text-muted-foreground text-sm" role="status" aria-live="polite">
                             <Loader />
                             <span>Streaming live response…</span>
+                          </div>
+                        )}
+
+                        {isRecording && (
+                          <div className="flex items-center gap-2 text-red-600 text-sm" role="status" aria-live="polite">
+                            <div className="h-2 w-2 rounded-full bg-red-600 animate-pulse" />
+                            <span>Recording audio…</span>
                           </div>
                         )}
 
@@ -774,6 +1042,131 @@ export default function AskAI() {
                             <BranchMessages>
                               <div className="grid gap-4">
                                 <Response>{message.content}</Response>
+                                {(() => {
+                                  // Render ALL visuals and artifacts found in tool logs as well as the last toolState payload
+                                  const cards: ReactNode[] = [];
+                                  
+                                  // Handle charts
+                                  const visuals = (meta?.toolLogs || [])
+                                    .map((log) => {
+                                      const out: any = log?.output;
+                                      const payload = out && (out.chart ? out : (out.output && out.output.chart ? out.output : null));
+                                      return payload ? { id: log.id, payload, type: 'chart' } : null;
+                                    })
+                                    .filter(Boolean) as Array<{ id: string; payload: any; type: string }>;
+                                  
+                                  // Handle artifacts
+                                  const artifacts = (meta?.toolLogs || [])
+                                    .map((log) => {
+                                      const out: any = log?.output;
+                                      const payload = out && (out.artifact ? out : (out.output && out.output.artifact ? out.output : null));
+                                      return payload ? { id: log.id, payload, type: 'artifact' } : null;
+                                    })
+                                    .filter(Boolean) as Array<{ id: string; payload: any; type: string }>;
+                                  
+                                  const lastOut: any = meta?.toolState?.output;
+                                  const lastChartPayload = lastOut && (lastOut.chart ? lastOut : (lastOut.output && lastOut.output.chart ? lastOut.output : null));
+                                  const lastArtifactPayload = lastOut && (lastOut.artifact ? lastOut : (lastOut.output && lastOut.output.artifact ? lastOut.output : null));
+                                  
+                                  if (lastChartPayload) {
+                                    visuals.push({ id: `${meta?.toolState?.toolName || "tool"}-final`, payload: lastChartPayload, type: 'chart' });
+                                  }
+                                  if (lastArtifactPayload) {
+                                    artifacts.push({ id: `${meta?.toolState?.toolName || "tool"}-final`, payload: lastArtifactPayload, type: 'artifact' });
+                                  }
+                                  
+                                  // Render charts
+                                  visuals.forEach((v, idx) => {
+                                    cards.push(
+                                      <div key={`chart-${v.id}-${idx}`} className="rounded-md border border-border/60 bg-background/70 p-2">
+                                        <ChartRenderer spec={v.payload.chart} data={v.payload.data} />
+                                      </div>
+                                    );
+                                  });
+                                  
+                                  // Render artifacts
+                                  artifacts.forEach((a, idx) => {
+                                    const getActionIcon = (type: string) => {
+                                      switch (type) {
+                                        case 'copy': return CopyIcon;
+                                        case 'download': return DownloadIcon;
+                                        case 'share': return ShareIcon;
+                                        case 'edit': return EditIcon;
+                                        default: return CopyIcon;
+                                      }
+                                    };
+
+                                    const handleActionClick = (action: any) => {
+                                      switch (action.type) {
+                                        case 'copy':
+                                          navigator.clipboard?.writeText(a.payload.artifact.content);
+                                          break;
+                                        case 'download':
+                                          const blob = new Blob([a.payload.artifact.content], { type: 'text/plain' });
+                                          const url = URL.createObjectURL(blob);
+                                          const downloadLink = document.createElement('a');
+                                          downloadLink.href = url;
+                                          downloadLink.download = `${a.payload.artifact.title.replace(/[^a-zA-Z0-9]/g, '_')}.txt`;
+                                          document.body.appendChild(downloadLink);
+                                          downloadLink.click();
+                                          document.body.removeChild(downloadLink);
+                                          URL.revokeObjectURL(url);
+                                          break;
+                                        case 'share':
+                                          if (navigator.share) {
+                                            navigator.share({
+                                              title: a.payload.artifact.title,
+                                              text: a.payload.artifact.content,
+                                            });
+                                          } else {
+                                            navigator.clipboard?.writeText(a.payload.artifact.content);
+                                          }
+                                          break;
+                                        case 'edit':
+                                          setInputValue(`Edit this document: ${a.payload.artifact.title}\n\n${a.payload.artifact.content}`);
+                                          break;
+                                        default:
+                                          navigator.clipboard?.writeText(a.payload.artifact.content);
+                                      }
+                                    };
+
+                                    cards.push(
+                                      <div key={`artifact-${a.id}-${idx}`} className="rounded-md border border-border/60 bg-background/70 p-2">
+                                        <Artifact>
+                                          <ArtifactHeader>
+                                            <div>
+                                              <ArtifactTitle>{a.payload.artifact.title}</ArtifactTitle>
+                                              {a.payload.artifact.description && (
+                                                <ArtifactDescription>{a.payload.artifact.description}</ArtifactDescription>
+                                              )}
+                                            </div>
+                                            {a.payload.artifact.actions && a.payload.artifact.actions.length > 0 && (
+                                              <ArtifactActions>
+                                                {a.payload.artifact.actions.map((action: any, actionIdx: number) => (
+                                                  <ArtifactAction
+                                                    key={actionIdx}
+                                                    label={action.label}
+                                                    tooltip={action.tooltip}
+                                                    icon={getActionIcon(action.type)}
+                                                    onClick={() => handleActionClick(action)}
+                                                  />
+                                                ))}
+                                              </ArtifactActions>
+                                            )}
+                                          </ArtifactHeader>
+                                          <ArtifactContent>
+                                            <div className="prose prose-sm max-w-none dark:prose-invert">
+                                              {a.payload.artifact.content}
+                                            </div>
+                                          </ArtifactContent>
+                                        </Artifact>
+                                      </div>
+                                    );
+                                  });
+                                  
+                                  if (cards.length === 0) return null;
+                                  return <>{cards}</>;
+                                })()}
                                 {meta?.summary && showAdvanced && (
                                   <InlineCitation className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                                     <InlineCitationText>
@@ -854,6 +1247,32 @@ export default function AskAI() {
                           </ChainOfThought>
                         )}
 
+                        {showAdvanced && meta?.toolLogs && meta.toolLogs.length > 0 && (
+                          <div className="space-y-2">
+                            <h4 className="text-sm font-medium text-muted-foreground">Task Progress</h4>
+                            <Task defaultOpen={false}>
+                              <TaskTrigger 
+                                title="Data Analysis Workflow" 
+                                status={meta.toolState?.state === "output-error" ? "error" : "completed"}
+                              />
+                              <TaskContent>
+                                <TaskItem>
+                                  Connected to <TaskItemFile>neon-db</TaskItemFile> database
+                                </TaskItem>
+                                <TaskItem>
+                                  Executed SQL query with {meta.toolLogs.length} tool call{meta.toolLogs.length !== 1 ? 's' : ''}
+                                </TaskItem>
+                                <TaskItem>
+                                  Processed {meta.summary ? formatNumber(meta.summary.rows.length) : 'N/A'} data records
+                                </TaskItem>
+                                <TaskItem>
+                                  Generated analysis with {formatPercent(meta.summary?.exemptShare ?? 0)} exempt share
+                                </TaskItem>
+                              </TaskContent>
+                            </Task>
+                          </div>
+                        )}
+
                         {showAdvanced && (
                           <Reasoning
                             isStreaming={isStreaming && activeAssistantId === message.id}
@@ -875,10 +1294,23 @@ export default function AskAI() {
                             />
                             <ToolContent>
                               <ToolInput input={meta.toolState.input} />
-                              <ToolOutput
-                                output={meta.toolState.output}
-                                errorText={meta.toolState.errorText}
-                              />
+                              {(() => {
+                                const out: any = meta.toolState.output;
+                                const payload = out && (out.chart ? out : out.output && out.output.chart ? out.output : null);
+                                if (payload) {
+                                  return (
+                                    <div className="rounded-md border border-border/60 bg-background/70 p-2">
+                                      <ChartRenderer spec={payload.chart} data={payload.data} />
+                                    </div>
+                                  );
+                                }
+                                return (
+                                  <ToolOutput
+                                    output={meta.toolState.output}
+                                    errorText={meta.toolState.errorText}
+                                  />
+                                );
+                              })()}
                             </ToolContent>
                           </Tool>
                         )}
@@ -928,6 +1360,30 @@ export default function AskAI() {
       </Conversation>
 
       <div className="space-y-3">
+        {messages.length === 0 && (
+          <div className="space-y-3">
+            <h3 className="text-sm font-medium text-muted-foreground">Component Demo</h3>
+            <div className="space-y-2">
+              <Task defaultOpen={true}>
+                <TaskTrigger title="Task Component Example" status="completed" />
+                <TaskContent>
+                  <TaskItem>
+                    This demonstrates the <TaskItemFile>Task</TaskItemFile> component
+                  </TaskItem>
+                  <TaskItem>
+                    It supports different statuses: pending, in_progress, completed, error
+                  </TaskItem>
+                  <TaskItem>
+                    You can nest <TaskItemFile>TaskItemFile</TaskItemFile> components for file references
+                  </TaskItem>
+                  <TaskItem>
+                    Perfect for showing workflow progress and task lists
+                  </TaskItem>
+                </TaskContent>
+              </Task>
+            </div>
+          </div>
+        )}
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-muted-foreground text-xs uppercase tracking-wide">
             Quick suggestions
@@ -980,6 +1436,41 @@ export default function AskAI() {
         </PromptInputBody>
         <PromptInputToolbar>
           <PromptInputTools>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={isRecording ? stopRecording : startRecording}
+                className={cn(
+                  "flex h-8 w-8 items-center justify-center rounded-md border transition-colors",
+                  isRecording
+                    ? "border-red-500 bg-red-50 text-red-600 hover:bg-red-100"
+                    : "border-border/60 text-muted-foreground hover:border-primary/40 hover:text-primary"
+                )}
+                title={isRecording ? "Stop recording" : "Start recording"}
+                disabled={status === "submitted" || status === "streaming"}
+              >
+                {isRecording ? (
+                  <MicOffIcon className="h-4 w-4" />
+                ) : (
+                  <MicIcon className="h-4 w-4" />
+                )}
+              </button>
+              <label
+                htmlFor="audio-upload"
+                className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md border border-border/60 text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+                title="Upload audio file"
+              >
+                <UploadIcon className="h-4 w-4" />
+                <input
+                  id="audio-upload"
+                  type="file"
+                  accept="audio/*"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                  disabled={status === "submitted" || status === "streaming"}
+                />
+              </label>
+            </div>
             <PromptInputModelSelect value={model} onValueChange={setModel}>
               <PromptInputModelSelectTrigger>
                 <PromptInputModelSelectValue placeholder="Model" />
@@ -1015,6 +1506,55 @@ export default function AskAI() {
           <PromptInputSubmit status={status} />
         </PromptInputToolbar>
       </PromptInput>
+
+      {showEmailModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <h3 className="text-lg font-semibold mb-4">Email Chat Response</h3>
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="email-input" className="block text-sm font-medium text-gray-700 mb-1">
+                  Email Address
+                </label>
+                <input
+                  id="email-input"
+                  type="email"
+                  value={emailAddress}
+                  onChange={(e) => setEmailAddress(e.target.value)}
+                  placeholder="Enter email address"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={isEmailing}
+                />
+              </div>
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => {
+                    setShowEmailModal(false);
+                    setEmailAddress("");
+                    setError(null);
+                  }}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                  disabled={isEmailing}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    const lastMessage = messages[messages.length - 1];
+                    if (lastMessage && lastMessage.role === "assistant") {
+                      handleEmailChat(lastMessage.content, conversationId);
+                    }
+                  }}
+                  disabled={isEmailing || !emailAddress.trim()}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isEmailing ? "Sending..." : "Send Email"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

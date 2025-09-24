@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
-type ThemeName = "light" | "dark" | "mta-light" | "mta-dark";
+type ThemeName = "light" | "dark" | "mta-light" | "mta-dark" | "subway" | "subway-light";
 
 type ThemeContextValue = {
   theme: ThemeName;
@@ -17,6 +17,8 @@ const THEME_OPTIONS: ThemeContextValue["themes"] = [
   { value: "dark", label: "Dark", description: "Low-light optimized contrast" },
   { value: "mta-light", label: "MTA Light", description: "MTA blue accents on bright canvas" },
   { value: "mta-dark", label: "MTA Night", description: "Midnight blue focus with amber cues" },
+  { value: "subway", label: "Subway Board (Dark)", description: "Solid black board with bold line badges" },
+  { value: "subway-light", label: "Subway Arrival (Light)", description: "White board with colored badges and dividers" },
 ];
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
@@ -41,7 +43,7 @@ function getPreferredTheme(): ThemeName {
 function applyTheme(theme: ThemeName) {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
-  root.classList.remove("dark", "theme-mta", "theme-mta-dark");
+  root.classList.remove("dark", "theme-mta", "theme-mta-dark", "theme-subway", "theme-subway-light");
 
   switch (theme) {
     case "light":
@@ -55,10 +57,17 @@ function applyTheme(theme: ThemeName) {
     case "mta-dark":
       root.classList.add("theme-mta", "theme-mta-dark", "dark");
       break;
+    case "subway":
+      // Subway board is a dark-first theme
+      root.classList.add("theme-subway", "dark");
+      break;
+    case "subway-light":
+      root.classList.add("theme-subway-light");
+      break;
   }
 
   root.dataset.theme = theme;
-  root.style.colorScheme = theme === "dark" || theme === "mta-dark" ? "dark" : "light";
+  root.style.colorScheme = theme === "dark" || theme === "mta-dark" || theme === "subway" ? "dark" : "light";
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {

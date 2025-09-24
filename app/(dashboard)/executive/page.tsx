@@ -365,7 +365,7 @@ function ExecutivePageContent() {
               <div className="font-medium text-foreground/90">
                 {route.routeId} - {route.routeName}
               </div>
-              <div className="text-xs text-foreground/60">{route.campus} | {route.aceEnforced ? "ACE enforced" : "No ACE coverage"} | {formatPercent(route.speedChangePct)} speed change</div>
+              <div className="text-xs text-foreground/60">{route.campus} | {route.aceEnforced ? "ACE enforced" : "No ACE coverage"} | {route.speedChangePct !== null ? formatPercent(route.speedChangePct) : "—"} speed change</div>
               <p className="mt-2 leading-relaxed text-foreground/80 text-sm">{route.narrative}</p>
             </li>
           ))}

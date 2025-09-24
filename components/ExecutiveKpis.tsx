@@ -6,6 +6,8 @@ import type { RouteComparison, CbdRouteTrend } from "@/lib/data/insights";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import LoadingSkeleton from "@/components/LoadingSkeleton";
+import LoadingSpinner from "@/components/LoadingSpinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   BarChart,
@@ -220,7 +222,7 @@ export default function ExecutiveKpis({ routeComparisons, cbdRouteTrends }: Exec
               <div className="inline-flex items-center gap-2">
                 ACE violations
                 <Tooltip>
-                  <TooltipTrigger>
+                  <TooltipTrigger asChild>
                     <button type="button" className="rounded-full border border-foreground/20 p-0.5 leading-none text-[10px] text-foreground/70">i</button>
                   </TooltipTrigger>
                   <TooltipContent>
@@ -250,7 +252,7 @@ export default function ExecutiveKpis({ routeComparisons, cbdRouteTrends }: Exec
             <div className="text-[11px] text-muted-foreground mt-1">Window: {formatDate(firstSeen)} → {formatDate(lastSeen)}</div>
             <div className="mt-3 h-12">
               {trendLoading ? (
-                <div className="h-full w-full animate-pulse rounded bg-foreground/10" />
+                <LoadingSkeleton variant="chart" className="h-12" />
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={violationTrendData.slice(-12)}>
@@ -272,7 +274,7 @@ export default function ExecutiveKpis({ routeComparisons, cbdRouteTrends }: Exec
               <div className="inline-flex items-center gap-2">
                 Routes monitored
                 <Tooltip>
-                  <TooltipTrigger>
+                  <TooltipTrigger asChild>
                     <button type="button" className="rounded-full border border-foreground/20 p-0.5 leading-none text-[10px] text-foreground/70">i</button>
                   </TooltipTrigger>
                   <TooltipContent>
@@ -291,7 +293,7 @@ export default function ExecutiveKpis({ routeComparisons, cbdRouteTrends }: Exec
             </div>
             <div className="mt-2">
               {loading ? (
-                <div className="h-2 w-full animate-pulse rounded bg-foreground/10" />
+                <LoadingSkeleton lines={1} className="h-2" />
               ) : (
                 <Progress value={aceCoveragePct} />
               )}
@@ -306,7 +308,7 @@ export default function ExecutiveKpis({ routeComparisons, cbdRouteTrends }: Exec
               <div className="inline-flex items-center gap-2">
                 ACE speed impact
                 <Tooltip>
-                  <TooltipTrigger>
+                  <TooltipTrigger asChild>
                     <button type="button" className="rounded-full border border-foreground/20 p-0.5 leading-none text-[10px] text-foreground/70">i</button>
                   </TooltipTrigger>
                   <TooltipContent>
@@ -356,7 +358,7 @@ export default function ExecutiveKpis({ routeComparisons, cbdRouteTrends }: Exec
                     <Area type="monotone" dataKey="exempt" fill={TREND_COLORS.exempt} fillOpacity={0.2} stroke={TREND_COLORS.exempt} name="Exempt" />
                   </ComposedChart>
                 </ResponsiveContainer>
-                {trendLoading && <div className="text-xs text-muted-foreground mt-1">Loading Neon trend…</div>}
+                {trendLoading && <LoadingSpinner size="sm" text="Loading Neon trend…" className="mt-2" />}
                 {trendError && <div className="text-xs text-destructive mt-1">{trendError}</div>}
               </CardContent>
             </Card>

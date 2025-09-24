@@ -1,4 +1,4 @@
-import { sql } from "@/lib/db";
+import { sql, isDbConfigured } from "@/lib/db";
 
 export type ViolationSummaryParams = {
   routeId?: string;
@@ -184,6 +184,55 @@ export async function getHotspots({
   start,
   end,
 }: ViolationSummaryParams & { limit?: number }): Promise<HotspotRow[]> {
+  if (!isDbConfigured) {
+    const sample: HotspotRow[] = [
+      {
+        busRouteId: "Bx12-SBS",
+        stopName: "Fordham Rd & 3rd Ave",
+        latitude: 40.86148,
+        longitude: -73.89433,
+        violations: 214,
+        exemptCount: 36,
+      },
+      {
+        busRouteId: "M15-SBS",
+        stopName: "1st Ave & E 14 St",
+        latitude: 40.73252,
+        longitude: -73.98367,
+        violations: 185,
+        exemptCount: 27,
+      },
+      {
+        busRouteId: "Q44-SBS",
+        stopName: "Main St & Roosevelt Ave",
+        latitude: 40.75968,
+        longitude: -73.83053,
+        violations: 168,
+        exemptCount: 22,
+      },
+      {
+        busRouteId: "S79-SBS",
+        stopName: "Hylan Blvd & Richmond Ave",
+        latitude: 40.56152,
+        longitude: -74.14838,
+        violations: 142,
+        exemptCount: 31,
+      },
+      {
+        busRouteId: "B44-SBS",
+        stopName: "Nostrand Ave & Avenue H",
+        latitude: 40.63144,
+        longitude: -73.94718,
+        violations: 133,
+        exemptCount: 19,
+      },
+    ];
+    const filtered = routeId ? sample.filter((row) => row.busRouteId === routeId) : sample;
+    const clampedLimit = Math.max(1, Math.min(limit, filtered.length || sample.length));
+    const source = filtered.length ? filtered : sample;
+    return source.slice(0, clampedLimit);
+  }
+
   const filters: any[] = [sql`violation_latitude is not null`, sql`violation_longitude is not null`];
   if (routeId) {
     filters.push(sql`bus_route_id = ${routeId}`);

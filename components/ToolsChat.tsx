@@ -10,6 +10,14 @@ import {
   PromptInputModelSelectItem,
   PromptInputModelSelectValue,
 } from "@/components/ai-elements/prompt-input";
+import Sparkline from "@/components/charts/Sparkline";
+import MultiLine from "@/components/charts/MultiLine";
+import GroupedBar from "@/components/charts/GroupedBar";
+import BarChartBasic from "@/components/charts/BarChartBasic";
+import PieChartBasic from "@/components/charts/PieChartBasic";
+import MapPanel from "@/components/MapPanel";
+import ErrorBoundary from "@/components/ErrorBoundary";
+import ChartErrorFallback from "@/components/ChartErrorFallback";
 
 export default function ToolsChat() {
   const [input, setInput] = useState("");
@@ -24,31 +32,81 @@ export default function ToolsChat() {
   );
   const { messages, sendMessage, status, error } = useChat({ chat });
 
-  const ChartRenderer = ({ spec, data }: { spec: any; data: any[] }) => {
-    try {
-      if (spec?.type === "line") {
-        const Sparkline = require("@/components/charts/Sparkline").default;
-        const points = Array.isArray(data)
-          ? data.map((d: any) => ({ label: String(d.label ?? ""), value: Number(d.value ?? 0) }))
-          : [];
-        return <Sparkline data={points} height={220} />;
+  const ChartRenderer = ({ spec, data }: { spec: any; data: any }) => {
+    const extractRows = (input: unknown) => {
+      if (Array.isArray(input)) return input;
+      if (input && typeof input === "object") {
+        const candidate = input as Record<string, unknown>;
+        if (Array.isArray(candidate.rows)) return candidate.rows;
+        if (Array.isArray(candidate.data)) return candidate.data;
+        if (Array.isArray(candidate.points)) return candidate.points;
       }
-      if (spec?.type === "grouped-bar") {
-        const GroupedBar = require("@/components/charts/GroupedBar").default;
-        const rows = Array.isArray(data)
-          ? data.map((d: any) => ({
+      return [] as any[];
+    };
+
+    return (
+      <ErrorBoundary fallback={ChartErrorFallback}>
+        {(() => {
+          if (spec?.type === "line") {
+            const points = extractRows(data).map((d: any) => ({ label: String(d.label ?? ""), value: Number(d.value ?? 0) }));
+            return <Sparkline data={points} height={220} />;
+          }
+          if (spec?.type === "multi-line") {
+            const rows = extractRows(data);
+            const series = Array.isArray(spec?.series) ? spec.series : [];
+            const marker = spec?.marker ?? null;
+            return <MultiLine data={rows} series={series} height={260} yLabel={spec?.yLabel} marker={marker} />;
+          }
+          if (spec?.type === "grouped-bar") {
+            const rows = extractRows(data).map((d: any) => ({
               name: String(d.name ?? d.label ?? ""),
               violations: Number(d.violations ?? d.value ?? 0),
-              exempt: Number(d.exempt ?? 0),
-            }))
-          : [];
-        return <GroupedBar data={rows} height={260} />;
-      }
-    } catch {}
-    return (
-      <pre className="overflow-x-auto rounded-md bg-muted/30 p-2 text-xs">
-        {JSON.stringify({ spec, data }, null, 2)}
-      </pre>
+              exempt: Number(d.exempt ?? d.exempt_count ?? 0),
+            }));
+            return <GroupedBar data={rows} height={260} />;
+          }
+          if (spec?.type === "bar") {
+            const rows = extractRows(data).map((d: any) => ({ label: String(d.label ?? d.name ?? ""), value: Number(d.value ?? d.count ?? 0) }));
+            return <BarChartBasic data={rows} height={240} yLabel={spec?.yLabel || "Count"} />;
+          }
+          if (spec?.type === "pie") {
+            const rows = extractRows(data).map((d: any) => ({ label: String(d.label ?? d.name ?? ""), value: Number(d.value ?? d.count ?? 0) }));
+            return <PieChartBasic data={rows} height={240} />;
+          }
+          if (spec?.type === "map") {
+            const markers = extractRows(data).map((d: any) => ({
+              id: String(d.id ?? `${d.longitude},${d.latitude}`),
+              longitude: Number(d.longitude ?? d.lng ?? d.lon ?? 0),
+              latitude: Number(d.latitude ?? d.lat ?? 0),
+              color: d.color || "#2563eb",
+              title: d.title,
+              description: d.description,
+              href: d.href,
+            }));
+            const center: [number, number] | undefined = Array.isArray(spec?.center) && spec.center.length === 2
+              ? [Number(spec.center[0]), Number(spec.center[1])] as [number, number]
+              : undefined;
+            return (
+              <div className="space-y-2">
+                {spec?.title && <div className="text-sm font-medium text-foreground">{spec.title}</div>}
+                <MapPanel
+                  height={320}
+                  markers={markers}
+                  center={center}
+                  zoom={Number(spec?.zoom ?? 10)}
+                  cluster={spec?.cluster ?? true}
+                  hoverPopups
+                />
+              </div>
+            );
+          }
+          return (
+            <pre className="overflow-x-auto rounded-md bg-muted/30 p-2 text-xs">
+              {JSON.stringify({ spec, data }, null, 2)}
+            </pre>
+          );
+        })()}
+      </ErrorBoundary>
     );
   };
 
@@ -178,7 +236,7 @@ export default function ToolsChat() {
                   default: {
                     // Only show tool parts when they are tool-related and showTools is enabled
                     const looksLikeTool = typeof part?.type === "string" && part.type.startsWith("tool-");
-                  if (part.type === "tool-chartViolationsTrend" || part.type === "tool-chartViolationsGrouped") {
+                  if (part.type === "tool-chartViolationsTrend" || part.type === "tool-chartViolationsGrouped" || part.type === "tool-visualize") {
                       if (!showTools) return null;
                       const payload: any = (part as any).output ?? part;
                       return (

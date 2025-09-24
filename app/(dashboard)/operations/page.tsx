@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import InsightCard from "@/components/InsightCard";
 import type { AnalystScenario, ExemptRepeater, RouteComparison } from "@/lib/data/insights";
 import type { Campus } from "@/lib/data/cuny";
@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import GroupedBar from "@/components/charts/GroupedBar";
+import { bearingDegrees, bearingToCardinal, formatDistance, haversineDistanceKm, type LatLng } from "@/lib/geo/location";
 
 const percent = new Intl.NumberFormat("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const integer = new Intl.NumberFormat("en-US");
@@ -89,11 +90,35 @@ export default function OperationsPage() {
   const [dataError, setDataError] = useState<string>("");
   const [loadingData, setLoadingData] = useState<boolean>(true);
   const [comparisonLimit, setComparisonLimit] = useState<number>(6);
+  const [userLocation, setUserLocation] = useState<GeolocationPosition | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
 
   const MapPanel = useMemo(
     () => dynamic(() => import("@/components/MapPanel"), { ssr: false }),
     []
   );
+
+  const handleShareLocation = useCallback(() => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setLocationError("This browser does not support location access.");
+      return;
+    }
+
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setUserLocation(position);
+        setLocationError(null);
+        setIsLocating(false);
+      },
+      (error) => {
+        setLocationError(error?.message || "Unable to fetch your location.");
+        setIsLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -262,7 +287,7 @@ export default function OperationsPage() {
     ? filteredRoutes.filter((route) => route.aceEnforced).length / filteredRoutes.length
     : 0;
   const avgSpeedDelta = filteredRoutes.length
-    ? filteredRoutes.reduce((acc, route) => acc + route.speedChangePct, 0) / filteredRoutes.length
+    ? filteredRoutes.reduce((acc, route) => acc + (route.speedChangePct ?? 0), 0) / filteredRoutes.length
     : 0;
   const avgExemptShare = filteredRouteMetrics.length
     ? filteredRouteMetrics.reduce((acc, row) => acc + (row.violations ? (row.exemptCount / row.violations) * 100 : 0), 0) /
@@ -289,6 +314,107 @@ export default function OperationsPage() {
         })),
     [campuses, selectedCampusType]
   );
+
+  const userCoordinates = useMemo<LatLng | null>(() => {
+    if (!userLocation) return null;
+    return {
+      latitude: userLocation.coords.latitude,
+      longitude: userLocation.coords.longitude,
+    };
+  }, [userLocation]);
+
+  const nearestHotspot = useMemo(() => {
+    if (!userCoordinates || !filteredHotspots.length) return null;
+    let closest = filteredHotspots[0];
+    let closestDistance = Number.POSITIVE_INFINITY;
+
+    for (const point of filteredHotspots) {
+      const distanceKm = haversineDistanceKm(userCoordinates, {
+        latitude: point.latitude,
+        longitude: point.longitude,
+      });
+      if (distanceKm < closestDistance) {
+        closest = point;
+        closestDistance = distanceKm;
+      }
+    }
+
+    const bearing = bearingDegrees(userCoordinates, {
+      latitude: closest.latitude,
+      longitude: closest.longitude,
+    });
+
+    return {
+      point: closest,
+      distanceKm: closestDistance,
+      bearing,
+    };
+  }, [userCoordinates, filteredHotspots]);
+
+  const nearestCampus = useMemo(() => {
+    if (!userCoordinates || !campusMarkers.length) return null;
+    let closest = campusMarkers[0];
+    let closestDistance = Number.POSITIVE_INFINITY;
+
+    for (const marker of campusMarkers) {
+      const distanceKm = haversineDistanceKm(userCoordinates, {
+        latitude: marker.latitude,
+        longitude: marker.longitude,
+      });
+      if (distanceKm < closestDistance) {
+        closest = marker;
+        closestDistance = distanceKm;
+      }
+    }
+
+    const bearing = bearingDegrees(userCoordinates, {
+      latitude: closest.latitude,
+      longitude: closest.longitude,
+    });
+
+    return {
+      marker: closest,
+      distanceKm: closestDistance,
+      bearing,
+    };
+  }, [userCoordinates, campusMarkers]);
+
+  const locationSummary = useMemo(() => {
+    if (!userCoordinates) return null;
+    if (!filteredHotspots.length && !campusMarkers.length) {
+      return "Location captured. Map layers will update once hotspot or campus data is available.";
+    }
+
+    if (nearestHotspot) {
+      const distanceCopy = formatDistance(nearestHotspot.distanceKm);
+      const direction = bearingToCardinal(nearestHotspot.bearing);
+      const stopLabel = nearestHotspot.point.stopName ?? "an unnamed stop";
+      const exemptShare = nearestHotspot.point.violations
+        ? (nearestHotspot.point.exemptCount / nearestHotspot.point.violations) * 100
+        : null;
+      const shareMessage =
+        exemptShare !== null
+          ? `Exempt share here is ${formatPercentValue(exemptShare)}.`
+          : "";
+      return [`You are ${distanceCopy} ${direction} of ${stopLabel} on ${nearestHotspot.point.busRouteId}.`, shareMessage]
+        .filter(Boolean)
+        .join(" ");
+    }
+
+    if (nearestCampus) {
+      const distanceCopy = formatDistance(nearestCampus.distanceKm);
+      const direction = bearingToCardinal(nearestCampus.bearing);
+      return `You are ${distanceCopy} ${direction} of ${nearestCampus.marker.title}.`;
+    }
+
+    return null;
+  }, [userCoordinates, filteredHotspots.length, campusMarkers.length, nearestHotspot, nearestCampus]);
+
+  const accuracyMeters = useMemo(() => {
+    if (!userLocation) return null;
+    const accuracy = Math.round(userLocation.coords.accuracy ?? 0);
+    return Number.isFinite(accuracy) && accuracy > 0 ? accuracy : null;
+  }, [userLocation]);
 
   const markerData = useMemo(
     () => [
@@ -543,14 +669,68 @@ export default function OperationsPage() {
       </div>
       <div className="grid grid-cols-1 gap-4 animate-fade-up lg:grid-cols-5">
         <div className="space-y-4 lg:col-span-3">
-          <MapPanel
-            height={280}
-            center={[-73.95, 40.73]}
-            zoom={10.2}
-            markers={markerData}
-            cluster={useClusters}
-            hoverPopups={!useClusters}
-          />
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-medium">ACE hotspot map</h2>
+                <p className="text-xs text-muted-foreground">
+                  Share your location to see how close you are to key pressure points and campuses.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleShareLocation}
+                  disabled={isLocating}
+                  className="inline-flex items-center gap-2 rounded-full border border-primary/40 bg-primary/15 px-3 py-1.5 text-xs font-medium text-primary transition-all hover:-translate-y-0.5 hover:bg-primary/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {isLocating ? "Locating…" : userLocation ? "Update my location" : "Share my location"}
+                </button>
+                {userLocation && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUserLocation(null);
+                      setLocationError(null);
+                    }}
+                    className="inline-flex items-center gap-2 rounded-full border border-foreground/20 px-3 py-1.5 text-xs font-medium text-foreground/70 transition-all hover:-translate-y-0.5 hover:border-foreground/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            </div>
+            {locationError && (
+              <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive shadow-sm">
+                {locationError}
+              </div>
+            )}
+            {userLocation && locationSummary && (
+              <div className="rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 text-xs text-primary/90 shadow-sm">
+                <span>{locationSummary}</span>
+                {accuracyMeters !== null && (
+                  <span className="ml-1 text-primary/70">(±{accuracyMeters} m accuracy)</span>
+                )}
+              </div>
+            )}
+            <MapPanel
+              height={280}
+              center={[-73.95, 40.73]}
+              zoom={10.2}
+              markers={markerData}
+              cluster={useClusters}
+              hoverPopups={!useClusters}
+              userLocation={
+                userLocation
+                  ? {
+                      longitude: userLocation.coords.longitude,
+                      latitude: userLocation.coords.latitude,
+                      accuracy: userLocation.coords.accuracy,
+                    }
+                  : null
+              }
+            />
+          </div>
           <div className="surface-card rounded-xl border border-foreground/10 bg-card/80 p-4 shadow-soft-lg space-y-3 sm:p-5">
             <h2 className="text-sm font-medium">Top pressure points</h2>
             {loadingData && !filteredHotspots.length ? (
@@ -669,7 +849,7 @@ export default function OperationsPage() {
                     <div className="text-xs text-foreground/60">{formatShareValue(route.studentShare)} of riders</div>
                   </td>
                   <td className="py-2 pr-3">
-                    {formatChange(route.speedChangePct)}
+                    {route.speedChangePct !== null ? formatChange(route.speedChangePct) : "—"}
                     <div className="text-xs text-foreground/60">{route.aceEnforced ? "ACE enforced" : "Needs ACE"}</div>
                   </td>
                   <td className="py-2 pr-3">{integer.format(route.dynamicAverageMonthlyViolations)}</td>

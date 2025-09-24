@@ -5,6 +5,10 @@ export const runtime = "nodejs";
 
 export async function GET(req: Request) {
   try {
+    const hasToken = Boolean(process.env.NEON_DATA_API_TOKEN || process.env.NEON_DATA_API_KEY);
+    if (!hasToken) {
+      return NextResponse.json({ ok: true, skipped: true, reason: "missing NEON_DATA_API_TOKEN" });
+    }
     const auth = req.headers.get("authorization") || undefined;
     // Try a lightweight probe; fall back to a tiny aggregation from an allowed table
     const probe = await dataApiGet<any[]>({

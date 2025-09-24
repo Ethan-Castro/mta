@@ -304,7 +304,7 @@ export default function PolicyPage() {
               <li key={route.routeId} className="rounded-lg border border-foreground/10 p-3">
                 <div className="flex items-center justify-between text-xs text-foreground/60">
                   <span>{route.routeId} | {route.boroughs}</span>
-                  <span>{formatChange(route.violationChangePct)} violations | {formatChange(route.speedChangePct)} speed</span>
+                  <span>{route.violationChangePct !== null ? formatChange(route.violationChangePct) : "—"} violations | {route.speedChangePct !== null ? formatChange(route.speedChangePct) : "—"} speed</span>
                 </div>
                 <div className="mt-1 font-medium text-foreground/90">{route.routeName}</div>
                 <p className="mt-2 leading-relaxed">{route.highlight}</p>
@@ -334,10 +334,10 @@ export default function PolicyPage() {
                     {route.routeId}
                     <div className="text-xs text-foreground/60">{route.routeName}</div>
                   </td>
-                  <td className="py-2 pr-3">{integer.format(route.prePricingViolations)}</td>
-                  <td className="py-2 pr-3">{integer.format(route.postPricingViolations)}</td>
-                  <td className="py-2 pr-3">{formatChange(route.violationChangePct)}</td>
-                  <td className="py-2 pr-3">{formatChange(route.speedChangePct)}</td>
+                  <td className="py-2 pr-3">{route.prePricingViolations !== null ? integer.format(route.prePricingViolations) : "—"}</td>
+                  <td className="py-2 pr-3">{route.postPricingViolations !== null ? integer.format(route.postPricingViolations) : "—"}</td>
+                  <td className="py-2 pr-3">{route.violationChangePct !== null ? formatChange(route.violationChangePct) : "—"}</td>
+                  <td className="py-2 pr-3">{route.speedChangePct !== null ? formatChange(route.speedChangePct) : "—"}</td>
                   <td className="py-2">{route.highlight}</td>
                 </tr>
               ))}

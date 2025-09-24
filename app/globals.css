@@ -156,6 +156,107 @@
   --sidebar-ring: #6e7bf0;
 }
 
+/* Subway Board Theme (portable tokens) */
+.theme-subway {
+  /* General look & feel */
+  --background: #000000; /* solid black */
+  --foreground: #ffffff; /* white text */
+  --card: #0a0a0a; /* slightly lighter than black for rows */
+  --card-foreground: #ffffff;
+  --popover: #0a0a0a;
+  --popover-foreground: #ffffff;
+  --primary: #0072BC; /* subway-blue */
+  --primary-foreground: #ffffff;
+  --secondary: #111111;
+  --secondary-foreground: #e5e5e5;
+  --muted: #0f0f0f; /* muted dark gray surfaces */
+  --muted-foreground: #9ca3af; /* muted gray text */
+  --accent: #0072BC; /* flat accent */
+  --accent-foreground: #ffffff;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --success: #22c55e;
+  --border: transparent; /* eliminate borders; use spacing/alignment */
+  --input: #1a1a1a;
+  --ring: #2563eb;
+  --chart-1: #0072BC;
+  --chart-2: #22c55e;
+  --chart-3: #f59e0b;
+  --chart-4: #ef4444;
+  --chart-5: #a855f7;
+  --radius: 0.5rem;
+
+  /* Typography tokens */
+  --sb-font-sans: var(--font-geist-sans);
+  --sb-label-size: 1.125rem; /* primary labels */
+  --sb-label-weight: 600; /* medium-bold */
+  --sb-subtext-size: 0.8125rem; /* secondary info */
+  --sb-subtext-color: #9ca3af;
+  --sb-number-size: 1.75rem; /* bold numbers */
+  --sb-number-weight: 800;
+  --sb-unit-size: 0.6875rem; /* uppercase labels like MIN */
+  --sb-unit-weight: 700;
+
+  /* Spacing & rhythm */
+  --sb-row-height: 64px; /* uniform row height */
+  --sb-row-gap: 3px; /* 2–4px */
+  --sb-row-x: 14px; /* 12–16px */
+  --sb-badge-size: 36px; /* scales with row height */
+}
+
+.dark.theme-subway {
+  /* dark mode stays identical for subway board (already black) */
+}
+
+/* Subway Arrival Sign - Light Theme */
+.theme-subway-light {
+  --background: #ffffff; /* white canvas */
+  --foreground: #000000; /* black text */
+  --card: #ffffff;
+  --card-foreground: #000000;
+  --popover: #ffffff;
+  --popover-foreground: #000000;
+  --primary: #0072BC; /* subway-blue */
+  --primary-foreground: #ffffff;
+  --secondary: #f5f5f5;
+  --secondary-foreground: #111111;
+  --muted: #f5f5f5;
+  --muted-foreground: #6b7280; /* Tailwind zinc-500-ish */
+  --accent: #0072BC;
+  --accent-foreground: #ffffff;
+  --destructive: #b91c1c;
+  --destructive-foreground: #ffffff;
+  --success: #16a34a;
+  --border: #e5e7eb; /* light gray */
+  --input: #e5e7eb;
+  --ring: #2563eb;
+  --divider: #e5e7eb; /* thin row separators */
+  --footer-bg: #1a1a1a; /* dark footer strip */
+  --footer-fg: #ffffff;
+  --footer-accent: #ffcd00; /* sun icon */
+
+  /* Line colors */
+  --line-blue: #0072BC; /* C */
+  --line-green: #6CBE45; /* G */
+
+  /* Typography tokens (reuse subway board sizes) */
+  --sb-font-sans: var(--font-geist-sans);
+  --sb-label-size: 1.125rem;
+  --sb-label-weight: 600;
+  --sb-subtext-size: 0.8125rem;
+  --sb-subtext-color: #6b7280;
+  --sb-number-size: 1.75rem;
+  --sb-number-weight: 800;
+  --sb-unit-size: 0.6875rem;
+  --sb-unit-weight: 700;
+
+  /* Spacing & rhythm */
+  --sb-row-height: 60px;
+  --sb-row-gap: 3px;
+  --sb-row-x: 16px;
+  --sb-badge-size: 36px;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -258,6 +359,98 @@
 }
 
 @layer components {
+  /* Subway board primitives */
+  .sb-section {
+    color: var(--foreground);
+    font-family: var(--sb-font-sans);
+    font-size: calc(var(--sb-label-size) - 0.125rem);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: none;
+    padding: 8px var(--sb-row-x);
+  }
+
+  .sb-row {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    height: var(--sb-row-height);
+    padding-inline: var(--sb-row-x);
+    gap: 12px;
+    background: var(--card);
+  }
+
+  .sb-row + .sb-row { margin-top: var(--sb-row-gap); }
+
+  /* Light theme: thin divider between rows */
+  .theme-subway-light .sb-row { border-bottom: 1px solid var(--divider); }
+  .theme-subway-light .sb-row:last-child { border-bottom: none; }
+
+  .sb-badge {
+    width: var(--sb-badge-size);
+    height: var(--sb-badge-size);
+    border-radius: 9999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--primary);
+    color: var(--primary-foreground);
+    font-weight: 800;
+    text-transform: uppercase;
+    line-height: 1;
+  }
+
+  /* Badge line colors (light theme arrivals) */
+  .sb-badge--blue { background: var(--line-blue); color: #fff; }
+  .sb-badge--green { background: var(--line-green); color: #fff; }
+
+  .sb-text { line-height: 1.1; }
+  .sb-title {
+    color: var(--foreground);
+    font-size: var(--sb-label-size);
+    font-weight: var(--sb-label-weight);
+  }
+  .sb-subtitle {
+    color: var(--sb-subtext-color);
+    font-size: var(--sb-subtext-size);
+  }
+
+  .sb-left { display: inline-flex; align-items: center; gap: 10px; }
+  .sb-train-number { color: var(--foreground); font-weight: 600; font-size: calc(var(--sb-label-size) - 0.0625rem); }
+
+  .sb-value {
+    display: flex;
+    flex-direction: column;
+    align-items: end;
+    justify-content: center;
+    line-height: 1;
+  }
+  .sb-number {
+    color: var(--foreground);
+    font-weight: var(--sb-number-weight);
+    font-size: var(--sb-number-size);
+  }
+  .sb-unit {
+    color: var(--sb-subtext-color);
+    font-size: var(--sb-unit-size);
+    font-weight: var(--sb-unit-weight);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-top: 2px;
+  }
+
+  .sb-footer {
+    background: var(--footer-bg);
+    color: var(--footer-fg);
+    font-family: var(--sb-font-sans);
+    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px var(--sb-row-x);
+  }
+
   .surface-card {
     position: relative;
     overflow: hidden;

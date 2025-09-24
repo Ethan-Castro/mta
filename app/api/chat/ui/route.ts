@@ -4,6 +4,7 @@ import { addMessage, upsertConversation } from "@/lib/chat";
 import { getViolationSummary } from "@/lib/data/violations";
 import { sql } from "@/lib/db";
 import { SYSTEM_PROMPTS } from "@/lib/ai/system-prompts";
+import { buildAceTools } from "@/lib/ai/ace-tools";
 import { getExa } from "@/lib/ai/exa";
 import {
   ALLOWED_TABLES,
@@ -15,11 +16,14 @@ import {
 } from "@/lib/ai/sql-tools";
 import { dataApiGet } from "@/lib/data-api";
 import { getNeonMCPTools } from "@/lib/mcp/neon";
+import { stackServerApp } from "@/stack/server";
 
 export const maxDuration = 30;
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
+  const currentUser = await stackServerApp.getUser({ tokenStore: req, or: "return-null" });
+
   const { messages, model, conversationId: conversationIdInput, title }: { messages: UIMessage[]; model?: string; conversationId?: string; title?: string } =
     await req.json();
 
@@ -59,6 +63,15 @@ export async function POST(req: Request) {
   // Require AI Gateway key to be provided by environment (no hardcoded fallback)
 
   // Build local tools; merge MCP tools if available
+  let authHeader = req.headers.get("authorization") || undefined;
+  if (!authHeader && currentUser) {
+    try {
+      const authJson = await currentUser.getAuthJson();
+      if (authJson?.accessToken) {
+        authHeader = `Bearer ${authJson.accessToken}`;
+      }
+    } catch {}
+  }
   const localTools = {
     webSearch: tool({
       description: "Search the web for up-to-date information",
@@ -102,7 +115,11 @@ export async function POST(req: Request) {
         const qp: Record<string, any> = { select, ...(params || {}) };
         if (typeof limit === "number") qp.limit = String(limit);
         if (order) qp.order = order;
-        const rows = await dataApiGet({ table, params: qp });
+        const rows = await dataApiGet({
+          table,
+          params: qp,
+          headers: authHeader ? { Authorization: authHeader } : {},
+        });
         return { rows };
       },
     }),
@@ -155,7 +172,14 @@ export async function POST(req: Request) {
       }),
       execute: async ({ table, year, start, end, dateColumn }) => {
         try {
-          return await queryTableRowCount({ table, year, start, end, dateColumn });
+          return await queryTableRowCount({
+            table,
+            year,
+            start,
+            end,
+            dateColumn,
+            headers: authHeader ? { Authorization: authHeader } : undefined,
+          });
         } catch (error) {
           if (error instanceof SqlToolError) {
             return { error: error.message };
@@ -194,7 +218,13 @@ export async function POST(req: Request) {
       }),
       execute: async ({ routeId, year, start, end }) => {
         try {
-          return await queryViolationStats({ routeId, year, start, end });
+          return await queryViolationStats({
+            routeId,
+            year,
+            start,
+            end,
+            headers: authHeader ? { Authorization: authHeader } : undefined,
+          });
         } catch (error) {
           if (error instanceof SqlToolError) {
             return { error: error.message };
@@ -250,6 +280,192 @@ export async function POST(req: Request) {
         };
       },
     }),
+    visualize: tool({
+      description:
+        "Render a simple chart UI from provided data. Supports 'line', 'multi-line', 'grouped-bar', 'bar', and 'pie'. Typically call an MCP SQL tool first, then pass rows here.",
+      inputSchema: z.object({
+        spec: z.object({
+          type: z.enum(["line", "multi-line", "grouped-bar", "bar", "pie"]),
+          title: z.string().optional(),
+          yLabel: z.string().optional(),
+          series: z.array(z.string()).optional(),
+          xKey: z.string().optional(),
+          yKey: z.string().optional(),
+          aceRoute: z.string().optional(),
+          markerLabel: z.string().optional(),
+          marker: z.object({ x: z.string(), label: z.string().optional() }).optional(),
+        }),
+        data: z.union([
+          z.array(z.record(z.any())),
+          z.object({ rows: z.array(z.record(z.any())) }),
+        ]),
+      }),
+      execute: async ({ spec, data }) => {
+        const rows = Array.isArray((data as any)?.rows) ? (data as any).rows : (data as any);
+        if (spec.type === "multi-line") {
+          const xKey: string = (spec as any).xKey || "week_start";
+          const yKey: string = (spec as any).yKey || "avg_mph";
+          const routeKey = "route_id";
+          const aceKey = "ace_go_live";
+          const inputRows: any[] = Array.isArray(rows) ? rows : [];
+          const routeSet = new Set<string>(
+            Array.isArray((spec as any).series) && (spec as any).series.length
+              ? (spec as any).series
+              : inputRows
+                  .map((r) => String(r?.[routeKey] ?? ""))
+                  .filter((v) => Boolean(v))
+          );
+          const series = Array.from(routeSet);
+          const byX = new Map<string, Record<string, number | string>>();
+          let aceDate: string | null = null;
+          const aceRoute = (spec as any).aceRoute || (series.length ? series[0] : null);
+          for (const r of inputRows) {
+            const xRaw = r?.[xKey];
+            if (!xRaw) continue;
+            const label = typeof xRaw === "string" ? xRaw.slice(0, 10) : new Date(xRaw).toISOString().slice(0, 10);
+            const route = String(r?.[routeKey] ?? "");
+            if (!route) continue;
+            const valueNum = Number(r?.[yKey] ?? 0);
+            const point = byX.get(label) ?? { label };
+            (point as any)[route] = Number.isFinite(valueNum) ? valueNum : 0;
+            byX.set(label, point);
+            if (!aceDate && aceRoute && route === aceRoute) {
+              const a = r?.[aceKey];
+              if (a) {
+                aceDate = typeof a === "string" ? a.slice(0, 10) : new Date(a).toISOString().slice(0, 10);
+              }
+            }
+          }
+          const points = Array.from(byX.entries())
+            .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+            .map(([, v]) => v as { label: string; [k: string]: number | string });
+          const marker = (spec as any).marker || (aceDate
+            ? { x: aceDate, label: (spec as any).markerLabel || (aceRoute ? `ACE go-live: ${aceRoute} (${aceDate})` : `ACE go-live (${aceDate})`) }
+            : undefined);
+          return { chart: { type: "multi-line", series, yLabel: (spec as any).yLabel || "Average speed (mph)", marker }, data: points };
+        }
+        if (spec.type === "line") {
+          const xKey: string | undefined = (spec as any).xKey;
+          const yKey: string | undefined = (spec as any).yKey;
+          const points = Array.isArray(rows)
+            ? rows.map((d: any) => {
+                const rawLabel = xKey ? d?.[xKey] : (d?.label ?? d?.name ?? d?.date_trunc_ym);
+                const label = typeof rawLabel === "string" ? rawLabel : rawLabel ? new Date(rawLabel).toISOString().slice(0, 10) : "";
+                const valueSource = yKey ? d?.[yKey] : (d?.value ?? d?.violations ?? d?.avg_mph ?? d?.count);
+                const value = Number(valueSource ?? 0);
+                return { label: String(label), value: Number.isFinite(value) ? value : 0 };
+              })
+            : [];
+          return { chart: spec, data: points };
+        }
+        if (spec.type === "grouped-bar") {
+          const out = Array.isArray(rows)
+            ? rows.map((d: any) => ({
+                name: String((spec as any).xKey ? d?.[(spec as any).xKey] : (d.name ?? d.label ?? d.date_trunc_ym) ?? ""),
+                violations: Number(d.violations ?? d.value ?? 0),
+                exempt: Number(d.exempt ?? d.exempt_count ?? 0),
+              }))
+            : [];
+          return { chart: spec, data: out };
+        }
+        if (spec.type === "bar") {
+          const xKey: string | undefined = (spec as any).xKey;
+          const yKey: string | undefined = (spec as any).yKey;
+          const out = Array.isArray(rows)
+            ? rows.map((d: any) => ({
+                label: String((xKey ? d?.[xKey] : (d.label ?? d.name)) ?? ""),
+                value: Number((yKey ? d?.[yKey] : (d.value ?? d.count ?? d.avg_mph)) ?? 0),
+              }))
+            : [];
+          return { chart: spec, data: out };
+        }
+        if (spec.type === "pie") {
+          const xKey: string | undefined = (spec as any).xKey;
+          const yKey: string | undefined = (spec as any).yKey;
+          const out = Array.isArray(rows)
+            ? rows.map((d: any) => ({
+                label: String((xKey ? d?.[xKey] : (d.label ?? d.name)) ?? ""),
+                value: Number((yKey ? d?.[yKey] : (d.value ?? d.count ?? d.avg_mph)) ?? 0),
+              }))
+            : [];
+          return { chart: spec, data: out };
+        }
+        return { error: "Unsupported chart type" };
+      },
+    }),
+    createMap: tool({
+      description:
+        "Create an interactive Mapbox map from tabular data. Provide latitude/longitude keys and optional title/description/color/href keys.",
+      inputSchema: z.object({
+        spec: z.object({
+          type: z.literal("map"),
+          title: z.string().optional(),
+          center: z.array(z.number()).length(2).optional().describe("[lng, lat]"),
+          zoom: z.number().min(1).max(20).optional(),
+          cluster: z.boolean().optional(),
+        }),
+        data: z.union([
+          z.array(z.record(z.any())),
+          z.object({ rows: z.array(z.record(z.any())) }),
+        ]),
+        config: z.object({
+          latitudeKey: z.string(),
+          longitudeKey: z.string(),
+          titleKey: z.string().optional(),
+          descriptionKey: z.string().optional(),
+          colorKey: z.string().optional(),
+          hrefKey: z.string().optional(),
+        }),
+      }),
+      execute: async ({ spec, data, config }) => {
+        const rows: any[] = Array.isArray((data as any)?.rows) ? (data as any).rows : (Array.isArray(data) ? data : []);
+        if (!Array.isArray(rows) || rows.length === 0) {
+          return { error: "No data provided for map" };
+        }
+        function colorFromValue(value: unknown): string {
+          if (typeof value === "number" && Number.isFinite(value)) {
+            if (value < 10) return "#10b981";
+            if (value < 50) return "#f59e0b";
+            return "#ef4444";
+          }
+          if (value == null) return "#2563eb";
+          const s = String(value);
+          let hash = 0;
+          for (let i = 0; i < s.length; i++) hash = (hash << 5) - hash + s.charCodeAt(i);
+          const palette = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4"];
+          return palette[Math.abs(hash) % palette.length];
+        }
+        const markers = rows
+          .map((row: any, index: number) => {
+            const lat = Number(row?.[config.latitudeKey]);
+            const lng = Number(row?.[config.longitudeKey]);
+            if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+            const title = config.titleKey ? String(row?.[config.titleKey] ?? "") : `Point ${index + 1}`;
+            const description = config.descriptionKey ? String(row?.[config.descriptionKey] ?? "") : "";
+            const href = config.hrefKey ? String(row?.[config.hrefKey] ?? "") : undefined;
+            const color = config.colorKey ? colorFromValue(row?.[config.colorKey]) : "#2563eb";
+            return { id: `m-${index}`, latitude: lat, longitude: lng, title, description, href, color };
+          })
+          .filter(Boolean) as Array<{ id: string; latitude: number; longitude: number; title?: string; description?: string; href?: string; color?: string; }>;
+        if (!markers.length) return { error: "No valid coordinates found in data" };
+        let center: [number, number] | undefined = (spec as any).center as any;
+        if (!center) {
+          const avgLat = markers.reduce((s, m) => s + m.latitude, 0) / markers.length;
+          const avgLng = markers.reduce((s, m) => s + m.longitude, 0) / markers.length;
+          center = [avgLng, avgLat];
+        }
+        return {
+          chart: {
+            type: "map",
+            title: (spec as any).title,
+            center,
+            zoom: (spec as any).zoom ?? 10,
+            cluster: (spec as any).cluster ?? true,
+          },
+          data: markers,
+        };
+      },
+    }),
   } as const;
 
   const aliasTools = {
@@ -266,25 +482,32 @@ export async function POST(req: Request) {
         return { tables: (rows as any[]).map((r: any) => r.table_name) };
       },
     }),
-    runSql: tool({
-      description: "Execute a read-only SQL statement (SELECT/CTE only).",
-      inputSchema: z.object({ sql: z.string().describe("SQL to run (single SELECT/CTE)") }),
-      execute: async ({ sql: statement }) => {
-        try {
-          ensureSelectAllowed(statement);
-          const rows = await (sql as any).unsafe(statement);
-          return { rows };
-        } catch (error) {
-          if (error instanceof SqlToolError) {
-            return { error: error.message };
-          }
-          throw error;
-        }
-      },
-    }),
   } as const;
 
-  const tools = { ...localTools, ...aliasTools, ...(mcp?.tools || {}) } as Record<string, any>;
+  const aceTools = await buildAceTools();
+  const tools = { ...localTools, ...aliasTools, ...aceTools, ...(mcp?.tools || {}) } as Record<string, any>;
+  if (mcp?.tools?.run_sql) tools.runSql = mcp.tools.run_sql;
+  if (mcp?.tools?.run_sql_transaction) tools.runSqlTransaction = mcp.tools.run_sql_transaction;
+
+  const alias = (from: string, to: string) => {
+    if (!(from in tools) && to in tools) {
+      tools[from] = tools[to];
+      try {
+        if ((tools as any)[to]?.__origin && !(tools as any)[from]?.__origin) {
+          (tools as any)[from].__origin = (tools as any)[to].__origin;
+        }
+      } catch {}
+    }
+  };
+
+  alias("list_tables", "listTables");
+  alias("describe_table", "describeTable");
+  alias("forecast_route", "forecastRoute");
+  alias("risk_top", "riskTop");
+  alias("risk_score", "riskScore");
+  alias("hotspots_map", "hotspotsMap");
+  alias("survival_km", "survivalKm");
+  alias("survival_cox", "survivalCox");
 
   const result = streamText({
     model: headerModel ?? attachmentModel ?? model ?? "openai/gpt-5-mini",

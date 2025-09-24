@@ -3,61 +3,12 @@ import { z } from "zod";
 import { sql } from "@/lib/db";
 import { getNeonMCPTools } from "@/lib/mcp/neon";
 
-function buildLocalSqlTools(options: { allowDestructive: boolean }) {
-  const { allowDestructive } = options;
-
-  return {
-    run_sql: tool({
-      description: "Execute SQL against the configured Neon database (DATABASE_URL).",
-      inputSchema: z.object({
-        query: z.string().describe("SQL to run"),
-      }),
-      execute: async ({ query }) => {
-        if (!allowDestructive && /\b(drop|truncate)\b/i.test(query)) {
-          throw new Error("Destructive statements are blocked. Enable allowDestructive to proceed.");
-        }
-        const rows = await (sql as any).unsafe(query);
-        return { rows };
-      },
-    }),
-
-    run_sql_transaction: tool({
-      description: "Execute multiple SQL statements in a single transaction.",
-      inputSchema: z.object({
-        queries: z.array(z.string()).min(1),
-      }),
-      execute: async ({ queries }) => {
-        if (!allowDestructive) {
-          for (const q of queries) {
-            if (/\b(drop|truncate)\b/i.test(q)) {
-              throw new Error("Destructive statements are blocked. Enable allowDestructive to proceed.");
-            }
-          }
-        }
-        await (sql as any).unsafe("BEGIN");
-        try {
-          const results: any[] = [];
-          for (const q of queries) {
-            // eslint-disable-next-line no-await-in-loop
-            results.push(await (sql as any).unsafe(q));
-          }
-          await (sql as any).unsafe("COMMIT");
-          return { results };
-        } catch (err) {
-          try { await (sql as any).unsafe("ROLLBACK"); } catch {}
-          throw err;
-        }
-      },
-    }),
-  } as const;
-}
-
 export async function getNeonAgent(options?: { maxSteps?: number; allowDestructive?: boolean; includeMcp?: boolean }) {
   const maxSteps = options?.maxSteps ?? 8;
-  const allowDestructive = options?.allowDestructive ?? false;
+  const _allowDestructive = options?.allowDestructive ?? false;
   const includeMcp = options?.includeMcp !== false;
 
-  const localTools = buildLocalSqlTools({ allowDestructive });
+  const localTools: Record<string, any> = {};
 
   let mcpCloseAll: null | (() => Promise<void>) = null;
   let mcpTools: Record<string, any> = {};
@@ -123,50 +74,13 @@ export async function getNeonAgent(options?: { maxSteps?: number; allowDestructi
     });
   }
 
-  // runSql alias accepting { sql } and returning { rows }
-  const runSql = tool({
-    description: "Execute arbitrary SQL (alias; prefers SELECT).",
-    inputSchema: z.object({
-      sql: z.string().describe("SQL to run"),
-    }),
-    execute: async ({ sql: query }) => {
-      if (!allowDestructive && /\b(drop|truncate)\b/i.test(query)) {
-        throw new Error("Destructive statements are blocked. Enable allowDestructive to proceed.");
-      }
-      const rows = await (sql as any).unsafe(query);
-      return { rows };
-    },
-  });
-
-  // runSqlTransaction alias accepting { sql: string[] }
-  const runSqlTransaction = tool({
-    description: "Execute multiple SQL statements in a transaction (alias).",
-    inputSchema: z.object({
-      sql: z.array(z.string()).min(1),
-    }),
-    execute: async ({ sql: queries }) => {
-      if (!allowDestructive) {
-        for (const q of queries) {
-          if (/\b(drop|truncate)\b/i.test(q)) {
-            throw new Error("Destructive statements are blocked. Enable allowDestructive to proceed.");
-          }
-        }
-      }
-      await (sql as any).unsafe("BEGIN");
-      try {
-        const results: any[] = [];
-        for (const q of queries) {
-          // eslint-disable-next-line no-await-in-loop
-          results.push(await (sql as any).unsafe(q));
-        }
-        await (sql as any).unsafe("COMMIT");
-        return { results };
-      } catch (err) {
-        try { await (sql as any).unsafe("ROLLBACK"); } catch {}
-        throw err;
-      }
-    },
-  });
+  // Alias to MCP SQL tools when available
+  if (mcpTools.run_sql) {
+    aliasTools.runSql = mcpTools.run_sql;
+  }
+  if (mcpTools.run_sql_transaction) {
+    aliasTools.runSqlTransaction = mcpTools.run_sql_transaction;
+  }
 
   const agent = new Agent({
     model: "openai/gpt-5-mini",
@@ -179,8 +93,6 @@ export async function getNeonAgent(options?: { maxSteps?: number; allowDestructi
       ...localTools,
       ...mcpTools,
       ...aliasTools,
-      runSql,
-      runSqlTransaction,
     },
   });
 

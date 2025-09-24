@@ -1,5 +1,6 @@
-import { streamText, stepCountIs } from "ai";
+import { streamText, stepCountIs, experimental_transcribe as transcribe } from "ai";
 import { SYSTEM_PROMPTS } from "@/lib/ai/system-prompts";
+import { buildAceTools } from "@/lib/ai/ace-tools";
 import { z } from "zod";
 import { getViolationSummary } from "@/lib/data/violations";
 import { sql, isDbConfigured } from "@/lib/db";
@@ -11,8 +12,11 @@ import {
   type ToolLogEntry,
 } from "@/lib/ai/assistant-utils";
 import { getExa } from "@/lib/ai/exa";
+import { elevenlabs } from "@ai-sdk/elevenlabs";
 // no next/headers in route handlers; use req.headers
 import { getNeonMCPTools } from "@/lib/mcp/neon";
+import { stackServerApp } from "@/stack/server";
+import { emailTools } from "@/lib/ai/email-tools";
 
 export const runtime = "nodejs";
 const TOOL_META_SENTINEL = "[[AI_TOOL_META]]";
@@ -82,6 +86,7 @@ function toSerializable(value: unknown): unknown {
 }
 
 export async function POST(req: Request) {
+  const currentUser = await stackServerApp.getUser({ tokenStore: req, or: "return-null" });
   try {
     const body = await req.json().catch(() => ({}));
     const { routeId, start, end, question, model, conversationId: conversationIdInput, title } = body || {};
@@ -156,10 +161,11 @@ export async function POST(req: Request) {
     const toolLogs: ToolLogEntry[] = [];
 
     const localTools: Record<string, any> = {
+      ...emailTools,
       webSearch: {
         description: "Search the web for up-to-date information",
         inputSchema: z.object({
-          query: z.string().min(1).max(200).describe("The search query"),
+          query: z.string().min(1).max(50).describe("The search query"),
         }),
         execute: async ({ query }: { query: string }) => {
           if (!process.env.EXA_API_KEY) {
@@ -204,24 +210,291 @@ export async function POST(req: Request) {
           };
         },
       },
-    };
+      visualize: {
+        description:
+          "Render a simple chart UI from provided data. Supports 'line', 'grouped-bar', 'bar', and 'pie'. Typically call an MCP SQL tool first, then pass rows here.",
+        inputSchema: z.object({
+          spec: z.object({
+            type: z.enum(["line", "grouped-bar", "bar", "pie", "multi-line"]),
+            title: z.string().optional(),
+            yLabel: z.string().optional(),
+            // multi-line specific (optional):
+            series: z.array(z.string()).optional(),
+            xKey: z.string().optional(),
+            yKey: z.string().optional(),
+            aceRoute: z.string().optional(),
+            markerLabel: z.string().optional(),
+            marker: z
+              .object({ x: z.string(), label: z.string().optional() })
+              .optional(),
+          }),
+          data: z.union([
+            z.array(z.record(z.any())),
+            z.object({ rows: z.array(z.record(z.any())) }),
+          ]),
+        }),
+        execute: async ({ spec, data }: { spec: any; data: any }) => {
+          const rows = Array.isArray((data as any)?.rows) ? (data as any).rows : (data as any);
+          if (spec.type === "multi-line") {
+            const xKey: string = spec.xKey || "week_start";
+            const yKey: string = spec.yKey || "avg_mph";
+            const routeKey = "route_id";
+            const aceKey = "ace_go_live";
+
+            const inputRows: any[] = Array.isArray(rows) ? rows : [];
+            // Collect routes
+            const routeSet = new Set<string>(
+              Array.isArray(spec.series) && spec.series.length
+                ? spec.series
+                : inputRows
+                    .map((r) => String(r?.[routeKey] ?? ""))
+                    .filter((v) => Boolean(v))
+            );
+            const series = Array.from(routeSet);
+
+            // Build (week_start -> point)
+            const byX = new Map<string, Record<string, number | string>>();
+            let aceDate: string | null = null;
+            const aceRoute = spec.aceRoute || (series.length ? series[0] : null);
+
+            for (const r of inputRows) {
+              const xRaw = r?.[xKey];
+              if (!xRaw) continue;
+              // Normalize label to YYYY-MM-DD
+              const label = typeof xRaw === "string" ? xRaw.slice(0, 10) : new Date(xRaw).toISOString().slice(0, 10);
+              const route = String(r?.[routeKey] ?? "");
+              if (!route) continue;
+              const valueNum = Number(r?.[yKey] ?? 0);
+              const point = byX.get(label) ?? { label };
+              point[route] = Number.isFinite(valueNum) ? valueNum : 0;
+              byX.set(label, point);
+
+              if (!aceDate && aceRoute && route === aceRoute) {
+                const a = r?.[aceKey];
+                if (a) {
+                  aceDate = typeof a === "string" ? a.slice(0, 10) : new Date(a).toISOString().slice(0, 10);
+                }
+              }
+            }
+
+            const points = Array.from(byX.entries())
+              .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+              .map(([, v]) => v as { label: string; [k: string]: number | string });
+
+            const marker = spec.marker || (aceDate
+              ? { x: aceDate, label: spec.markerLabel || (aceRoute ? `ACE go-live: ${aceRoute} (${aceDate})` : `ACE go-live (${aceDate})`) }
+              : undefined);
+
+            return {
+              chart: { type: "multi-line", series, yLabel: spec.yLabel || "Average speed (mph)", marker },
+              data: points,
+            };
+          }
+          if (spec.type === "line") {
+            const xKey: string | undefined = spec.xKey;
+            const yKey: string | undefined = spec.yKey;
+            const points = Array.isArray(rows)
+              ? rows.map((d: any) => {
+                  const rawLabel = xKey ? d?.[xKey] : (d?.label ?? d?.name ?? d?.date_trunc_ym);
+                  const label = typeof rawLabel === "string" ? rawLabel : rawLabel ? new Date(rawLabel).toISOString().slice(0, 10) : "";
+                  const valueSource = yKey ? d?.[yKey] : (d?.value ?? d?.violations ?? d?.avg_mph ?? d?.count);
+                  const value = Number(valueSource ?? 0);
+                  return { label: String(label), value: Number.isFinite(value) ? value : 0 };
+                })
+              : [];
+            return { chart: spec, data: points };
+          }
+          if (spec.type === "grouped-bar") {
+            const out = Array.isArray(rows)
+              ? rows.map((d: any) => ({
+                  name: String((spec.xKey ? d?.[spec.xKey] : (d.name ?? d.label ?? d.date_trunc_ym)) ?? ""),
+                  violations: Number(d.violations ?? d.value ?? 0),
+                  exempt: Number(d.exempt ?? d.exempt_count ?? 0),
+                }))
+              : [];
+            return { chart: spec, data: out };
+          }
+          if (spec.type === "bar") {
+            const xKey: string | undefined = spec.xKey;
+            const yKey: string | undefined = spec.yKey;
+            const out = Array.isArray(rows)
+              ? rows.map((d: any) => ({
+                  label: String((xKey ? d?.[xKey] : (d.label ?? d.name)) ?? ""),
+                  value: Number((yKey ? d?.[yKey] : (d.value ?? d.count ?? d.avg_mph)) ?? 0),
+                }))
+              : [];
+            return { chart: spec, data: out };
+          }
+          if (spec.type === "pie") {
+            const xKey: string | undefined = spec.xKey;
+            const yKey: string | undefined = spec.yKey;
+            const out = Array.isArray(rows)
+              ? rows.map((d: any) => ({
+                  label: String((xKey ? d?.[xKey] : (d.label ?? d.name)) ?? ""),
+                  value: Number((yKey ? d?.[yKey] : (d.value ?? d.count ?? d.avg_mph)) ?? 0),
+                }))
+              : [];
+            return { chart: spec, data: out };
+          }
+          return { error: "Unsupported chart type" };
+        },
+    },
+      createMap: {
+        description:
+          "Create an interactive Mapbox map from tabular data. Provide latitude/longitude keys and optional title/description/color/href keys.",
+        inputSchema: z.object({
+          spec: z.object({
+            type: z.literal("map"),
+            title: z.string().optional(),
+            center: z.array(z.number()).length(2).optional().describe("[lng, lat]"),
+            zoom: z.number().min(1).max(20).optional(),
+            cluster: z.boolean().optional(),
+          }),
+          data: z.union([
+            z.array(z.record(z.any())),
+            z.object({ rows: z.array(z.record(z.any())) }),
+          ]),
+          config: z.object({
+            latitudeKey: z.string(),
+            longitudeKey: z.string(),
+            titleKey: z.string().optional(),
+            descriptionKey: z.string().optional(),
+            colorKey: z.string().optional(),
+            hrefKey: z.string().optional(),
+          }),
+        }),
+        execute: async ({ spec, data, config }: { spec: any; data: any; config: any }) => {
+          const rows: any[] = Array.isArray((data as any)?.rows) ? (data as any).rows : (Array.isArray(data) ? data : []);
+
+          if (!Array.isArray(rows) || rows.length === 0) {
+            return { error: "No data provided for map" };
+          }
+
+          function colorFromValue(value: unknown): string {
+            if (typeof value === "number" && Number.isFinite(value)) {
+              if (value < 10) return "#10b981"; // green
+              if (value < 50) return "#f59e0b"; // amber
+              return "#ef4444"; // red
+            }
+            if (value == null) return "#2563eb"; // default blue
+            const s = String(value);
+            let hash = 0;
+            for (let i = 0; i < s.length; i++) hash = (hash << 5) - hash + s.charCodeAt(i);
+            const palette = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4"];
+            return palette[Math.abs(hash) % palette.length];
+          }
+
+          const markers = rows
+            .map((row: any, index: number) => {
+              const lat = Number(row?.[config.latitudeKey]);
+              const lng = Number(row?.[config.longitudeKey]);
+              if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+              const title = config.titleKey ? String(row?.[config.titleKey] ?? "") : `Point ${index + 1}`;
+              const description = config.descriptionKey ? String(row?.[config.descriptionKey] ?? "") : "";
+              const href = config.hrefKey ? String(row?.[config.hrefKey] ?? "") : undefined;
+              const color = config.colorKey ? colorFromValue(row?.[config.colorKey]) : "#2563eb";
+              return { id: `m-${index}`, latitude: lat, longitude: lng, title, description, href, color };
+            })
+            .filter(Boolean) as Array<{
+              id: string; latitude: number; longitude: number; title?: string; description?: string; href?: string; color?: string;
+            }>;
+
+          if (!markers.length) {
+            return { error: "No valid coordinates found in data" };
+          }
+
+          let center: [number, number] | undefined = spec.center as any;
+          if (!center) {
+            const avgLat = markers.reduce((s, m) => s + m.latitude, 0) / markers.length;
+            const avgLng = markers.reduce((s, m) => s + m.longitude, 0) / markers.length;
+            center = [avgLng, avgLat];
+          }
+
+          return {
+            chart: {
+              type: "map",
+              title: spec.title,
+              center,
+              zoom: spec.zoom ?? 10,
+              cluster: spec.cluster ?? true,
+            },
+            data: markers,
+          };
+        },
+      },
+      transcribeAudio: {
+        description: "Transcribe audio files to text using ElevenLabs speech-to-text",
+        inputSchema: z.object({
+          audio: z.string().describe("Base64 encoded audio data or audio file URL"),
+          languageCode: z.string().optional().describe("ISO-639-1 language code (e.g., 'en')"),
+          tagAudioEvents: z.boolean().optional().default(true).describe("Whether to tag audio events like (laughter)"),
+          numSpeakers: z.number().int().optional().describe("Maximum number of speakers (up to 32)"),
+          timestampsGranularity: z.enum(["none", "word", "character"]).optional().default("word").describe("Granularity of timestamps"),
+          diarize: z.boolean().optional().default(true).describe("Whether to identify speakers"),
+        }),
+        execute: async ({ audio, languageCode, tagAudioEvents, numSpeakers, timestampsGranularity, diarize }: { audio: string; languageCode?: string; tagAudioEvents?: boolean; numSpeakers?: number; timestampsGranularity?: "none" | "word" | "character"; diarize?: boolean }) => {
+          if (!process.env.ELEVENLABS_API_KEY) {
+            return { error: "ELEVENLABS_API_KEY is not configured." };
+          }
+          try {
+            // Convert base64 to Uint8Array if needed
+            let audioData: Uint8Array;
+            if (audio.startsWith('data:')) {
+              const base64Data = audio.split(',')[1];
+              const binaryString = atob(base64Data);
+              audioData = new Uint8Array(binaryString.length);
+              for (let i = 0; i < binaryString.length; i++) {
+                audioData[i] = binaryString.charCodeAt(i);
+              }
+            } else if (audio.startsWith('http')) {
+              // Handle URL - fetch the audio file
+              const response = await fetch(audio);
+              if (!response.ok) {
+                return { error: "Failed to fetch audio from URL" };
+              }
+              const arrayBuffer = await response.arrayBuffer();
+              audioData = new Uint8Array(arrayBuffer);
+            } else {
+              // Assume it's base64 without data URL prefix
+              const binaryString = atob(audio);
+              audioData = new Uint8Array(binaryString.length);
+              for (let i = 0; i < binaryString.length; i++) {
+                audioData[i] = binaryString.charCodeAt(i);
+              }
+            }
+
+            const result = await transcribe({
+              model: elevenlabs.transcription('scribe_v1'),
+              audio: audioData,
+            providerOptions: { 
+              elevenlabs: { 
+                ...(languageCode && { languageCode }),
+                ...(tagAudioEvents !== undefined && { tagAudioEvents }),
+                ...(numSpeakers && { numSpeakers }),
+                ...(timestampsGranularity && { timestampsGranularity }),
+                ...(diarize !== undefined && { diarize })
+              } 
+            },
+            });
+
+            return {
+              text: result.text,
+              segments: result.segments || [],
+              language: result.language || languageCode || 'auto-detected'
+            };
+          } catch (error: any) {
+            return { error: error?.message || "Transcription failed" };
+          }
+        },
+      },
+  };
+
+    // ===== Model tools (external Model API) =====
+    const aceTools = await buildAceTools();
+    Object.assign(localTools, aceTools);
 
     if (isDbConfigured) {
       Object.assign(localTools, {
-        runSql: {
-          description: "Execute a SQL query against Neon Postgres (server-side only).",
-          inputSchema: z.object({
-            sql: z.string().describe("Full SQL string to execute"),
-          }),
-          execute: async ({ sql: raw }: { sql: string }) => {
-            const check = ensureReadOnlySql(raw);
-            if ("reason" in check) {
-              return { error: check.reason };
-            }
-            const rows = await sql.unsafe(check.statement);
-            return { rows };
-          },
-        },
         describeTable: {
           description: "Describe the schema of an allowed table (public schema only).",
           inputSchema: z.object({ table: z.string().describe("Table name (validated against allow-list)") }),
@@ -247,7 +520,49 @@ export async function POST(req: Request) {
 
     // Attach Neon MCP tools if available (best-effort)
     const mcp = await getNeonMCPTools().catch(() => null);
-    const tools = { ...(localTools as Record<string, any>), ...(mcp?.tools || {}) };
+    const tools: Record<string, any> = { ...(localTools as Record<string, any>), ...(mcp?.tools || {}) };
+
+    // Provide snake_case aliases for common local tools to handle provider/model naming variations
+    const alias = (from: string, to: string) => {
+      if (!(from in tools) && to in tools) {
+        tools[from] = tools[to];
+        // mark origin for introspection consistency
+        if (tools[to]?.__origin && !tools[from].__origin) tools[from].__origin = tools[to].__origin;
+      }
+    };
+    alias("list_tables", "listTables");
+    alias("describe_table", "describeTable");
+    alias("forecast_route", "forecastRoute");
+    alias("risk_top", "riskTop");
+    alias("risk_score", "riskScore");
+    alias("hotspots_map", "hotspotsMap");
+    alias("survival_km", "survivalKm");
+    alias("survival_cox", "survivalCox");
+
+    // Prefer Neon MCP run_sql aliases when available
+    if (mcp?.tools?.run_sql) tools.runSql = mcp.tools.run_sql;
+    if (mcp?.tools?.run_sql_transaction) tools.runSqlTransaction = mcp.tools.run_sql_transaction;
+
+    // Discovery helper: enumerate available tools (local + MCP)
+    tools.list_resources = {
+      description: "List available tool operations (local and Neon MCP)",
+      // Root schema must be an object for providers like Vercel AI Gateway/Bedrock
+      inputSchema: z.object({
+        only_tools: z.boolean().optional(),
+        onlyTools: z.boolean().optional(),
+      }),
+      execute: async (args?: { only_tools?: boolean; onlyTools?: boolean }) => {
+        const names = Object.keys(tools);
+        const originMap: Record<string, string> = {};
+        for (const name of names) {
+          const origin = (tools as any)[name]?.__origin || "local";
+          originMap[name] = String(origin);
+        }
+        const only = args?.only_tools ?? args?.onlyTools ?? true;
+        if (only) return names;
+        return { tools: names.map((n) => ({ name: n, origin: originMap[n] })) };
+      },
+    };
 
     const result = streamText({
       model: headerModel ?? (model || "openai/gpt-5-mini"),
@@ -256,7 +571,7 @@ export async function POST(req: Request) {
       messages: modelMessages,
       tools,
       toolChoice: "auto",
-      stopWhen: stepCountIs(15),
+      stopWhen: stepCountIs(20),
       onStepFinish({ toolCalls, toolResults }) {
         toolCalls?.forEach((call) => {
           toolCallMap.set(call.toolCallId, {

@@ -149,6 +149,7 @@ export async function queryTableRowCount(params: {
   start?: string;
   end?: string;
   dateColumn?: string;
+  headers?: Record<string, string>;
 }) {
   const table = validateTable(params.table);
   const year = coerceYear(params.year);
@@ -167,7 +168,7 @@ export async function queryTableRowCount(params: {
       ? `${String(qp[columnName])},gte.${year}-01-01,lt.${year + 1}-01-01`
       : `gte.${year}-01-01,lt.${year + 1}-01-01`;
   }
-  const count = await dataApiCount({ table, filterParams: qp });
+  const count = await dataApiCount({ table, filterParams: qp, headers: params.headers || {} });
   return {
     table,
     filters: {
@@ -185,6 +186,7 @@ export async function queryViolationStats(params: {
   start?: string;
   end?: string;
   routeId?: string;
+  headers?: Record<string, string>;
 }) {
   const table: AllowedTable = "violations";
   const columnName = DEFAULT_DATE_COLUMN[table] ?? "last_occurrence";
@@ -205,9 +207,9 @@ export async function queryViolationStats(params: {
   }
 
   // totals (two counts via filters)
-  const totalCount = await dataApiCount({ table, filterParams: baseFilters });
+  const totalCount = await dataApiCount({ table, filterParams: baseFilters, headers: params.headers || {} });
   const exemptFilters = { ...baseFilters, ...eqFilter("violation_status", "EXEMPT") } as any;
-  const exemptCount = await dataApiCount({ table, filterParams: exemptFilters });
+  const exemptCount = await dataApiCount({ table, filterParams: exemptFilters, headers: params.headers || {} });
 
   // trend by month
   const trendRowsRaw = await dataApiGet<Array<{ month: string; violations: string | number }>>({
@@ -218,6 +220,7 @@ export async function queryViolationStats(params: {
       order: "month.asc",
       group: "month",
     },
+    headers: params.headers || {},
   });
   const trendRows = trendRowsRaw.map((r) => ({ month: r.month, violations: Number(r.violations ?? 0) }));
 

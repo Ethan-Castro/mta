@@ -1,7 +1,7 @@
 "use client";
 
 import Map, { Marker, Popup, NavigationControl, Source, Layer } from "react-map-gl/mapbox";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import "mapbox-gl/dist/mapbox-gl.css";
 import type { MapRef } from "react-map-gl/mapbox";
 import type { FeatureCollection, Feature, Point } from "geojson";
@@ -21,9 +21,24 @@ type Props = {
   }>;
   cluster?: boolean;
   hoverPopups?: boolean;
+  mapStyle?: string;
+  userLocation?: {
+    longitude: number;
+    latitude: number;
+    accuracy?: number;
+  } | null;
 };
 
-export default function MapPanel({ height = 300, center = [-73.9857, 40.7484], zoom = 10, markers = [], cluster = false, hoverPopups = true }: Props) {
+export default function MapPanel({
+  height = 300,
+  center = [-73.9857, 40.7484],
+  zoom = 10,
+  markers = [],
+  cluster = false,
+  hoverPopups = true,
+  mapStyle = "mapbox://styles/mapbox/satellite-streets-v12",
+  userLocation = null,
+}: Props) {
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -34,6 +49,13 @@ export default function MapPanel({ height = 300, center = [-73.9857, 40.7484], z
     : null;
 
   const mapRef = useRef<MapRef | null>(null);
+
+  useEffect(() => {
+    if (!userLocation) return;
+    const map = mapRef.current;
+    if (!map) return;
+    map.flyTo({ center: [userLocation.longitude, userLocation.latitude], zoom: Math.max(zoom, 12) });
+  }, [userLocation?.longitude, userLocation?.latitude, zoom]);
 
   const geojson: FeatureCollection<Point> = useMemo(() => {
     return {
@@ -67,7 +89,7 @@ export default function MapPanel({ height = 300, center = [-73.9857, 40.7484], z
         <Map
           ref={mapRef}
           initialViewState={{ longitude: center[0], latitude: center[1], zoom }}
-          mapStyle="mapbox://styles/mapbox/light-v11"
+          mapStyle={mapStyle}
           mapboxAccessToken={token}
           interactiveLayerIds={interactiveLayerIds}
           onClick={(e: any) => {
@@ -103,6 +125,15 @@ export default function MapPanel({ height = 300, center = [-73.9857, 40.7484], z
           }}
         >
           <NavigationControl position="top-left" />
+
+          {userLocation && (
+            <Marker longitude={userLocation.longitude} latitude={userLocation.latitude} anchor="bottom">
+              <span
+                title="Your location"
+                className="block h-5 w-5 -translate-y-1 rounded-full border-2 border-white bg-rose-500 shadow-[0_0_0_6px_rgba(244,63,94,0.35)]"
+              />
+            </Marker>
+          )}
 
           {!cluster && (
             <>
@@ -187,7 +218,14 @@ export default function MapPanel({ height = 300, center = [-73.9857, 40.7484], z
                 filter={["!", ["has", "point_count"]] as any}
                 paint={{
                   "circle-color": ["get", "color"] as any,
-                  "circle-radius": ["match", ["get", "id"], ["prefix", "campus-"], 8, 5],
+                  // Use a prefix check on the id to size campus markers slightly larger
+                  // Mapbox expression: case(slice(get('id'),0,7) == 'campus-', 8, 5)
+                  "circle-radius": [
+                    "case",
+                    ["==", ["slice", ["get", "id"], 0, 7], "campus-"],
+                    8,
+                    5,
+                  ] as any,
                   "circle-stroke-width": 2,
                   "circle-stroke-color": "#ffffff",
                 } as any}

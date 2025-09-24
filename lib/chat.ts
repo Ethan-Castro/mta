@@ -23,6 +23,33 @@ export type ChatMessage = {
 const memoryConversations = new Map<string, Conversation>();
 const memoryMessagesByConversation = new Map<string, ChatMessage[]>();
 
+// Memory management constants
+const MAX_MEMORY_CONVERSATIONS = 100;
+const MAX_MEMORY_MESSAGES_PER_CONVERSATION = 50;
+
+// Cleanup function to prevent memory leaks
+function cleanupMemoryStorage() {
+  // Clean up old conversations if we exceed the limit
+  if (memoryConversations.size > MAX_MEMORY_CONVERSATIONS) {
+    const entries = Array.from(memoryConversations.entries());
+    entries.sort((a, b) => new Date(a[1].updated_at).getTime() - new Date(b[1].updated_at).getTime());
+    
+    const toDelete = entries.slice(0, entries.length - MAX_MEMORY_CONVERSATIONS);
+    toDelete.forEach(([id]) => {
+      memoryConversations.delete(id);
+      memoryMessagesByConversation.delete(id);
+    });
+  }
+  
+  // Clean up old messages per conversation
+  for (const [conversationId, messages] of memoryMessagesByConversation.entries()) {
+    if (messages.length > MAX_MEMORY_MESSAGES_PER_CONVERSATION) {
+      const trimmed = messages.slice(-MAX_MEMORY_MESSAGES_PER_CONVERSATION);
+      memoryMessagesByConversation.set(conversationId, trimmed);
+    }
+  }
+}
+
 export async function ensureChatSchema(): Promise<void> {
   if (!isDbConfigured) return;
   // Use text ids so we don't depend on extensions
@@ -154,6 +181,10 @@ export async function addMessage(params: { conversationId: string; role: ChatRol
     const list = memoryMessagesByConversation.get(params.conversationId) ?? [];
     list.push(created);
     memoryMessagesByConversation.set(params.conversationId, list);
+    
+    // Clean up memory after adding a message
+    cleanupMemoryStorage();
+    
     await touchConversation(params.conversationId);
     return created;
   }

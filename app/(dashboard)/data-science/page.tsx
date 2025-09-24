@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import type { FormEvent } from "react";
+import type { FeatureCollection } from "geojson";
 import {
   BarChart,
   Bar,
@@ -18,22 +21,9 @@ import {
   PieChart,
   Pie,
   Cell,
-  ComposedChart,
-  Area,
-  AreaChart,
 } from "recharts";
-import {
-  Brain,
-  Database,
-  TrendingUp,
-  MapPin,
-  Users,
-  AlertTriangle,
-  Calculator,
-  FileText,
-  Zap,
-  Target
-} from "lucide-react";
+import { Brain, Database, Loader2, Calculator, FileText, Zap, Target } from "lucide-react";
+import type { ForecastPayload, RiskRow } from "@/lib/aceApi";
 import type { AnalystScenario, DocumentationLink, StudentDbRecipe } from "@/lib/data/insights";
 const AskAI = dynamic(() => import("@/components/AskAI"), { ssr: false });
 
@@ -55,6 +45,35 @@ export default function DataSciencePage() {
   const [recipes, setRecipes] = useState<StudentDbRecipe[]>([]);
   const [curatedError, setCuratedError] = useState<string | null>(null);
   const [curatedLoading, setCuratedLoading] = useState<boolean>(true);
+
+  const DEFAULT_FORECAST_ROUTE = "Q46";
+  const DEFAULT_RISK_LIMIT = 20;
+  const DEFAULT_AVG_SPEED = 8.5;
+  const DEFAULT_TRIPS_PER_HOUR = 22;
+
+  const modelApiRef = useRef<null | typeof import("@/lib/aceApi").aceApi>(null);
+  const [modelReady, setModelReady] = useState(false);
+  const [modelError, setModelError] = useState<string | null>(null);
+
+  const [forecastRouteId, setForecastRouteId] = useState<string>(DEFAULT_FORECAST_ROUTE);
+  const [forecastData, setForecastData] = useState<ForecastPayload | null>(null);
+  const [forecastLoading, setForecastLoading] = useState(false);
+  const [forecastError, setForecastError] = useState<string | null>(null);
+
+  const [riskLimit, setRiskLimit] = useState<number>(DEFAULT_RISK_LIMIT);
+  const [riskRows, setRiskRows] = useState<RiskRow[]>([]);
+  const [riskLoading, setRiskLoading] = useState(false);
+  const [riskError, setRiskError] = useState<string | null>(null);
+
+  const [avgSpeedMph, setAvgSpeedMph] = useState<number>(DEFAULT_AVG_SPEED);
+  const [tripsPerHour, setTripsPerHour] = useState<number>(DEFAULT_TRIPS_PER_HOUR);
+  const [riskScoreValue, setRiskScoreValue] = useState<number | null>(null);
+  const [riskScoreLoading, setRiskScoreLoading] = useState(false);
+  const [riskScoreError, setRiskScoreError] = useState<string | null>(null);
+
+  const [hotspotsData, setHotspotsData] = useState<FeatureCollection | null>(null);
+  const [hotspotsLoading, setHotspotsLoading] = useState(false);
+  const [hotspotsError, setHotspotsError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -109,8 +128,257 @@ export default function DataSciencePage() {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    const base = process.env.NEXT_PUBLIC_ACE_API_BASE;
+    if (!base) {
+      setModelError("Model API base URL is not configured.");
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    import("@/lib/aceApi")
+      .then((mod) => {
+        if (cancelled) return;
+        modelApiRef.current = mod.aceApi;
+        setModelReady(true);
+        setModelError(null);
+      })
+      .catch((error) => {
+        console.error("Unable to initialize Model API client", error);
+        if (!cancelled) {
+          setModelReady(false);
+          setModelError("Model API client is unavailable right now.");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const prompts = useMemo(() => starterPrompts.slice(0, 5), [starterPrompts]);
   const studentPromptSuggestions = useMemo(() => studentPrompts.slice(0, 4), [studentPrompts]);
+
+  const fetchForecast = useCallback(
+    async (route: string) => {
+      if (!modelApiRef.current) {
+        setForecastError("Model API is not ready.");
+        return;
+      }
+      const normalized = route.trim();
+      if (!normalized) {
+        setForecastError("Route ID is required.");
+        return;
+      }
+      setForecastLoading(true);
+      try {
+        const data = await modelApiRef.current.forecast(normalized);
+        setForecastData(data);
+        setForecastError(null);
+      } catch (error) {
+        console.error("Failed to load forecast", error);
+        setForecastError("Unable to load forecast right now.");
+      } finally {
+        setForecastLoading(false);
+      }
+    },
+    []
+  );
+
+  const fetchRiskTop = useCallback(
+    async (limit: number) => {
+      if (!modelApiRef.current) {
+        setRiskError("Model API is not ready.");
+        return;
+      }
+      const clamped = Math.min(200, Math.max(1, Math.round(limit)));
+      setRiskLimit(clamped);
+      setRiskLoading(true);
+      try {
+        const rows = await modelApiRef.current.riskTop(clamped);
+        setRiskRows(rows);
+        setRiskError(null);
+      } catch (error) {
+        console.error("Failed to load risk leaderboard", error);
+        setRiskError("Unable to load risk leaderboard.");
+      } finally {
+        setRiskLoading(false);
+      }
+    },
+    []
+  );
+
+  const fetchRiskScore = useCallback(
+    async (speed: number, trips: number) => {
+      if (!modelApiRef.current) {
+        setRiskScoreError("Model API is not ready.");
+        return;
+      }
+      const speedValue = Math.max(0, Number.isFinite(speed) ? speed : 0);
+      const tripsValue = Math.max(0, Number.isFinite(trips) ? trips : 0);
+      setAvgSpeedMph(speedValue);
+      setTripsPerHour(tripsValue);
+      setRiskScoreLoading(true);
+      try {
+        const res = await modelApiRef.current.riskScore(speedValue, tripsValue);
+        setRiskScoreValue(res.risk_score ?? null);
+        setRiskScoreError(null);
+      } catch (error) {
+        console.error("Failed to score scenario", error);
+        setRiskScoreError("Unable to score the scenario.");
+      } finally {
+        setRiskScoreLoading(false);
+      }
+    },
+    []
+  );
+
+  const fetchHotspots = useCallback(async () => {
+    if (!modelApiRef.current) {
+      setHotspotsError("Model API is not ready.");
+      return;
+    }
+    setHotspotsLoading(true);
+    try {
+      const gj = await modelApiRef.current.hotspots();
+      setHotspotsData(gj);
+      setHotspotsError(null);
+    } catch (error) {
+      console.error("Failed to load hotspots", error);
+      setHotspotsError("Unable to load hotspots data.");
+    } finally {
+      setHotspotsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!modelReady) return;
+    fetchForecast(DEFAULT_FORECAST_ROUTE);
+    fetchRiskTop(DEFAULT_RISK_LIMIT);
+    fetchRiskScore(DEFAULT_AVG_SPEED, DEFAULT_TRIPS_PER_HOUR);
+    fetchHotspots();
+  }, [modelReady, fetchForecast, fetchRiskTop, fetchRiskScore, fetchHotspots]);
+
+  const forecastChartData = useMemo(() => {
+    if (!forecastData) return [] as Array<{
+      date: string;
+      history?: number | null;
+      forecast?: number | null;
+      ciLow?: number | null;
+      ciHigh?: number | null;
+    }>;
+
+    const map = new Map<string, {
+      date: string;
+      history?: number | null;
+      forecast?: number | null;
+      ciLow?: number | null;
+      ciHigh?: number | null;
+    }>();
+
+    const ensureEntry = (label: string) => {
+      const key = label || "";
+      const existing = map.get(key);
+      if (existing) return existing;
+      const entry = { date: key } as {
+        date: string;
+        history?: number | null;
+        forecast?: number | null;
+        ciLow?: number | null;
+        ciHigh?: number | null;
+      };
+      map.set(key, entry);
+      return entry;
+    };
+
+    const addSeries = (
+      dates: string[] | undefined,
+      values: (number | null | undefined)[] | undefined,
+      prop: "history" | "forecast" | "ciLow" | "ciHigh"
+    ) => {
+      if (!Array.isArray(dates) || !Array.isArray(values)) return;
+      const length = Math.min(dates.length, values.length);
+      for (let i = 0; i < length; i += 1) {
+        const rawDate = dates[i];
+        if (!rawDate) continue;
+        const label = typeof rawDate === "string" ? rawDate : String(rawDate);
+        const value = Number(values[i] ?? null);
+        const entry = ensureEntry(label);
+        entry[prop] = Number.isFinite(value) ? value : null;
+      }
+    };
+
+    addSeries(forecastData.history?.date, forecastData.history?.history, "history");
+    addSeries(forecastData.forecast?.date, forecastData.forecast?.forecast, "forecast");
+
+    const ciLowDates = forecastData.ci_low?.date ?? forecastData.forecast?.date ?? forecastData.history?.date;
+    const ciHighDates = forecastData.ci_high?.date ?? forecastData.forecast?.date ?? forecastData.history?.date;
+    addSeries(ciLowDates, forecastData.ci_low?.ci_low, "ciLow");
+    addSeries(ciHighDates, forecastData.ci_high?.ci_high, "ciHigh");
+
+    return Array.from(map.values()).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  }, [forecastData]);
+
+  const riskTopChartData = useMemo(() => {
+    if (!riskRows.length) return [] as Array<{ label: string; score: number }>;
+    const grouped = new Map<string, RiskRow>();
+    for (const row of riskRows) {
+      if (!grouped.has(row.route_id)) {
+        grouped.set(row.route_id, row);
+      }
+    }
+    return Array.from(grouped.entries())
+      .map(([route, row]) => ({
+        label: `${route}@${row.hour_of_day}:00`,
+        score: Number(row.risk_score ?? 0),
+      }))
+      .slice(0, 12);
+  }, [riskRows]);
+
+  const hotspotChartData = useMemo(() => {
+    if (!hotspotsData || !Array.isArray(hotspotsData.features)) return [] as Array<{ label: string; value: number }>;
+    const counts = hotspotsData.features
+      .map((feature) => {
+        const count = (feature as any)?.properties?.count;
+        const parsed = Number(count ?? 0);
+        return Number.isFinite(parsed) ? parsed : 0;
+      })
+      .sort((a, b) => b - a)
+      .slice(0, 15);
+    return counts.map((value, index) => ({ label: `#${index + 1}`, value }));
+  }, [hotspotsData]);
+
+  const totalRiskRoutes = useMemo(() => new Set(riskRows.map((row) => row.route_id)).size, [riskRows]);
+  const totalHotspotCount = useMemo(
+    () => (Array.isArray(hotspotsData?.features) ? hotspotsData!.features.length : 0),
+    [hotspotsData]
+  );
+
+  const handleForecastSubmit = useCallback(
+    (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      fetchForecast(forecastRouteId);
+    },
+    [fetchForecast, forecastRouteId]
+  );
+
+  const handleRiskTopSubmit = useCallback(
+    (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      fetchRiskTop(riskLimit);
+    },
+    [fetchRiskTop, riskLimit]
+  );
+
+  const handleRiskScoreSubmit = useCallback(
+    (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      fetchRiskScore(avgSpeedMph, tripsPerHour);
+    },
+    [fetchRiskScore, avgSpeedMph, tripsPerHour]
+  );
 
   async function onPredict() {
     setRunning(true);
@@ -318,6 +586,300 @@ export default function DataSciencePage() {
         </TabsContent>
 
         <TabsContent value="analytics" className="space-y-6">
+          <section className="space-y-4">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">Model API insights</h3>
+              <p className="text-xs text-foreground/60">Forecasts, risk rankings, and hotspots pulled live from the external model service.</p>
+            </div>
+            {modelError ? (
+              <div className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                {modelError}
+              </div>
+            ) : !modelReady ? (
+              <div className="flex items-center gap-2 rounded-md border border-foreground/10 bg-foreground/5 px-3 py-2 text-xs text-foreground/60">
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                Connecting to Model API…
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center justify-between text-sm">
+                        <span>Route forecast</span>
+                        <span className="text-xs font-normal text-foreground/60">Route: {forecastRouteId || "—"}</span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <form onSubmit={handleForecastSubmit} className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end">
+                        <label className="flex flex-col text-xs font-medium text-foreground/80 sm:w-auto">
+                          Route ID
+                          <Input
+                            value={forecastRouteId}
+                            onChange={(event) => setForecastRouteId(event.target.value.toUpperCase())}
+                            placeholder="e.g. Q46"
+                            className="mt-1 h-8 text-sm"
+                          />
+                        </label>
+                        <button
+                          type="submit"
+                          disabled={!modelReady || forecastLoading}
+                          className="inline-flex items-center justify-center gap-2 rounded-md border border-foreground/20 px-3 py-1.5 text-xs font-medium text-foreground/80 transition-colors hover:border-foreground/40 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {forecastLoading ? (
+                            <>
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                              Loading
+                            </>
+                          ) : (
+                            "Load forecast"
+                          )}
+                        </button>
+                      </form>
+                      {forecastError && (
+                        <div className="mb-3 rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                          {forecastError}
+                        </div>
+                      )}
+                      <div className="h-64">
+                        {forecastLoading && !forecastChartData.length ? (
+                          <div className="flex h-full items-center justify-center gap-2 text-xs text-foreground/60">
+                            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                            Loading forecast…
+                          </div>
+                        ) : forecastChartData.length ? (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={forecastChartData}>
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                              <YAxis tick={{ fontSize: 11 }} />
+                              <Tooltip />
+                              <Line type="monotone" dataKey="history" stroke="#2563eb" dot={false} name="History" />
+                              <Line type="monotone" dataKey="forecast" stroke="#22c55e" strokeDasharray="5 3" dot={false} name="Forecast" />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="flex h-full items-center justify-center text-center text-xs text-foreground/60">
+                            No forecast data yet. Try another route ID.
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center justify-between text-sm">
+                        <span>Risk leaderboard</span>
+                        <span className="text-xs font-normal text-foreground/60">{totalRiskRoutes} routes</span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <form onSubmit={handleRiskTopSubmit} className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end">
+                        <label className="flex flex-col text-xs font-medium text-foreground/80 sm:w-auto">
+                          Limit (1-200)
+                          <Input
+                            type="number"
+                            min={1}
+                            max={200}
+                            value={riskLimit}
+                            onChange={(event) => {
+                              const next = Number(event.target.value);
+                              setRiskLimit(Number.isFinite(next) ? next : 0);
+                            }}
+                            className="mt-1 h-8 text-sm"
+                          />
+                        </label>
+                        <button
+                          type="submit"
+                          disabled={!modelReady || riskLoading}
+                          className="inline-flex items-center justify-center gap-2 rounded-md border border-foreground/20 px-3 py-1.5 text-xs font-medium text-foreground/80 transition-colors hover:border-foreground/40 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {riskLoading ? (
+                            <>
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                              Loading
+                            </>
+                          ) : (
+                            "Refresh"
+                          )}
+                        </button>
+                      </form>
+                      {riskError && (
+                        <div className="mb-3 rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                          {riskError}
+                        </div>
+                      )}
+                      <div className="h-64">
+                        {riskLoading && !riskTopChartData.length ? (
+                          <div className="flex h-full items-center justify-center gap-2 text-xs text-foreground/60">
+                            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                            Loading risk rankings…
+                          </div>
+                        ) : riskTopChartData.length ? (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={riskTopChartData}>
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis dataKey="label" tick={{ fontSize: 11 }} interval={0} angle={-30} textAnchor="end" height={70} />
+                              <YAxis tick={{ fontSize: 11 }} />
+                              <Tooltip />
+                              <Bar dataKey="score" fill="#f97316" name="Risk score" />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="flex h-full items-center justify-center text-center text-xs text-foreground/60">
+                            No risk rows available.
+                          </div>
+                        )}
+                      </div>
+                      <p className="mt-2 text-xs text-foreground/60">Showing the strongest stop-hour per route across {riskRows.length} ranked rows.</p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-sm">Scenario risk scoring</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <form onSubmit={handleRiskScoreSubmit} className="mb-3 grid gap-2 sm:grid-cols-3">
+                        <label className="flex flex-col text-xs font-medium text-foreground/80">
+                          Avg speed (mph)
+                          <Input
+                            type="number"
+                            step="0.1"
+                            min={0}
+                            value={avgSpeedMph}
+                            onChange={(event) => {
+                              const next = Number(event.target.value);
+                              setAvgSpeedMph(Number.isFinite(next) ? next : 0);
+                            }}
+                            className="mt-1 h-8 text-sm"
+                          />
+                        </label>
+                        <label className="flex flex-col text-xs font-medium text-foreground/80">
+                          Trips per hour
+                          <Input
+                            type="number"
+                            step="0.1"
+                            min={0}
+                            value={tripsPerHour}
+                            onChange={(event) => {
+                              const next = Number(event.target.value);
+                              setTripsPerHour(Number.isFinite(next) ? next : 0);
+                            }}
+                            className="mt-1 h-8 text-sm"
+                          />
+                        </label>
+                        <button
+                          type="submit"
+                          disabled={!modelReady || riskScoreLoading}
+                          className="inline-flex items-center justify-center gap-2 rounded-md border border-foreground/20 px-3 py-1.5 text-xs font-medium text-foreground/80 transition-colors hover:border-foreground/40 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {riskScoreLoading ? (
+                            <>
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                              Scoring…
+                            </>
+                          ) : (
+                            "Score scenario"
+                          )}
+                        </button>
+                      </form>
+                      {riskScoreError && (
+                        <div className="mb-3 rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                          {riskScoreError}
+                        </div>
+                      )}
+                      <div className="flex flex-col gap-3 rounded-lg border border-foreground/10 bg-foreground/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <p className="text-xs text-foreground/60">Predicted risk score</p>
+                          <p className="text-2xl font-semibold text-foreground/90">
+                            {riskScoreValue != null && Number.isFinite(riskScoreValue) ? riskScoreValue.toFixed(3) : "—"}
+                          </p>
+                        </div>
+                        {riskScoreLoading ? (
+                          <div className="flex items-center gap-2 text-xs text-foreground/60">
+                            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                            Calculating…
+                          </div>
+                        ) : riskScoreValue != null && Number.isFinite(riskScoreValue) ? (
+                          <ResponsiveContainer width={160} height={80}>
+                            <BarChart data={[{ label: "score", value: riskScoreValue }]}>
+                              <XAxis dataKey="label" hide />
+                              <YAxis hide domain={[0, Math.max(riskScoreValue * 1.2, 1)]} />
+                              <Tooltip />
+                              <Bar dataKey="value" fill="#22c55e" />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="text-xs text-foreground/60">Submit a scenario to preview the score.</div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center justify-between text-sm">
+                        <span>Hotspot histogram</span>
+                        <span className="text-xs font-normal text-foreground/60">{totalHotspotCount} features</span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="text-xs text-foreground/60">Top 15 hotspot clusters ranked by count.</p>
+                        <button
+                          type="button"
+                          onClick={() => fetchHotspots()}
+                          disabled={!modelReady || hotspotsLoading}
+                          className="inline-flex items-center justify-center gap-2 rounded-md border border-foreground/20 px-3 py-1.5 text-xs font-medium text-foreground/80 transition-colors hover:border-foreground/40 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {hotspotsLoading ? (
+                            <>
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                              Loading
+                            </>
+                          ) : (
+                            "Refresh"
+                          )}
+                        </button>
+                      </div>
+                      {hotspotsError && (
+                        <div className="mb-3 rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                          {hotspotsError}
+                        </div>
+                      )}
+                      <div className="h-64">
+                        {hotspotsLoading && !hotspotChartData.length ? (
+                          <div className="flex h-full items-center justify-center gap-2 text-xs text-foreground/60">
+                            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                            Loading hotspots…
+                          </div>
+                        ) : hotspotChartData.length ? (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={hotspotChartData}>
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                              <YAxis tick={{ fontSize: 11 }} />
+                              <Tooltip />
+                              <Bar dataKey="value" fill="#6366f1" name="Count" />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="flex h-full items-center justify-center text-center text-xs text-foreground/60">
+                            No hotspot clusters returned.
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            )}
+          </section>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Card>
               <CardHeader>

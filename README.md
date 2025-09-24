@@ -45,6 +45,9 @@ ML_PROVIDER_TOKEN=
 ML_PREDICT_URL=
 ML_SIMULATE_URL=
 
+# ElevenLabs Speech-to-Text (server-only)
+ELEVENLABS_API_KEY=
+
 CONGESTION_PRICING_START=2024-06-30
 # NEXT_PUBLIC_BASE_URL=
 
@@ -78,6 +81,7 @@ This project includes integration with the Neon MCP Server, allowing the chatbot
 - **SQL execution**: The chatbot can run SQL queries against your Neon databases
 - **Database management**: Create, delete, and manage branches, databases, and projects
 - **Migration support**: Handle database schema changes through natural language requests
+- **Audio transcription**: Record voice messages or upload audio files for speech-to-text conversion using ElevenLabs
 
 ### Setup
 
@@ -114,9 +118,82 @@ This project includes integration with the Neon MCP Server, allowing the chatbot
    - "Create a database named 'test-db'"
    - "Run SQL: SELECT COUNT(*) FROM violations"
 
+## Audio Transcription with ElevenLabs
+
+The AI chat interface now supports audio input through ElevenLabs speech-to-text integration. Users can record voice messages or upload audio files for transcription.
+
+### Features
+
+- **Voice recording**: Click the microphone button to record audio directly in the chat
+- **File upload**: Upload audio files (MP3, WAV, etc.) for transcription
+- **Advanced options**: Configure language detection, speaker identification, and audio event tagging
+- **Real-time feedback**: Visual indicators show recording status and processing
+
+### Setup
+
+1. Add your ElevenLabs API key to `.env.local`:
+   ```bash
+   ELEVENLABS_API_KEY=your_api_key_here
+   ```
+
+2. The transcription tool supports various options:
+   - **Language detection**: Automatically detect or specify language (ISO-639-1 codes)
+   - **Speaker identification**: Identify different speakers in multi-person conversations
+   - **Audio events**: Tag events like laughter, footsteps, etc.
+   - **Timestamps**: Get word-level or character-level timestamps
+
+### Usage
+
+- **Recording**: Click the microphone icon to start/stop recording
+- **File upload**: Click the upload icon to select an audio file
+- **Transcription**: The AI will automatically transcribe the audio and respond to your spoken question
+
 ### Security
 
 The Neon MCP Server is intended for local development and IDE integrations only. Always review and authorize actions requested by the LLM before execution.
+
+## Neon Data API & Auth setup
+
+1) Create `.env.local` based on the following template (or copy `.env.example` if present):
+
+```env
+# Neon Auth (Stack) – replace with your keys
+NEXT_PUBLIC_STACK_PROJECT_ID=
+NEXT_PUBLIC_STACK_PUBLISHABLE_CLIENT_KEY=
+STACK_SECRET_SERVER_KEY=
+
+# Neon DB connection(s)
+DATABASE_URL=
+DATABASE_URL_UNPOOLED=
+PGHOST=
+PGHOST_UNPOOLED=
+PGUSER=
+PGDATABASE=
+PGPASSWORD=
+
+# Neon Data API endpoint (PostgREST)
+# Example: https://<endpoint>/<db>/rest/v1
+NEON_DATA_API_URL=
+
+# Data API requires auth (JWT bearer). If using Neon Auth on the client, pass Authorization header.
+# For server probes or service usage you can set a server token/key here:
+NEON_DATA_API_TOKEN=
+NEON_DATA_API_KEY=
+
+# Optional: Stack project id for headers
+STACK_PROJECT_ID=
+```
+
+2) Enable the Data API for your Neon branch in the Neon Console. Ensure RLS policies are in place for all tables and your `authenticated` role has the correct GRANTs.
+
+3) Health check the integration locally:
+
+```bash
+curl -i http://localhost:3000/api/health \
+  -H "Authorization: Bearer <your_jwt_or_service_token>"
+```
+
+This calls the Data API using PostgREST-compatible params and verifies DB and MCP connections.
 
 ## Learn More
 

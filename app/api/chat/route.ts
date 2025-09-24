@@ -1,7 +1,9 @@
-import { streamText, UIMessage, convertToModelMessages, tool, stepCountIs } from "ai";
+import { streamText, UIMessage, convertToModelMessages, tool, stepCountIs, experimental_transcribe as transcribe } from "ai";
 import { z } from "zod";
 import { SYSTEM_PROMPTS } from "@/lib/ai/system-prompts";
+import { buildAceTools } from "@/lib/ai/ace-tools";
 import { getExa } from "@/lib/ai/exa";
+import { elevenlabs } from "@ai-sdk/elevenlabs";
 import {
   ALLOWED_TABLES,
   ensureSelectAllowed,
@@ -14,11 +16,14 @@ import { getViolationSummary } from "@/lib/data/violations";
 import { sql } from "@/lib/db";
 import { dataApiGet } from "@/lib/data-api";
 import { getNeonMCPTools } from "@/lib/mcp/neon";
+import { stackServerApp } from "@/stack/server";
 
 export const maxDuration = 30;
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
+  const currentUser = await stackServerApp.getUser({ tokenStore: req, or: "return-null" });
+
   const body = await req.json().catch(() => ({} as any));
   const { messages = [], model, system }: { messages?: UIMessage[]; model?: string; system?: string } = body || {};
 
@@ -40,6 +45,15 @@ export async function POST(req: Request) {
 
   // Build local tools and merge MCP tools if available
   const mcp = await getNeonMCPTools().catch(() => null);
+  let authHeader = req.headers.get("authorization") || undefined;
+  if (!authHeader && currentUser) {
+    try {
+      const authJson = await currentUser.getAuthJson();
+      if (authJson?.accessToken) {
+        authHeader = `Bearer ${authJson.accessToken}`;
+      }
+    } catch {}
+  }
   const localTools = {
     webSearch: tool({
       description: "Search the web for up-to-date information",
@@ -83,7 +97,11 @@ export async function POST(req: Request) {
         const qp: Record<string, any> = { select, ...(params || {}) };
         if (typeof limit === "number") qp.limit = String(limit);
         if (order) qp.order = order;
-        const rows = await dataApiGet({ table, params: qp });
+        const rows = await dataApiGet({
+          table,
+          params: qp,
+          headers: authHeader ? { Authorization: authHeader } : {},
+        });
         return { rows };
       },
     }),
@@ -158,7 +176,14 @@ export async function POST(req: Request) {
       }),
       execute: async ({ table, year, start, end, dateColumn }) => {
         try {
-          return await queryTableRowCount({ table, year, start, end, dateColumn });
+          return await queryTableRowCount({
+            table,
+            year,
+            start,
+            end,
+            dateColumn,
+            headers: authHeader ? { Authorization: authHeader } : undefined,
+          });
         } catch (error) {
           if (error instanceof SqlToolError) {
             return { error: error.message };
@@ -177,7 +202,13 @@ export async function POST(req: Request) {
       }),
       execute: async ({ routeId, year, start, end }) => {
         try {
-          return await queryViolationStats({ routeId, year, start, end });
+          return await queryViolationStats({
+            routeId,
+            year,
+            start,
+            end,
+            headers: authHeader ? { Authorization: authHeader } : undefined,
+          });
         } catch (error) {
           if (error instanceof SqlToolError) {
             return { error: error.message };
@@ -253,9 +284,144 @@ export async function POST(req: Request) {
         };
       },
     }),
+    visualize: tool({
+      description:
+        "Render a simple chart UI from provided data. Supports 'line', 'grouped-bar', 'bar', and 'pie'. Typically call an MCP SQL tool first, then pass rows here.",
+      inputSchema: z.object({
+        spec: z.object({
+          type: z.enum(["line", "grouped-bar", "bar", "pie"]),
+          title: z.string().optional(),
+          yLabel: z.string().optional(),
+        }),
+        data: z.union([
+          z.array(z.record(z.any())),
+          z.object({ rows: z.array(z.record(z.any())) })
+        ]),
+      }),
+      execute: async ({ spec, data }) => {
+        const rows = Array.isArray((data as any)?.rows) ? (data as any).rows : (data as any);
+        if (spec.type === "line") {
+          const points = Array.isArray(rows)
+            ? rows.map((d: any) => ({ label: String(d.label ?? d.name ?? d.date_trunc_ym ?? ""), value: Number(d.value ?? d.violations ?? 0) }))
+            : [];
+          return { chart: spec, data: points };
+        }
+        if (spec.type === "grouped-bar") {
+          const out = Array.isArray(rows)
+            ? rows.map((d: any) => ({
+                name: String(d.name ?? d.label ?? d.date_trunc_ym ?? ""),
+                violations: Number(d.violations ?? d.value ?? 0),
+                exempt: Number(d.exempt ?? d.exempt_count ?? 0),
+              }))
+            : [];
+          return { chart: spec, data: out };
+        }
+        if (spec.type === "bar") {
+          const out = Array.isArray(rows)
+            ? rows.map((d: any) => ({ label: String(d.label ?? d.name ?? ""), value: Number(d.value ?? d.count ?? 0) }))
+            : [];
+          return { chart: spec, data: out };
+        }
+        if (spec.type === "pie") {
+          const out = Array.isArray(rows)
+            ? rows.map((d: any) => ({ label: String(d.label ?? d.name ?? ""), value: Number(d.value ?? d.count ?? 0) }))
+            : [];
+          return { chart: spec, data: out };
+        }
+        return { error: "Unsupported chart type" };
+      },
+    }),
+    transcribeAudio: tool({
+      description: "Transcribe audio files to text using ElevenLabs speech-to-text",
+      inputSchema: z.object({
+        audio: z.string().describe("Base64 encoded audio data or audio file URL"),
+        languageCode: z.string().optional().describe("ISO-639-1 language code (e.g., 'en')"),
+        tagAudioEvents: z.boolean().optional().default(true).describe("Whether to tag audio events like (laughter)"),
+        numSpeakers: z.number().int().optional().describe("Maximum number of speakers (up to 32)"),
+        timestampsGranularity: z.enum(["none", "word", "character"]).optional().default("word").describe("Granularity of timestamps"),
+        diarize: z.boolean().optional().default(true).describe("Whether to identify speakers"),
+      }),
+      execute: async ({ audio, languageCode, tagAudioEvents, numSpeakers, timestampsGranularity, diarize }) => {
+        if (!process.env.ELEVENLABS_API_KEY) {
+          return { error: "ELEVENLABS_API_KEY is not configured." };
+        }
+        try {
+          // Convert base64 to Uint8Array if needed
+          let audioData: Uint8Array;
+          if (audio.startsWith('data:')) {
+            const base64Data = audio.split(',')[1];
+            const binaryString = atob(base64Data);
+            audioData = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+              audioData[i] = binaryString.charCodeAt(i);
+            }
+          } else if (audio.startsWith('http')) {
+            // Handle URL - fetch the audio file
+            const response = await fetch(audio);
+            if (!response.ok) {
+              return { error: "Failed to fetch audio from URL" };
+            }
+            const arrayBuffer = await response.arrayBuffer();
+            audioData = new Uint8Array(arrayBuffer);
+          } else {
+            // Assume it's base64 without data URL prefix
+            const binaryString = atob(audio);
+            audioData = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+              audioData[i] = binaryString.charCodeAt(i);
+            }
+          }
+
+          const result = await transcribe({
+            model: elevenlabs.transcription('scribe_v1'),
+            audio: audioData,
+            providerOptions: { 
+              elevenlabs: { 
+                ...(languageCode && { languageCode }),
+                ...(tagAudioEvents !== undefined && { tagAudioEvents }),
+                ...(numSpeakers && { numSpeakers }),
+                ...(timestampsGranularity && { timestampsGranularity }),
+                ...(diarize !== undefined && { diarize })
+              } 
+            },
+          });
+
+          return {
+            text: result.text,
+            segments: result.segments || [],
+            language: result.language || languageCode || 'auto-detected'
+          };
+        } catch (error: any) {
+          return { error: error?.message || "Transcription failed" };
+        }
+      },
+    }),
+    artifact: tool({
+      description: "Create a structured document artifact with title, description, content, and actions. Use this to present formatted documents, reports, or any structured content in the chat.",
+      inputSchema: z.object({
+        title: z.string().min(1).describe("The main title of the artifact"),
+        description: z.string().optional().describe("Optional description or subtitle for the artifact"),
+        content: z.string().min(1).describe("The main content of the artifact (can include markdown)"),
+        actions: z.array(z.object({
+          label: z.string().min(1).describe("Label for the action button"),
+          tooltip: z.string().optional().describe("Tooltip text for the action"),
+          icon: z.string().optional().describe("Icon name (e.g., 'copy', 'download', 'edit')"),
+        })).optional().describe("Optional array of action buttons"),
+      }),
+      execute: async ({ title, description, content, actions }) => {
+        return {
+          artifact: {
+            title,
+            description,
+            content,
+            actions: actions || [],
+          },
+        };
+      },
+    }),
   } as const;
 
-  // Helpful aliases: listTables and runSql (read-only)
+  // Helpful alias: listTables (read-only)
   const aliasTools: Record<string, any> = {
     listTables: tool({
       description: "List table names in the 'public' schema",
@@ -270,25 +436,38 @@ export async function POST(req: Request) {
         return { tables: (rows as any[]).map((r: any) => r.table_name) };
       },
     }),
-    runSql: tool({
-      description: "Execute a read-only SQL statement (SELECT/CTE only).",
-      inputSchema: z.object({ sql: z.string().describe("SQL to run (single SELECT/CTE)") }),
-      execute: async ({ sql: statement }) => {
-        try {
-          ensureSelectAllowed(statement);
-          const rows = await (sql as any).unsafe(statement);
-          return { rows };
-        } catch (error) {
-          if (error instanceof SqlToolError) {
-            return { error: error.message };
-          }
-          throw error;
-        }
-      },
-    }),
   };
 
-  const tools = { ...(localTools as Record<string, any>), ...aliasTools, ...(mcp?.tools || {}) };
+  const aceTools = await buildAceTools();
+
+  const tools = {
+    ...(localTools as Record<string, any>),
+    ...aliasTools,
+    ...aceTools,
+    ...(mcp?.tools || {}),
+  } as Record<string, any>;
+  if (mcp?.tools?.run_sql) tools.runSql = mcp.tools.run_sql;
+  if (mcp?.tools?.run_sql_transaction) tools.runSqlTransaction = mcp.tools.run_sql_transaction;
+
+  const alias = (from: string, to: string) => {
+    if (!(from in tools) && to in tools) {
+      tools[from] = tools[to];
+      try {
+        if ((tools as any)[to]?.__origin && !(tools as any)[from]?.__origin) {
+          (tools as any)[from].__origin = (tools as any)[to].__origin;
+        }
+      } catch {}
+    }
+  };
+
+  alias("list_tables", "listTables");
+  alias("describe_table", "describeTable");
+  alias("forecast_route", "forecastRoute");
+  alias("risk_top", "riskTop");
+  alias("risk_score", "riskScore");
+  alias("hotspots_map", "hotspotsMap");
+  alias("survival_km", "survivalKm");
+  alias("survival_cox", "survivalCox");
 
   const result = streamText({
     model: headerModel ?? attachmentModel ?? (model || "openai/gpt-5-mini"),

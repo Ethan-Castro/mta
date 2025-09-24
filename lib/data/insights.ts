@@ -215,35 +215,44 @@ export async function getCuratedHotspots(): Promise<ViolationHotspot[]> {
       },
     ];
   }
+  try {
+    const rows = await sql`
+      select
+        id,
+        route_id,
+        campus,
+        location,
+        latitude,
+        longitude,
+        average_daily_violations,
+        exempt_share_pct,
+        recurring_vehicles,
+        highlight
+      from violation_hotspots_curated
+      order by average_daily_violations desc nulls last
+    `;
 
-  const rows = await sql`
-    select
-      id,
-      route_id,
-      campus,
-      location,
-      latitude,
-      longitude,
-      average_daily_violations,
-      exempt_share_pct,
-      recurring_vehicles,
-      highlight
-    from violation_hotspots_curated
-    order by average_daily_violations desc nulls last
-  `;
-
-  return (rows as Array<{ [key: string]: any }>).map((row) => ({
-    id: row.id,
-    routeId: row.route_id,
-    campus: row.campus,
-    location: row.location,
-    latitude: Number(row.latitude ?? 0),
-    longitude: Number(row.longitude ?? 0),
-    averageDailyViolations: row.average_daily_violations !== null ? Number(row.average_daily_violations) : null,
-    exemptSharePct: row.exempt_share_pct !== null ? Number(row.exempt_share_pct) : null,
-    recurringVehicles: row.recurring_vehicles !== null ? Number(row.recurring_vehicles) : null,
-    highlight: row.highlight,
-  }));
+    return (rows as Array<{ [key: string]: any }>).map((row) => ({
+      id: row.id,
+      routeId: row.route_id,
+      campus: row.campus,
+      location: row.location,
+      latitude: Number(row.latitude ?? 0),
+      longitude: Number(row.longitude ?? 0),
+      averageDailyViolations:
+        row.average_daily_violations !== null ? Number(row.average_daily_violations) : null,
+      exemptSharePct: row.exempt_share_pct !== null ? Number(row.exempt_share_pct) : null,
+      recurringVehicles: row.recurring_vehicles !== null ? Number(row.recurring_vehicles) : null,
+      highlight: row.highlight,
+    }));
+  } catch (error: any) {
+    if (error?.code === "42P01") {
+      const seed = await import("@/data/seed/violation-hotspots.json");
+      const data = (seed?.default || seed) as ViolationHotspot[];
+      return data;
+    }
+    throw error;
+  }
 }
 
 export async function getExemptRepeaterSummaries(): Promise<ExemptRepeater[]> {
@@ -261,28 +270,38 @@ export async function getExemptRepeaterSummaries(): Promise<ExemptRepeater[]> {
     ];
   }
 
-  const rows = await sql`
-    select
-      vehicle_id,
-      company,
-      primary_reason,
-      violations,
-      routes,
-      hotspots,
-      next_action
-    from exempt_repeaters_curated
-    order by violations desc nulls last
-  `;
-
-  return (rows as Array<{ [key: string]: any }>).map((row) => ({
-    vehicleId: row.vehicle_id,
-    company: row.company,
-    primaryReason: row.primary_reason,
-    violations: row.violations !== null ? Number(row.violations) : null,
-    routes: Array.isArray(row.routes) ? row.routes : [],
-    hotspots: Array.isArray(row.hotspots) ? row.hotspots : [],
-    nextAction: row.next_action,
-  }));
+  try {
+    const rows = await sql`
+      select
+        vehicle_id,
+        company,
+        primary_reason,
+        violations,
+        routes,
+        hotspots,
+        next_action
+      from exempt_repeaters_curated
+      order by violations desc nulls last
+    `;
+  
+    return (rows as Array<{ [key: string]: any }>).map((row) => ({
+      vehicleId: row.vehicle_id,
+      company: row.company,
+      primaryReason: row.primary_reason,
+      violations: row.violations !== null ? Number(row.violations) : null,
+      routes: Array.isArray(row.routes) ? row.routes : [],
+      hotspots: Array.isArray(row.hotspots) ? row.hotspots : [],
+      nextAction: row.next_action,
+    }));
+  } catch (error: any) {
+    // If table doesn't exist (42P01), fall back to seed data
+    if (error?.code === "42P01") {
+      const seed = await import("@/data/seed/exempt-repeaters.json");
+      const data = (seed?.default || seed) as ExemptRepeater[];
+      return data;
+    }
+    throw error;
+  }
 }
 
 export async function getCbdRouteTrends(): Promise<CbdRouteTrend[]> {
