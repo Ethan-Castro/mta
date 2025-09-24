@@ -149,10 +149,56 @@ export async function getNeonMCPTools(): Promise<MCPToolsBundle> {
     },
   });
 
+  // Very conservative read-only checker
+  function isSelectOnly(sqlText: string): boolean {
+    const t = sqlText.replace(/--.*?$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "").trim();
+    if (!t) return false;
+    const single = t.replace(/[;\s]+$/, "").trim().toLowerCase();
+    if (!(single.startsWith("select") || single.startsWith("with "))) return false;
+    const forbidden = ["insert","update","delete","drop","truncate","alter","grant","revoke","comment","create","attach","replace","vacuum","merge","call","execute"];
+    return !forbidden.some((kw) => new RegExp(`\\b${kw}\\b`, "i").test(single));
+  }
+
+  const localRunSql = tool({
+    description: "Execute a read-only SQL SELECT statement against the configured database.",
+    inputSchema: z.object({ sql: z.string() }),
+    execute: async ({ sql }: { sql: string }) => {
+      try {
+        if (!isSelectOnly(sql)) {
+          return { error: "Only single read-only SELECT statements are permitted." };
+        }
+        const rows = await (neonSql as any).unsafe(sql);
+        return { rows };
+      } catch (err: any) {
+        return { error: err?.message || "SQL execution failed" };
+      }
+    },
+  });
+
+  const localRunSqlTransaction = tool({
+    description: "Execute multiple read-only SQL statements as a single operation (limited).",
+    inputSchema: z.object({ statements: z.array(z.string()).min(1) }),
+    execute: async ({ statements }: { statements: string[] }) => {
+      try {
+        const outputs: any[] = [];
+        for (const s of statements) {
+          if (!isSelectOnly(s)) return { error: "Only read-only SELECT statements are permitted." };
+          const rows = await (neonSql as any).unsafe(s);
+          outputs.push({ rows });
+        }
+        return { results: outputs };
+      } catch (err: any) {
+        return { error: err?.message || "Transaction failed" };
+      }
+    },
+  });
+
   const localFallbacks: Record<string, any> = {
     get_connection_string: localGetConnectionString,
     get_database_tables: localListTables,
     describe_table_schema: localDescribeTable,
+    run_sql: localRunSql,
+    run_sql_transaction: localRunSqlTransaction,
   };
 
   for (const [name, impl] of Object.entries(localFallbacks)) {
