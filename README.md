@@ -200,3 +200,17 @@ This project addresses **MTA Datathon 2025**’s three core business questions:
 This project delivers **real-time, AI-powered analytics** to support MTA’s mission of improving bus speeds and reliability through ACE enforcement. It is designed to be **scalable, production-ready, and executive-friendly** for decision-making.
 
 ---
+
+## 🔗 Related API Repositories
+
+This project builds on dedicated API services developed for the datathon.  
+The following repositories contain the training, preprocessing, and API logic that power the insights in **MTA ACE Insight Studio**:
+
+- [**mta-ace-api**](https://github.com/Ethan-Castro/mta-ace-api)  
+  Backend service focused on Automated Camera Enforcement (ACE) violation data, including preprocessing, route-level aggregations, and enforcement metrics.
+
+- [**mta-analytics-api**](https://github.com/Ethan-Castro/mta-analytics-api)  
+  Analytics service providing curated insights, student route analysis, and congestion pricing comparisons. Designed to integrate directly with the Insight Studio dashboard for real-time analysis.
+
+---
+
