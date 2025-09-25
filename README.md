@@ -1,6 +1,4 @@
 
-
-```markdown
 # 🚍 MTA ACE Insight Studio
 
 **Executive-ready analytics platform for the MTA ACE Datathon 2025**
