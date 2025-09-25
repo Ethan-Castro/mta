@@ -87,8 +87,14 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   }), [metrics, metricsLoaded]);
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 pb-8 sm:gap-6 sm:px-6 sm:pb-12 lg:flex-row lg:gap-10">
-      <aside className="lg:w-64 xl:w-72">
+    <div className="mx-auto max-w-6xl px-4 pb-8 sm:px-6 sm:pb-12">
+      {/* Data Disclaimer Banner */}
+      <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-center text-sm text-amber-800 sm:mb-6">
+        <strong>⚠️ Data in Progress:</strong> Data is not accurate yet. This is a development environment with sample data.
+      </div>
+      
+      <div className="flex flex-col gap-4 lg:flex-row lg:gap-10">
+        <aside className="lg:w-64 xl:w-72">
         <div className="sticky top-24 space-y-4 rounded-2xl border border-border/60 bg-card/70 p-4 backdrop-blur supports-[backdrop-filter]:bg-card/80 lg:top-28 lg:space-y-6 lg:p-5">
           <div className="space-y-1">
             <p className="text-xs font-semibold uppercase tracking-widest text-foreground/60">Navigator</p>
@@ -200,6 +206,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
         </div>
         <div className="space-y-6 lg:space-y-8">{children}</div>
       </section>
+      </div>
     </div>
   );
 }

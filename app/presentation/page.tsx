@@ -135,8 +135,8 @@ export default function PresentationPage() {
               <iframe 
                 src="https://www.loom.com/embed/7c07cc04d6b04a6683f35c2c97113b1e?sid=daf2fd5c-eafd-45e7-99b2-9bfe76bf8796" 
                 frameBorder="0" 
-                webkitAllowFullScreen 
-                mozAllowFullScreen 
+                webkitallowfullscreen="true"
+                mozallowfullscreen="true"
                 allowFullScreen 
                 style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}
               />
