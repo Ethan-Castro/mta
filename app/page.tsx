@@ -13,6 +13,13 @@ const personas = [
       "Summaries, benchmarks, and talking points for C-suite and board updates.",
   },
   {
+    href: "/presentation",
+    title: "Presentation",
+    subtitle: "Animated business questions",
+    description:
+      "Anchor-linked sections with recommendations and placeholders for charts/maps.",
+  },
+  {
     href: "/operations",
     title: "Operations",
     subtitle: "Route speeds and violations",

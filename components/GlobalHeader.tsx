@@ -10,6 +10,7 @@ import { stackClientApp } from "@/stack/client";
 
 type GlobalRoute =
   | "/"
+  | "/presentation"
   | "/executive"
   | "/operations"
   | "/map"
@@ -20,6 +21,7 @@ type GlobalRoute =
 
 const NAV_ITEMS: Array<{ href: GlobalRoute; label: string }> = [
   { href: "/", label: "Overview" },
+  { href: "/presentation", label: "Presentation" },
   { href: "/executive", label: "Executive" },
   { href: "/operations", label: "Operations" },
   { href: "/map", label: "Map Explorer" },

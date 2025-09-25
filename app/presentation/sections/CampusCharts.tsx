@@ -1,0 +1,1384 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import {
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+type Row = {
+  campus: string;
+  route_id: string;
+  ym: string; // YYYY-MM-01
+  weighted_speed: number;
+  month_trip_count: number;
+  phase: "pre_ACE" | "ACE" | string;
+  ace_start_month?: string | null;
+};
+
+const BARUCH_CSV = `campus,route_id,ym,weighted_speed,month_trip_count,phase,ace_start_month
+
+Baruch College,M1,2023-01-01,6.839370874593370,31614.0,pre_ACE,
+Baruch College,M1,2023-02-01,6.786561166654490,29488.0,pre_ACE,
+Baruch College,M1,2023-03-01,6.645120534064960,32068.0,pre_ACE,
+Baruch College,M1,2023-04-01,6.617292624081370,30864.0,pre_ACE,
+Baruch College,M1,2023-05-01,6.496897252556390,31482.0,pre_ACE,
+Baruch College,M1,2023-06-01,6.512098531169490,30304.0,pre_ACE,
+Baruch College,M1,2023-07-01,6.696366879866840,31070.0,pre_ACE,
+Baruch College,M1,2023-08-01,6.499678972864020,31574.0,pre_ACE,
+Baruch College,M1,2023-09-01,6.482120755226700,28844.0,pre_ACE,
+Baruch College,M1,2023-10-01,6.491837555459730,30642.0,pre_ACE,
+Baruch College,M1,2023-11-01,6.594520017825110,29244.0,pre_ACE,
+Baruch College,M1,2023-12-01,6.678336522468760,29752.0,pre_ACE,
+Baruch College,M1,2024-01-01,6.789857559658810,33212.0,pre_ACE,
+Baruch College,M1,2024-02-01,6.719389895786560,30700.0,pre_ACE,
+Baruch College,M1,2024-03-01,6.688786857217800,31968.0,pre_ACE,
+Baruch College,M1,2024-04-01,6.473476254345210,31666.0,pre_ACE,
+Baruch College,M1,2024-05-01,6.480907913034760,31741.0,pre_ACE,
+Baruch College,M1,2024-06-01,6.597880344560650,29838.0,pre_ACE,
+Baruch College,M1,2024-07-01,6.599526516233520,32534.0,pre_ACE,
+Baruch College,M1,2024-08-01,6.580506835073030,30772.0,pre_ACE,
+Baruch College,M1,2024-09-01,6.434497186178710,29613.0,pre_ACE,
+Baruch College,M1,2024-10-01,6.388572055951590,32049.0,pre_ACE,
+Baruch College,M1,2024-11-01,6.59254511457728,30306.0,pre_ACE,
+Baruch College,M1,2024-12-01,6.637989631637040,31073.0,pre_ACE,
+Baruch College,M1,2025-01-01,6.759116486068280,32900.0,pre_ACE,
+Baruch College,M1,2025-02-01,6.638017325598750,21136.0,pre_ACE,
+Baruch College,M1,2025-03-01,6.727905279014280,31400.0,pre_ACE,
+Baruch College,M1,2025-04-01,6.585325762231620,30308.0,pre_ACE,
+Baruch College,M1,2025-05-01,6.537309418162330,29569.0,pre_ACE,
+Baruch College,M1,2025-06-01,6.554560586049270,30343.0,pre_ACE,
+Baruch College,M1,2025-07-01,6.602854676886240,32781.0,pre_ACE,
+Baruch College,M101,2023-01-01,6.864664625722290,66322.0,pre_ACE,2024-09-01
+Baruch College,M101,2023-02-01,6.876821782309300,62028.0,pre_ACE,2024-09-01
+Baruch College,M101,2023-03-01,6.705622705506090,67776.0,pre_ACE,2024-09-01
+Baruch College,M101,2023-04-01,6.711911497110540,63538.0,pre_ACE,2024-09-01
+Baruch College,M101,2023-05-01,6.6251234878516,65580.0,pre_ACE,2024-09-01
+Baruch College,M101,2023-06-01,6.594943253700520,63493.0,pre_ACE,2024-09-01
+Baruch College,M101,2023-07-01,6.667176794918230,65034.0,pre_ACE,2024-09-01
+Baruch College,M101,2023-08-01,6.653890073935390,65047.0,pre_ACE,2024-09-01
+Baruch College,M101,2023-09-01,6.462318617355250,56508.0,pre_ACE,2024-09-01
+Baruch College,M101,2023-10-01,6.5080412490672800,64014.0,pre_ACE,2024-09-01
+Baruch College,M101,2023-11-01,6.581400437780640,62892.0,pre_ACE,2024-09-01
+Baruch College,M101,2023-12-01,6.650609958027950,59930.0,pre_ACE,2024-09-01
+Baruch College,M101,2024-01-01,6.733314579798890,65230.0,pre_ACE,2024-09-01
+Baruch College,M101,2024-02-01,6.746523763686760,58577.0,pre_ACE,2024-09-01
+Baruch College,M101,2024-03-01,6.682907858852160,67503.0,pre_ACE,2024-09-01
+Baruch College,M101,2024-04-01,6.667484553226840,65449.0,pre_ACE,2024-09-01
+Baruch College,M101,2024-05-01,6.637342737377170,63873.0,pre_ACE,2024-09-01
+Baruch College,M101,2024-06-01,6.673482912190120,53389.0,pre_ACE,2024-09-01
+Baruch College,M101,2024-07-01,6.78712230774544,57708.0,pre_ACE,2024-09-01
+Baruch College,M101,2024-08-01,6.890878247574480,45551.0,pre_ACE,2024-09-01
+Baruch College,M101,2024-09-01,6.588443604352670,49265.0,ACE,2024-09-01
+Baruch College,M101,2024-10-01,6.518570880382910,65579.0,ACE,2024-09-01
+Baruch College,M101,2024-11-01,6.6374765570454800,61358.0,ACE,2024-09-01
+Baruch College,M101,2024-12-01,6.697627157618850,61407.0,ACE,2024-09-01
+Baruch College,M101,2025-01-01,6.837019341406010,68345.0,ACE,2024-09-01
+Baruch College,M101,2025-02-01,6.711909900503880,48772.0,ACE,2024-09-01
+Baruch College,M101,2025-03-01,6.842889660804700,67260.0,ACE,2024-09-01
+Baruch College,M101,2025-04-01,6.740005059943370,67755.0,ACE,2024-09-01
+Baruch College,M101,2025-05-01,6.701324766317980,64308.0,ACE,2024-09-01
+Baruch College,M101,2025-06-01,6.754312422097100,60383.0,ACE,2024-09-01
+Baruch College,M101,2025-07-01,6.815952387809210,64433.0,ACE,2024-09-01
+Baruch College,M102,2023-01-01,6.453084189674060,36821.0,pre_ACE,
+Baruch College,M102,2023-02-01,6.430322965593400,33942.0,pre_ACE,
+Baruch College,M102,2023-03-01,6.36884077355253,39029.0,pre_ACE,
+Baruch College,M102,2023-04-01,6.259147310511570,36080.0,pre_ACE,
+Baruch College,M102,2023-05-01,6.206349954963070,36103.0,pre_ACE,
+Baruch College,M102,2023-06-01,6.164747795533510,34395.0,pre_ACE,
+Baruch College,M102,2023-07-01,6.250794365742760,36884.0,pre_ACE,
+Baruch College,M102,2023-08-01,6.2172296949055100,34590.0,pre_ACE,
+Baruch College,M102,2023-09-01,6.132418540022700,32678.0,pre_ACE,
+Baruch College,M102,2023-10-01,6.177437444091480,36360.0,pre_ACE,
+Baruch College,M102,2023-11-01,6.221459623081140,35823.0,pre_ACE,
+Baruch College,M102,2023-12-01,6.294214519740670,35274.0,pre_ACE,
+Baruch College,M102,2024-01-01,6.363803419911510,37049.0,pre_ACE,
+Baruch College,M102,2024-02-01,6.226069012239610,32802.0,pre_ACE,
+Baruch College,M102,2024-03-01,6.269065056312860,36901.0,pre_ACE,
+Baruch College,M102,2024-04-01,6.089663045727200,34119.0,pre_ACE,
+Baruch College,M102,2024-05-01,6.101347672870280,33682.0,pre_ACE,
+Baruch College,M102,2024-06-01,6.140016676583560,30394.0,pre_ACE,
+Baruch College,M102,2024-07-01,6.2713970977877500,31415.0,pre_ACE,
+Baruch College,M102,2024-08-01,6.442816648766070,26402.0,pre_ACE,
+Baruch College,M102,2024-09-01,6.060096283736650,29270.0,pre_ACE,
+Baruch College,M102,2024-10-01,5.991282517849840,35630.0,pre_ACE,
+Baruch College,M102,2024-11-01,6.1548964548221400,35125.0,pre_ACE,
+Baruch College,M102,2024-12-01,6.180818996005690,35823.0,pre_ACE,
+Baruch College,M102,2025-01-01,6.326656622742920,38424.0,pre_ACE,
+Baruch College,M102,2025-02-01,6.307644574243610,25111.0,pre_ACE,
+Baruch College,M102,2025-03-01,6.339370296206560,36224.0,pre_ACE,
+Baruch College,M102,2025-04-01,6.192180617548220,37691.0,pre_ACE,
+Baruch College,M102,2025-05-01,6.201447829145870,35911.0,pre_ACE,
+Baruch College,M102,2025-06-01,6.2097564115147500,33406.0,pre_ACE,
+Baruch College,M102,2025-07-01,6.231776819561870,36574.0,pre_ACE,
+Baruch College,M103,2023-01-01,6.659052298944730,35563.0,pre_ACE,
+Baruch College,M103,2023-02-01,6.624998603424010,33232.0,pre_ACE,
+Baruch College,M103,2023-03-01,6.518999890414090,37013.0,pre_ACE,
+Baruch College,M103,2023-04-01,6.53411385142125,35187.0,pre_ACE,
+Baruch College,M103,2023-05-01,6.469726157775770,35096.0,pre_ACE,
+Baruch College,M103,2023-06-01,6.3901126124972900,33024.0,pre_ACE,
+Baruch College,M103,2023-07-01,6.50389517165265,36240.0,pre_ACE,
+Baruch College,M103,2023-08-01,6.492672883067090,34572.0,pre_ACE,
+Baruch College,M103,2023-09-01,6.448208368081350,30204.0,pre_ACE,
+Baruch College,M103,2023-10-01,6.46020755265968,34990.0,pre_ACE,
+Baruch College,M103,2023-11-01,6.488779723257570,34037.0,pre_ACE,
+Baruch College,M103,2023-12-01,6.582099351313990,34053.0,pre_ACE,
+Baruch College,M103,2024-01-01,6.578258042195820,35041.0,pre_ACE,
+Baruch College,M103,2024-02-01,6.597557617625160,33191.0,pre_ACE,
+Baruch College,M103,2024-03-01,6.54245930104079,35950.0,pre_ACE,
+Baruch College,M103,2024-04-01,6.4731478014212,32586.0,pre_ACE,
+Baruch College,M103,2024-05-01,6.554355666938600,30440.0,pre_ACE,
+Baruch College,M103,2024-06-01,6.669018077933400,27820.0,pre_ACE,
+Baruch College,M103,2024-07-01,6.688697915044910,29217.0,pre_ACE,
+Baruch College,M103,2024-08-01,6.780618344481700,26106.0,pre_ACE,
+Baruch College,M103,2024-09-01,6.483679957477200,26643.0,pre_ACE,
+Baruch College,M103,2024-10-01,6.421641869670640,33266.0,pre_ACE,
+Baruch College,M103,2024-11-01,6.550219126510490,33158.0,pre_ACE,
+Baruch College,M103,2024-12-01,6.551821710350750,33348.0,pre_ACE,
+Baruch College,M103,2025-01-01,6.577489557597980,36956.0,pre_ACE,
+Baruch College,M103,2025-02-01,6.620340765353020,23715.0,pre_ACE,
+Baruch College,M103,2025-03-01,6.677390529348120,35869.0,pre_ACE,
+Baruch College,M103,2025-04-01,6.5311165220701400,35646.0,pre_ACE,
+Baruch College,M103,2025-05-01,6.643082488601250,35567.0,pre_ACE,
+Baruch College,M103,2025-06-01,6.690879757439180,32651.0,pre_ACE,
+Baruch College,M103,2025-07-01,6.70915018471791,34664.0,pre_ACE,
+Baruch College,M2,2023-01-01,7.317953761222540,30746.0,pre_ACE,2025-02-01
+Baruch College,M2,2023-02-01,7.306530933137260,27996.0,pre_ACE,2025-02-01
+Baruch College,M2,2023-03-01,7.159634754969780,31152.0,pre_ACE,2025-02-01
+Baruch College,M2,2023-04-01,7.113484379763530,29927.0,pre_ACE,2025-02-01
+Baruch College,M2,2023-05-01,6.967561965550540,30760.0,pre_ACE,2025-02-01
+Baruch College,M2,2023-06-01,6.997759664578960,29500.0,pre_ACE,2025-02-01
+Baruch College,M2,2023-07-01,7.22714491916432,30615.0,pre_ACE,2025-02-01
+Baruch College,M2,2023-08-01,7.013038715133850,29068.0,pre_ACE,2025-02-01
+Baruch College,M2,2023-09-01,7.020049947337790,28229.0,pre_ACE,2025-02-01
+Baruch College,M2,2023-10-01,6.9934493887887100,30273.0,pre_ACE,2025-02-01
+Baruch College,M2,2023-11-01,7.074688541907170,28895.0,pre_ACE,2025-02-01
+Baruch College,M2,2023-12-01,7.18202554643189,28499.0,pre_ACE,2025-02-01
+Baruch College,M2,2024-01-01,7.2891384786460000,30897.0,pre_ACE,2025-02-01
+Baruch College,M2,2024-02-01,7.230919605224660,28105.0,pre_ACE,2025-02-01
+Baruch College,M2,2024-03-01,7.161941219404790,30266.0,pre_ACE,2025-02-01
+Baruch College,M2,2024-04-01,7.017907432563820,29550.0,pre_ACE,2025-02-01
+Baruch College,M2,2024-05-01,6.929430608290000,29078.0,pre_ACE,2025-02-01
+Baruch College,M2,2024-06-01,7.106922643241620,27527.0,pre_ACE,2025-02-01
+Baruch College,M2,2024-07-01,7.226711204033130,30308.0,pre_ACE,2025-02-01
+Baruch College,M2,2024-08-01,7.183234004487790,28187.0,pre_ACE,2025-02-01
+Baruch College,M2,2024-09-01,6.960825529697640,28030.0,pre_ACE,2025-02-01
+Baruch College,M2,2024-10-01,6.89832012501079,29780.0,pre_ACE,2025-02-01
+Baruch College,M2,2024-11-01,7.088470947598120,28580.0,pre_ACE,2025-02-01
+Baruch College,M2,2024-12-01,7.1828638636241900,27325.0,pre_ACE,2025-02-01
+Baruch College,M2,2025-01-01,7.281264006555280,31053.0,pre_ACE,2025-02-01
+Baruch College,M2,2025-02-01,7.188199990078920,20106.0,ACE,2025-02-01
+Baruch College,M2,2025-03-01,7.237933923838660,30088.0,ACE,2025-02-01
+Baruch College,M2,2025-04-01,7.054379976821580,29564.0,ACE,2025-02-01
+Baruch College,M2,2025-05-01,6.9937830805337500,28812.0,ACE,2025-02-01
+Baruch College,M2,2025-06-01,7.086932264869730,28026.0,ACE,2025-02-01
+Baruch College,M2,2025-07-01,7.115286587371000,30486.0,ACE,2025-02-01
+Baruch College,M3,2023-01-01,6.174449069704190,36163.0,pre_ACE,
+Baruch College,M3,2023-02-01,6.157306906160990,32991.0,pre_ACE,
+Baruch College,M3,2023-03-01,6.028943360621030,36075.0,pre_ACE,
+Baruch College,M3,2023-04-01,6.043553621702060,34339.0,pre_ACE,
+Baruch College,M3,2023-05-01,5.9236015203604100,35358.0,pre_ACE,
+Baruch College,M3,2023-06-01,5.919744604773620,33958.0,pre_ACE,
+Baruch College,M3,2023-07-01,6.119807512636890,36115.0,pre_ACE,
+Baruch College,M3,2023-08-01,5.9686884822236,34736.0,pre_ACE,
+Baruch College,M3,2023-09-01,5.987329520080100,32498.0,pre_ACE,
+Baruch College,M3,2023-10-01,5.985929590646890,34797.0,pre_ACE,
+Baruch College,M3,2023-11-01,6.016494326024320,32966.0,pre_ACE,
+Baruch College,M3,2023-12-01,6.086569566210480,31917.0,pre_ACE,
+Baruch College,M3,2024-01-01,6.120471342646680,35064.0,pre_ACE,
+Baruch College,M3,2024-02-01,6.0609574819882,32961.0,pre_ACE,
+Baruch College,M3,2024-03-01,6.054711671553290,34362.0,pre_ACE,
+Baruch College,M3,2024-04-01,5.90806555620796,33849.0,pre_ACE,
+Baruch College,M3,2024-05-01,5.927766869001400,33199.0,pre_ACE,
+Baruch College,M3,2024-06-01,6.007485364326760,31272.0,pre_ACE,
+Baruch College,M3,2024-07-01,6.0273677127505500,34972.0,pre_ACE,
+Baruch College,M3,2024-08-01,6.014331081312260,31934.0,pre_ACE,
+Baruch College,M3,2024-09-01,5.913920007330230,31766.0,pre_ACE,
+Baruch College,M3,2024-10-01,5.8963010091590800,34133.0,pre_ACE,
+Baruch College,M3,2024-11-01,5.97591532873198,32727.0,pre_ACE,
+Baruch College,M3,2024-12-01,6.089569269078000,33222.0,pre_ACE,
+Baruch College,M3,2025-01-01,6.109975179994010,35879.0,pre_ACE,
+Baruch College,M3,2025-02-01,6.071590549667960,28130.0,pre_ACE,
+Baruch College,M3,2025-03-01,6.086616494999370,35206.0,pre_ACE,
+Baruch College,M3,2025-04-01,5.949932027293410,34384.0,pre_ACE,
+Baruch College,M3,2025-05-01,5.892938387882150,34400.0,pre_ACE,
+Baruch College,M3,2025-06-01,5.947177573402870,32951.0,pre_ACE,
+Baruch College,M3,2025-07-01,5.949273756134120,35458.0,pre_ACE,
+
+`;
+
+// Paste BMCC data (Borough of Manhattan Community College) in the same CSV format below
+// Header MUST be: campus,route_id,ym,weighted_speed,month_trip_count,phase,ace_start_month
+// Example campus value: "Borough of Manhattan Community College"
+const BMCC_CSV = `campus,route_id,ym,weighted_speed,month_trip_count,phase,ace_start_month\n`;
+
+// School of Public Health
+const SCHOOL_OF_PUBLIC_HEALTH_CSV = `campus,route_id,ym,weighted_speed,month_trip_count,phase,ace_start_month
+School of Public Health,BXM3,2023-01-01,11.95759601,8475,pre_ACE,
+School of Public Health,BXM3,2023-02-01,11.85241079,7837,pre_ACE,
+School of Public Health,BXM3,2023-03-01,11.60621045,8861,pre_ACE,
+School of Public Health,BXM3,2023-04-01,11.55878259,8174,pre_ACE,
+School of Public Health,BXM3,2023-05-01,11.04472969,8428,pre_ACE,
+School of Public Health,BXM3,2023-06-01,11.38258583,8319,pre_ACE,
+School of Public Health,BXM3,2023-07-01,11.66427464,8219,pre_ACE,
+School of Public Health,BXM3,2023-08-01,11.62087404,8783,pre_ACE,
+School of Public Health,BXM3,2023-09-01,10.91342166,7208,pre_ACE,
+School of Public Health,BXM3,2023-10-01,11.05537925,8242,pre_ACE,
+School of Public Health,BXM3,2023-11-01,11.23135316,7652,pre_ACE,
+School of Public Health,BXM3,2023-12-01,11.36713598,7465,pre_ACE,
+School of Public Health,BXM3,2024-01-01,11.67755919,7827,pre_ACE,
+School of Public Health,BXM3,2024-02-01,11.55718483,7263,pre_ACE,
+School of Public Health,BXM3,2024-03-01,11.40634699,7751,pre_ACE,
+School of Public Health,BXM3,2024-04-01,11.07719757,7707,pre_ACE,
+School of Public Health,BXM3,2024-05-01,10.69484112,7848,pre_ACE,
+School of Public Health,BXM3,2024-06-01,11.10652084,7657,pre_ACE,
+School of Public Health,BXM3,2024-07-01,11.47278299,8414,pre_ACE,
+School of Public Health,BXM3,2024-08-01,11.41436816,8186,pre_ACE,
+School of Public Health,BXM3,2024-09-01,10.85024727,7463,pre_ACE,
+School of Public Health,BXM3,2024-10-01,10.68893281,8292,pre_ACE,
+School of Public Health,BXM3,2024-11-01,10.9002943,7667,pre_ACE,
+School of Public Health,BXM3,2024-12-01,11.10021956,7900,pre_ACE,
+School of Public Health,BXM3,2025-01-01,11.66235775,8360,pre_ACE,
+School of Public Health,BXM3,2025-02-01,11.44459855,7548,pre_ACE,
+School of Public Health,BXM3,2025-03-01,11.31020793,8334,pre_ACE,
+School of Public Health,BXM3,2025-04-01,11.12083795,8388,pre_ACE,
+School of Public Health,BXM3,2025-05-01,10.74942621,8021,pre_ACE,
+School of Public Health,BXM3,2025-06-01,11.05571963,7725,pre_ACE,
+School of Public Health,BXM3,2025-07-01,11.21589273,8454,pre_ACE,
+School of Public Health,BXM4,2023-01-01,10.32107715,5604,pre_ACE,
+School of Public Health,BXM4,2023-02-01,10.28682249,5185,pre_ACE,
+School of Public Health,BXM4,2023-03-01,10.03862158,5821,pre_ACE,
+School of Public Health,BXM4,2023-04-01,10.06764625,5466,pre_ACE,
+School of Public Health,BXM4,2023-05-01,9.670246192,5682,pre_ACE,
+School of Public Health,BXM4,2023-06-01,9.775791286,5569,pre_ACE,
+School of Public Health,BXM4,2023-07-01,10.07929861,5442,pre_ACE,
+School of Public Health,BXM4,2023-08-01,9.988028899,5684,pre_ACE,
+School of Public Health,BXM4,2023-09-01,9.559208144,4951,pre_ACE,
+School of Public Health,BXM4,2023-10-01,9.745957053,5508,pre_ACE,
+School of Public Health,BXM4,2023-11-01,9.847795154,5098,pre_ACE,
+School of Public Health,BXM4,2023-12-01,10.00721358,4867,pre_ACE,
+School of Public Health,BXM4,2024-01-01,10.3799617,5292,pre_ACE,
+School of Public Health,BXM4,2024-02-01,10.26064253,5068,pre_ACE,
+School of Public Health,BXM4,2024-03-01,10.04149903,5426,pre_ACE,
+School of Public Health,BXM4,2024-04-01,9.898182877,5382,pre_ACE,
+School of Public Health,BXM4,2024-05-01,9.519164012,5549,pre_ACE,
+School of Public Health,BXM4,2024-06-01,9.840655295,5318,pre_ACE,
+School of Public Health,BXM4,2024-07-01,10.09138622,5791,pre_ACE,
+School of Public Health,BXM4,2024-08-01,10.10972514,5609,pre_ACE,
+School of Public Health,BXM4,2024-09-01,9.570077553,5153,pre_ACE,
+School of Public Health,BXM4,2024-10-01,9.339036606,5690,pre_ACE,
+School of Public Health,BXM4,2024-11-01,9.573235641,5435,pre_ACE,
+School of Public Health,BXM4,2024-12-01,9.668606245,5529,pre_ACE,
+School of Public Health,BXM4,2025-01-01,10.12302344,5741,pre_ACE,
+School of Public Health,BXM4,2025-02-01,9.841770785,5091,pre_ACE,
+School of Public Health,BXM4,2025-03-01,9.78208423,5775,pre_ACE,
+School of Public Health,BXM4,2025-04-01,9.669671354,5585,pre_ACE,
+School of Public Health,BXM4,2025-05-01,9.342246617,5521,pre_ACE,
+School of Public Health,BXM4,2025-06-01,9.561903772,5342,pre_ACE,
+School of Public Health,BXM4,2025-07-01,9.67586598,5760,pre_ACE,
+School of Public Health,M102,2023-01-01,6.45308419,36821,pre_ACE,
+School of Public Health,M102,2023-02-01,6.430322966,33942,pre_ACE,
+School of Public Health,M102,2023-03-01,6.368840774,39029,pre_ACE,
+School of Public Health,M102,2023-04-01,6.259147311,36080,pre_ACE,
+School of Public Health,M102,2023-05-01,6.206349955,36103,pre_ACE,
+School of Public Health,M102,2023-06-01,6.164747796,34395,pre_ACE,
+School of Public Health,M102,2023-07-01,6.250794366,36884,pre_ACE,
+School of Public Health,M102,2023-08-01,6.217229695,34590,pre_ACE,
+School of Public Health,M102,2023-09-01,6.13241854,32678,pre_ACE,
+School of Public Health,M102,2023-10-01,6.177437444,36360,pre_ACE,
+School of Public Health,M102,2023-11-01,6.221459623,35823,pre_ACE,
+School of Public Health,M102,2023-12-01,6.29421452,35274,pre_ACE,
+School of Public Health,M102,2024-01-01,6.36380342,37049,pre_ACE,
+School of Public Health,M102,2024-02-01,6.226069012,32802,pre_ACE,
+School of Public Health,M102,2024-03-01,6.269065056,36901,pre_ACE,
+School of Public Health,M102,2024-04-01,6.089663046,34119,pre_ACE,
+School of Public Health,M102,2024-05-01,6.101347673,33682,pre_ACE,
+School of Public Health,M102,2024-06-01,6.140016677,30394,pre_ACE,
+School of Public Health,M102,2024-07-01,6.271397098,31415,pre_ACE,
+School of Public Health,M102,2024-08-01,6.442816649,26402,pre_ACE,
+School of Public Health,M102,2024-09-01,6.060096284,29270,pre_ACE,
+School of Public Health,M102,2024-10-01,5.991282518,35630,pre_ACE,
+School of Public Health,M102,2024-11-01,6.154896455,35125,pre_ACE,
+School of Public Health,M102,2024-12-01,6.180818996,35823,pre_ACE,
+School of Public Health,M102,2025-01-01,6.326656623,38424,pre_ACE,
+School of Public Health,M102,2025-02-01,6.307644574,25111,pre_ACE,
+School of Public Health,M102,2025-03-01,6.339370296,36224,pre_ACE,
+School of Public Health,M102,2025-04-01,6.192180618,37691,pre_ACE,
+School of Public Health,M102,2025-05-01,6.201447829,35911,pre_ACE,
+School of Public Health,M102,2025-06-01,6.209756412,33406,pre_ACE,
+School of Public Health,M102,2025-07-01,6.23177682,36574,pre_ACE,
+School of Public Health,M125,2023-01-01,5.840817687,44244,pre_ACE,
+School of Public Health,M125,2023-02-01,5.815302286,41097,pre_ACE,
+School of Public Health,M125,2023-03-01,5.637891172,46559,pre_ACE,
+School of Public Health,M125,2023-04-01,5.590420776,42686,pre_ACE,
+School of Public Health,M125,2023-05-01,5.441711145,43489,pre_ACE,
+School of Public Health,M125,2023-06-01,5.494887463,43732,pre_ACE,
+School of Public Health,M125,2023-07-01,5.481995969,44787,pre_ACE,
+School of Public Health,M125,2023-08-01,5.474665547,44623,pre_ACE,
+School of Public Health,M125,2023-09-01,5.453253048,39873,pre_ACE,
+School of Public Health,M125,2023-10-01,5.484030639,45057,pre_ACE,
+School of Public Health,M125,2023-11-01,5.527400175,43052,pre_ACE,
+School of Public Health,M125,2023-12-01,5.609345108,42439,pre_ACE,
+School of Public Health,M125,2024-01-01,5.602701359,44725,pre_ACE,
+School of Public Health,M125,2024-02-01,5.57827153,40846,pre_ACE,
+School of Public Health,M125,2024-03-01,5.457496147,45107,pre_ACE,
+School of Public Health,M125,2024-04-01,5.447713494,43337,pre_ACE,
+School of Public Health,M125,2024-05-01,5.357469193,43779,pre_ACE,
+School of Public Health,M125,2024-06-01,5.3713792,41258,pre_ACE,
+School of Public Health,M125,2024-07-01,5.465188545,42342,pre_ACE,
+School of Public Health,M125,2024-08-01,5.381172247,40652,pre_ACE,
+School of Public Health,M125,2024-09-01,5.315969653,38597,pre_ACE,
+School of Public Health,M125,2024-10-01,5.354729482,45890,pre_ACE,
+School of Public Health,M125,2024-11-01,5.378630591,43358,pre_ACE,
+School of Public Health,M125,2024-12-01,5.43873329,45071,pre_ACE,
+School of Public Health,M125,2025-01-01,5.633022688,45195,pre_ACE,
+School of Public Health,M125,2025-02-01,5.583214708,34706,pre_ACE,
+School of Public Health,M125,2025-03-01,5.543282408,44618,pre_ACE,
+School of Public Health,M125,2025-04-01,5.463768369,45507,pre_ACE,
+School of Public Health,M125,2025-05-01,5.403786234,43975,pre_ACE,
+School of Public Health,M125,2025-06-01,5.393484682,42359,pre_ACE,
+School of Public Health,M125,2025-07-01,5.534163001,45514,pre_ACE,
+School of Public Health,M7,2023-01-01,6.555616329,37628,pre_ACE,
+School of Public Health,M7,2023-02-01,6.488840475,34722,pre_ACE,
+School of Public Health,M7,2023-03-01,6.355121762,38074,pre_ACE,
+School of Public Health,M7,2023-04-01,6.369200436,36770,pre_ACE,
+School of Public Health,M7,2023-05-01,6.279762595,37238,pre_ACE,
+School of Public Health,M7,2023-06-01,6.2805493,35599,pre_ACE,
+School of Public Health,M7,2023-07-01,6.352827152,36453,pre_ACE,
+School of Public Health,M7,2023-08-01,6.32665131,37513,pre_ACE,
+School of Public Health,M7,2023-09-01,6.182954967,34449,pre_ACE,
+School of Public Health,M7,2023-10-01,6.291161157,35440,pre_ACE,
+School of Public Health,M7,2023-11-01,6.363767265,34629,pre_ACE,
+School of Public Health,M7,2023-12-01,6.38735164,35042,pre_ACE,
+School of Public Health,M7,2024-01-01,6.499177701,38655,pre_ACE,
+School of Public Health,M7,2024-02-01,6.39723381,35542,pre_ACE,
+School of Public Health,M7,2024-03-01,6.384458894,37915,pre_ACE,
+School of Public Health,M7,2024-04-01,6.250675533,36517,pre_ACE,
+School of Public Health,M7,2024-05-01,6.189510151,35562,pre_ACE,
+School of Public Health,M7,2024-06-01,6.237872295,34304,pre_ACE,
+School of Public Health,M7,2024-07-01,6.338911059,37198,pre_ACE,
+School of Public Health,M7,2024-08-01,6.284383284,36253,pre_ACE,
+School of Public Health,M7,2024-09-01,6.202402763,34994,pre_ACE,
+School of Public Health,M7,2024-10-01,6.191369613,36711,pre_ACE,
+School of Public Health,M7,2024-11-01,6.251834054,35338,pre_ACE,
+School of Public Health,M7,2024-12-01,6.322671881,35335,pre_ACE,
+School of Public Health,M7,2025-01-01,6.484963434,38191,pre_ACE,
+School of Public Health,M7,2025-02-01,6.418815596,29500,pre_ACE,
+School of Public Health,M7,2025-03-01,6.451834325,37658,pre_ACE,
+School of Public Health,M7,2025-04-01,6.341776865,36284,pre_ACE,
+School of Public Health,M7,2025-05-01,6.287357554,35592,pre_ACE,
+School of Public Health,M7,2025-06-01,6.262318307,35306,pre_ACE,
+School of Public Health,M7,2025-07-01,6.333568582,38041,pre_ACE,
+`;
+
+// New York City College of Technology
+const NEW_YORK_CITY_COLLEGE_OF_TECHNOLOGY_CSV = `campus,route_id,ym,weighted_speed,month_trip_count,phase,ace_start_month
+New York City College of Technology,B103,2023-01-01,8.434022707,28307,pre_ACE,
+New York City College of Technology,B103,2023-02-01,8.407664234,25571,pre_ACE,
+New York City College of Technology,B103,2023-03-01,8.311873904,28687,pre_ACE,
+New York City College of Technology,B103,2023-04-01,8.349431814,26883,pre_ACE,
+New York City College of Technology,B103,2023-05-01,8.141717318,26208,pre_ACE,
+New York City College of Technology,B103,2023-06-01,8.194724971,24638,pre_ACE,
+New York City College of Technology,B103,2023-07-01,8.310294791,25234,pre_ACE,
+New York City College of Technology,B103,2023-08-01,8.356587616,26560,pre_ACE,
+New York City College of Technology,B103,2023-09-01,8.001880862,25962,pre_ACE,
+New York City College of Technology,B103,2023-10-01,8.016186841,27506,pre_ACE,
+New York City College of Technology,B103,2023-11-01,8.091980312,26971,pre_ACE,
+New York City College of Technology,B103,2023-12-01,8.169578206,26837,pre_ACE,
+New York City College of Technology,B103,2024-01-01,8.334839035,28412,pre_ACE,
+New York City College of Technology,B103,2024-02-01,8.31309706,27302,pre_ACE,
+New York City College of Technology,B103,2024-03-01,8.212136075,28719,pre_ACE,
+New York City College of Technology,B103,2024-04-01,8.181435841,28751,pre_ACE,
+New York City College of Technology,B103,2024-05-01,7.946801935,28678,pre_ACE,
+New York City College of Technology,B103,2024-06-01,8.067455761,26954,pre_ACE,
+New York City College of Technology,B103,2024-07-01,8.21651762,27604,pre_ACE,
+New York City College of Technology,B103,2024-08-01,8.241549189,28739,pre_ACE,
+New York City College of Technology,B103,2024-09-01,7.892706589,27230,pre_ACE,
+New York City College of Technology,B103,2024-10-01,8.005895794,28628,pre_ACE,
+New York City College of Technology,B103,2024-11-01,8.021546014,25242,pre_ACE,
+New York City College of Technology,B103,2024-12-01,8.066932737,25286,pre_ACE,
+New York City College of Technology,B103,2025-01-01,8.35313245,26415,pre_ACE,
+New York City College of Technology,B103,2025-02-01,8.162336135,24404,pre_ACE,
+New York City College of Technology,B103,2025-03-01,8.158862558,28280,pre_ACE,
+New York City College of Technology,B103,2025-04-01,8.012074701,28201,pre_ACE,
+New York City College of Technology,B103,2025-05-01,7.875706749,28513,pre_ACE,
+New York City College of Technology,B103,2025-06-01,7.99829211,28204,pre_ACE,
+New York City College of Technology,B103,2025-07-01,8.147381908,29951,pre_ACE,
+New York City College of Technology,B25,2023-01-01,6.640604597,32804,ACE,2022-12-01
+New York City College of Technology,B25,2023-02-01,6.586287221,30147,ACE,2022-12-01
+New York City College of Technology,B25,2023-03-01,6.454281189,33134,ACE,2022-12-01
+New York City College of Technology,B25,2023-04-01,6.495810493,31271,ACE,2022-12-01
+New York City College of Technology,B25,2023-05-01,6.375907695,31206,ACE,2022-12-01
+New York City College of Technology,B25,2023-06-01,6.433689309,30787,ACE,2022-12-01
+New York City College of Technology,B25,2023-07-01,6.527041708,32340,ACE,2022-12-01
+New York City College of Technology,B25,2023-08-01,6.400295803,33137,ACE,2022-12-01
+New York City College of Technology,B25,2023-09-01,6.27560667,29664,ACE,2022-12-01
+New York City College of Technology,B25,2023-10-01,6.286824718,29690,ACE,2022-12-01
+New York City College of Technology,B25,2023-11-01,6.388261308,29309,ACE,2022-12-01
+New York City College of Technology,B25,2023-12-01,6.431952794,29144,ACE,2022-12-01
+New York City College of Technology,B25,2024-01-01,6.597550097,32201,ACE,2022-12-01
+New York City College of Technology,B25,2024-02-01,6.406335172,30305,ACE,2022-12-01
+New York City College of Technology,B25,2024-03-01,6.355477109,31870,ACE,2022-12-01
+New York City College of Technology,B25,2024-04-01,6.3035426,31207,ACE,2022-12-01
+New York City College of Technology,B25,2024-05-01,6.038424439,28716,ACE,2022-12-01
+New York City College of Technology,B25,2024-06-01,6.214869916,27296,ACE,2022-12-01
+New York City College of Technology,B25,2024-07-01,6.291782584,31014,ACE,2022-12-01
+New York City College of Technology,B25,2024-08-01,6.218238731,30028,ACE,2022-12-01
+New York City College of Technology,B25,2024-09-01,6.179101966,29465,ACE,2022-12-01
+New York City College of Technology,B25,2024-10-01,6.283998456,31210,ACE,2022-12-01
+New York City College of Technology,B25,2024-11-01,6.409529034,29515,ACE,2022-12-01
+New York City College of Technology,B25,2024-12-01,6.430623649,29839,ACE,2022-12-01
+New York City College of Technology,B25,2025-01-01,6.667121093,31866,ACE,2022-12-01
+New York City College of Technology,B25,2025-02-01,6.552112371,24549,ACE,2022-12-01
+New York City College of Technology,B25,2025-03-01,6.544960445,29845,ACE,2022-12-01
+New York City College of Technology,B25,2025-04-01,6.459122271,29465,ACE,2022-12-01
+New York City College of Technology,B25,2025-05-01,6.406162856,28137,ACE,2022-12-01
+New York City College of Technology,B25,2025-06-01,6.486451028,28416,ACE,2022-12-01
+New York City College of Technology,B25,2025-07-01,6.518019792,31163,ACE,2022-12-01
+New York City College of Technology,B26,2023-01-01,6.940053979,35773,pre_ACE,2023-10-01
+New York City College of Technology,B26,2023-02-01,6.927166738,32482,pre_ACE,2023-10-01
+New York City College of Technology,B26,2023-03-01,6.838291978,36168,pre_ACE,2023-10-01
+New York City College of Technology,B26,2023-04-01,6.824006432,34074,pre_ACE,2023-10-01
+New York City College of Technology,B26,2023-05-01,6.721384149,35407,pre_ACE,2023-10-01
+New York City College of Technology,B26,2023-06-01,6.788271444,34700,pre_ACE,2023-10-01
+New York City College of Technology,B26,2023-07-01,6.953770197,35717,pre_ACE,2023-10-01
+New York City College of Technology,B26,2023-08-01,6.897363592,35653,pre_ACE,2023-10-01
+New York City College of Technology,B26,2023-09-01,6.864196663,32380,pre_ACE,2023-10-01
+New York City College of Technology,B26,2023-10-01,6.868265097,34679,ACE,2023-10-01
+New York City College of Technology,B26,2023-11-01,6.995494469,33365,ACE,2023-10-01
+New York City College of Technology,B26,2023-12-01,6.986192097,33728,ACE,2023-10-01
+New York City College of Technology,B26,2024-01-01,7.083704293,35824,ACE,2023-10-01
+New York City College of Technology,B26,2024-02-01,6.946449784,33362,ACE,2023-10-01
+New York City College of Technology,B26,2024-03-01,6.826838059,35227,ACE,2023-10-01
+New York City College of Technology,B26,2024-04-01,6.857686362,34917,ACE,2023-10-01
+New York City College of Technology,B26,2024-05-01,6.66859803,34971,ACE,2023-10-01
+New York City College of Technology,B26,2024-06-01,6.740962541,33535,ACE,2023-10-01
+New York City College of Technology,B26,2024-07-01,6.990244045,35901,ACE,2023-10-01
+New York City College of Technology,B26,2024-08-01,7.002516625,35942,ACE,2023-10-01
+New York City College of Technology,B26,2024-09-01,6.807312057,34285,ACE,2023-10-01
+New York City College of Technology,B26,2024-10-01,6.867470654,36553,ACE,2023-10-01
+New York City College of Technology,B26,2024-11-01,6.949780492,34040,ACE,2023-10-01
+New York City College of Technology,B26,2024-12-01,7.022158205,34468,ACE,2023-10-01
+New York City College of Technology,B26,2025-01-01,7.171933922,35712,ACE,2023-10-01
+New York City College of Technology,B26,2025-02-01,7.045179157,27551,ACE,2023-10-01
+New York City College of Technology,B26,2025-03-01,7.510452124,36159,ACE,2023-10-01
+New York City College of Technology,B26,2025-04-01,7.465094018,35229,ACE,2023-10-01
+New York City College of Technology,B26,2025-05-01,7.428628622,35232,ACE,2023-10-01
+New York City College of Technology,B26,2025-06-01,7.49345922,34440,ACE,2023-10-01
+New York City College of Technology,B26,2025-07-01,7.282863921,37330,ACE,2023-10-01
+New York City College of Technology,B38,2023-01-01,6.812281095,61029,pre_ACE,
+New York City College of Technology,B38,2023-02-01,6.790713759,55403,pre_ACE,
+New York City College of Technology,B38,2023-03-01,6.675936883,63564,pre_ACE,
+New York City College of Technology,B38,2023-04-01,6.745531845,59576,pre_ACE,
+New York City College of Technology,B38,2023-05-01,6.654139741,62196,pre_ACE,
+New York City College of Technology,B38,2023-06-01,6.711257375,60281,pre_ACE,
+New York City College of Technology,B38,2023-07-01,6.816013351,60745,pre_ACE,
+New York City College of Technology,B38,2023-08-01,6.757325568,62010,pre_ACE,
+New York City College of Technology,B38,2023-09-01,6.562938318,58718,pre_ACE,
+New York City College of Technology,B38,2023-10-01,6.63304274,61716,pre_ACE,
+New York City College of Technology,B38,2023-11-01,6.731211418,58391,pre_ACE,
+New York City College of Technology,B38,2023-12-01,6.811206006,55662,pre_ACE,
+New York City College of Technology,B38,2024-01-01,6.759675291,57659,pre_ACE,
+New York City College of Technology,B38,2024-02-01,6.607278657,57154,pre_ACE,
+New York City College of Technology,B38,2024-03-01,6.558782938,60340,pre_ACE,
+New York City College of Technology,B38,2024-04-01,6.542643474,57776,pre_ACE,
+New York City College of Technology,B38,2024-05-01,6.376951351,60735,pre_ACE,
+New York City College of Technology,B38,2024-06-01,6.441090951,55822,pre_ACE,
+New York City College of Technology,B38,2024-07-01,6.746102549,58769,pre_ACE,
+New York City College of Technology,B38,2024-08-01,6.670701074,60501,pre_ACE,
+New York City College of Technology,B38,2024-09-01,6.561394262,59008,pre_ACE,
+New York City College of Technology,B38,2024-10-01,6.61981923,63405,pre_ACE,
+New York City College of Technology,B38,2024-11-01,6.711371375,59117,pre_ACE,
+New York City College of Technology,B38,2024-12-01,6.787954636,57894,pre_ACE,
+New York City College of Technology,B38,2025-01-01,6.862464419,62145,pre_ACE,
+New York City College of Technology,B38,2025-02-01,6.776539476,54513,pre_ACE,
+New York City College of Technology,B38,2025-03-01,6.797453128,60759,pre_ACE,
+New York City College of Technology,B38,2025-04-01,6.802927476,61018,pre_ACE,
+New York City College of Technology,B38,2025-05-01,6.760541636,60219,pre_ACE,
+New York City College of Technology,B38,2025-06-01,6.769255579,57834,pre_ACE,
+New York City College of Technology,B38,2025-07-01,6.72569343,60693,pre_ACE,
+New York City College of Technology,B41,2023-01-01,7.278970937,73663,pre_ACE,2024-09-01
+New York City College of Technology,B41,2023-02-01,7.234278168,67867,pre_ACE,2024-09-01
+New York City College of Technology,B41,2023-03-01,7.098874342,76196,pre_ACE,2024-09-01
+New York City College of Technology,B41,2023-04-01,7.216678055,72587,pre_ACE,2024-09-01
+New York City College of Technology,B41,2023-05-01,7.060389009,74827,pre_ACE,2024-09-01
+New York City College of Technology,B41,2023-06-01,7.075750663,73589,pre_ACE,2024-09-01
+New York City College of Technology,B41,2023-07-01,7.161776692,74556,pre_ACE,2024-09-01
+New York City College of Technology,B41,2023-08-01,7.180710623,76139,pre_ACE,2024-09-01
+New York City College of Technology,B41,2023-09-01,6.875349054,67708,pre_ACE,2024-09-01
+New York City College of Technology,B41,2023-10-01,6.894587146,71821,pre_ACE,2024-09-01
+New York City College of Technology,B41,2023-11-01,7.011577427,70037,pre_ACE,2024-09-01
+New York City College of Technology,B41,2023-12-01,7.040191124,69996,pre_ACE,2024-09-01
+New York City College of Technology,B41,2024-01-01,7.21266574,74544,pre_ACE,2024-09-01
+New York City College of Technology,B41,2024-02-01,7.106883637,70706,pre_ACE,2024-09-01
+New York City College of Technology,B41,2024-03-01,6.954599919,73728,pre_ACE,2024-09-01
+New York City College of Technology,B41,2024-04-01,7.028870379,73730,pre_ACE,2024-09-01
+New York City College of Technology,B41,2024-05-01,6.770962027,71009,pre_ACE,2024-09-01
+New York City College of Technology,B41,2024-06-01,6.855098334,69481,pre_ACE,2024-09-01
+New York City College of Technology,B41,2024-07-01,7.134416567,72869,pre_ACE,2024-09-01
+New York City College of Technology,B41,2024-08-01,7.060654321,69336,pre_ACE,2024-09-01
+New York City College of Technology,B41,2024-09-01,6.89327817,68625,ACE,2024-09-01
+New York City College of Technology,B41,2024-10-01,6.989443057,75011,ACE,2024-09-01
+New York City College of Technology,B41,2024-11-01,7.044382954,69685,ACE,2024-09-01
+New York City College of Technology,B41,2024-12-01,7.110031072,70913,ACE,2024-09-01
+New York City College of Technology,B41,2025-01-01,7.39573272,75115,ACE,2024-09-01
+New York City College of Technology,B41,2025-02-01,7.235538422,66433,ACE,2024-09-01
+New York City College of Technology,B41,2025-03-01,7.27217615,75039,ACE,2024-09-01
+New York City College of Technology,B41,2025-04-01,7.257477705,74401,ACE,2024-09-01
+New York City College of Technology,B41,2025-05-01,7.109934774,73971,ACE,2024-09-01
+New York City College of Technology,B41,2025-06-01,7.142056974,70969,ACE,2024-09-01
+New York City College of Technology,B41,2025-07-01,7.235012117,74155,ACE,2024-09-01
+New York City College of Technology,B52,2023-01-01,6.313447625,39967,pre_ACE,
+New York City College of Technology,B52,2023-02-01,6.268971809,36731,pre_ACE,
+New York City College of Technology,B52,2023-03-01,6.195973311,40273,pre_ACE,
+New York City College of Technology,B52,2023-04-01,6.24632737,38600,pre_ACE,
+New York City College of Technology,B52,2023-05-01,6.11926873,40007,pre_ACE,
+New York City College of Technology,B52,2023-06-01,6.228080485,39131,pre_ACE,
+New York City College of Technology,B52,2023-07-01,6.302391878,39889,pre_ACE,
+New York City College of Technology,B52,2023-08-01,6.286140084,41654,pre_ACE,
+New York City College of Technology,B52,2023-09-01,6.096444288,37029,pre_ACE,
+New York City College of Technology,B52,2023-10-01,6.077840646,38538,pre_ACE,
+New York City College of Technology,B52,2023-11-01,6.18230336,37769,pre_ACE,
+New York City College of Technology,B52,2023-12-01,6.261003136,37942,pre_ACE,
+New York City College of Technology,B52,2024-01-01,6.343371425,40381,pre_ACE,
+New York City College of Technology,B52,2024-02-01,6.194344201,36846,pre_ACE,
+New York City College of Technology,B52,2024-03-01,6.113060406,39587,pre_ACE,
+New York City College of Technology,B52,2024-04-01,6.06594034,39814,pre_ACE,
+New York City College of Technology,B52,2024-05-01,5.922074619,39184,pre_ACE,
+New York City College of Technology,B52,2024-06-01,6.016819166,37866,pre_ACE,
+New York City College of Technology,B52,2024-07-01,6.336298458,40573,pre_ACE,
+New York City College of Technology,B52,2024-08-01,6.287736263,40612,pre_ACE,
+New York City College of Technology,B52,2024-09-01,6.179628676,37814,pre_ACE,
+New York City College of Technology,B52,2024-10-01,6.268897882,40914,pre_ACE,
+New York City College of Technology,B52,2024-11-01,6.377654849,37807,pre_ACE,
+New York City College of Technology,B52,2024-12-01,6.406660112,38125,pre_ACE,
+New York City College of Technology,B52,2025-01-01,6.471055796,40616,pre_ACE,
+New York City College of Technology,B52,2025-02-01,6.361385682,35681,pre_ACE,
+New York City College of Technology,B52,2025-03-01,6.439823617,40162,pre_ACE,
+New York City College of Technology,B52,2025-04-01,6.151942957,38998,pre_ACE,
+New York City College of Technology,B52,2025-05-01,6.120394584,39260,pre_ACE,
+New York City College of Technology,B52,2025-06-01,6.139372639,37816,pre_ACE,
+New York City College of Technology,B52,2025-07-01,6.199725136,39691,pre_ACE,
+New York City College of Technology,B54,2023-01-01,6.278918851,20862,pre_ACE,
+New York City College of Technology,B54,2023-02-01,6.206948479,18878,pre_ACE,
+New York City College of Technology,B54,2023-03-01,6.126096041,21109,pre_ACE,
+New York City College of Technology,B54,2023-04-01,6.26025032,19641,pre_ACE,
+New York City College of Technology,B54,2023-05-01,6.101248878,20461,pre_ACE,
+New York City College of Technology,B54,2023-06-01,6.180701633,19818,pre_ACE,
+New York City College of Technology,B54,2023-07-01,6.427180266,20692,pre_ACE,
+New York City College of Technology,B54,2023-08-01,6.273663913,21140,pre_ACE,
+New York City College of Technology,B54,2023-09-01,6.110077251,19156,pre_ACE,
+New York City College of Technology,B54,2023-10-01,6.183659662,20494,pre_ACE,
+New York City College of Technology,B54,2023-11-01,6.118027613,19897,pre_ACE,
+New York City College of Technology,B54,2023-12-01,6.3256297,20207,pre_ACE,
+New York City College of Technology,B54,2024-01-01,6.344665464,20591,pre_ACE,
+New York City College of Technology,B54,2024-02-01,6.02259405,19308,pre_ACE,
+New York City College of Technology,B54,2024-03-01,6.047646927,20761,pre_ACE,
+New York City College of Technology,B54,2024-04-01,5.935618609,20210,pre_ACE,
+New York City College of Technology,B54,2024-05-01,5.850450994,20463,pre_ACE,
+New York City College of Technology,B54,2024-06-01,5.942210483,19795,pre_ACE,
+New York City College of Technology,B54,2024-07-01,5.998126473,20593,pre_ACE,
+New York City College of Technology,B54,2024-08-01,5.922685814,20866,pre_ACE,
+New York City College of Technology,B54,2024-09-01,5.872169415,20371,pre_ACE,
+New York City College of Technology,B54,2024-10-01,5.990758282,21527,pre_ACE,
+New York City College of Technology,B54,2024-11-01,5.988884597,19896,pre_ACE,
+New York City College of Technology,B54,2024-12-01,6.106834529,20628,pre_ACE,
+New York City College of Technology,B54,2025-01-01,6.357003503,21156,pre_ACE,
+New York City College of Technology,B54,2025-02-01,6.165790654,18490,pre_ACE,
+New York City College of Technology,B54,2025-03-01,6.213481806,20983,pre_ACE,
+New York City College of Technology,B54,2025-04-01,6.221411896,20402,pre_ACE,
+New York City College of Technology,B54,2025-05-01,6.146695177,20535,pre_ACE,
+New York City College of Technology,B54,2025-06-01,6.178819614,20082,pre_ACE,
+New York City College of Technology,B54,2025-07-01,6.227690789,21058,pre_ACE,
+New York City College of Technology,B93,2024-08-01,6.594575182,8394,pre_ACE,
+New York City College of Technology,B93,2024-09-01,7.668501782,624,pre_ACE,
+New York City College of Technology,B93,2025-03-01,7.185986996,844,pre_ACE,
+`;
+
+// John Jay College of Criminal Justice
+const JOHN_JAY_COLLEGE_OF_CRIMINAL_JUSTICE_CSV = `campus,route_id,ym,weighted_speed,month_trip_count,phase,ace_start_month
+John Jay College of Criminal Justice,BXM2,2023-01-01,11.75281431,10804,pre_ACE,
+John Jay College of Criminal Justice,BXM2,2023-02-01,11.94962978,10057,pre_ACE,
+John Jay College of Criminal Justice,BXM2,2023-03-01,11.63320206,11115,pre_ACE,
+John Jay College of Criminal Justice,BXM2,2023-04-01,11.61646431,10684,pre_ACE,
+John Jay College of Criminal Justice,BXM2,2023-05-01,11.10220814,10505,pre_ACE,
+John Jay College of Criminal Justice,BXM2,2023-06-01,11.23952684,10442,pre_ACE,
+John Jay College of Criminal Justice,BXM2,2023-07-01,11.61929167,10449,pre_ACE,
+John Jay College of Criminal Justice,BXM2,2023-08-01,11.68556317,10883,pre_ACE,
+John Jay College of Criminal Justice,BXM2,2023-09-01,11.30423095,9254,pre_ACE,
+John Jay College of Criminal Justice,BXM2,2023-10-01,11.30322203,10050,pre_ACE,
+John Jay College of Criminal Justice,BXM2,2023-11-01,11.40938967,9145,pre_ACE,
+John Jay College of Criminal Justice,BXM2,2023-12-01,11.50458707,9122,pre_ACE,
+John Jay College of Criminal Justice,BXM2,2024-01-01,11.84531033,10282,pre_ACE,
+John Jay College of Criminal Justice,BXM2,2024-02-01,11.71801364,9326,pre_ACE,
+John Jay College of Criminal Justice,BXM2,2024-03-01,11.56241438,10048,pre_ACE,
+John Jay College of Criminal Justice,BXM2,2024-04-01,11.39947971,9951,pre_ACE,
+John Jay College of Criminal Justice,BXM2,2024-05-01,10.83603541,10259,pre_ACE,
+John Jay College of Criminal Justice,BXM2,2024-06-01,11.20249702,10004,pre_ACE,
+John Jay College of Criminal Justice,BXM2,2024-07-01,11.72147113,10913,pre_ACE,
+John Jay College of Criminal Justice,BXM2,2024-08-01,11.6434234,10329,pre_ACE,
+John Jay College of Criminal Justice,BXM2,2024-09-01,11.11590607,9498,pre_ACE,
+John Jay College of Criminal Justice,BXM2,2024-10-01,10.99489038,10616,pre_ACE,
+John Jay College of Criminal Justice,BXM2,2024-11-01,11.11630971,9831,pre_ACE,
+John Jay College of Criminal Justice,BXM2,2024-12-01,11.29752588,9862,pre_ACE,
+John Jay College of Criminal Justice,BXM2,2025-01-01,11.56019457,10785,pre_ACE,
+John Jay College of Criminal Justice,BXM2,2025-02-01,11.41776786,9772,pre_ACE,
+John Jay College of Criminal Justice,BXM2,2025-03-01,11.25041779,10723,pre_ACE,
+John Jay College of Criminal Justice,BXM2,2025-04-01,11.13472896,10820,pre_ACE,
+John Jay College of Criminal Justice,BXM2,2025-05-01,10.80479378,10428,pre_ACE,
+John Jay College of Criminal Justice,BXM2,2025-06-01,11.02230285,10160,pre_ACE,
+John Jay College of Criminal Justice,BXM2,2025-07-01,11.20965127,10886,pre_ACE,
+John Jay College of Criminal Justice,M10,2023-01-01,6.419424713,23185,pre_ACE,
+John Jay College of Criminal Justice,M10,2023-02-01,6.355430961,20591,pre_ACE,
+John Jay College of Criminal Justice,M10,2023-03-01,6.22575928,23043,pre_ACE,
+John Jay College of Criminal Justice,M10,2023-04-01,6.200522284,22375,pre_ACE,
+John Jay College of Criminal Justice,M10,2023-05-01,5.98625053,22776,pre_ACE,
+John Jay College of Criminal Justice,M10,2023-06-01,6.046106731,21855,pre_ACE,
+John Jay College of Criminal Justice,M10,2023-07-01,6.257762539,23102,pre_ACE,
+John Jay College of Criminal Justice,M10,2023-08-01,6.203023206,22929,pre_ACE,
+John Jay College of Criminal Justice,M10,2023-09-01,6.100381842,21800,pre_ACE,
+John Jay College of Criminal Justice,M10,2023-10-01,6.107409842,22610,pre_ACE,
+John Jay College of Criminal Justice,M10,2023-11-01,6.177836272,21398,pre_ACE,
+John Jay College of Criminal Justice,M10,2023-12-01,6.244896415,21956,pre_ACE,
+John Jay College of Criminal Justice,M10,2024-01-01,6.311284564,22917,pre_ACE,
+John Jay College of Criminal Justice,M10,2024-02-01,6.157971397,21114,pre_ACE,
+John Jay College of Criminal Justice,M10,2024-03-01,6.175381052,23123,pre_ACE,
+John Jay College of Criminal Justice,M10,2024-04-01,5.977622761,22411,pre_ACE,
+John Jay College of Criminal Justice,M10,2024-05-01,5.906240366,21778,pre_ACE,
+John Jay College of Criminal Justice,M10,2024-06-01,6.032646874,21475,pre_ACE,
+John Jay College of Criminal Justice,M10,2024-07-01,6.095099098,23101,pre_ACE,
+John Jay College of Criminal Justice,M10,2024-08-01,6.105079851,21940,pre_ACE,
+John Jay College of Criminal Justice,M10,2024-09-01,6.066789562,21912,pre_ACE,
+John Jay College of Criminal Justice,M10,2024-10-01,6.066083939,22734,pre_ACE,
+John Jay College of Criminal Justice,M10,2024-11-01,6.090395264,20714,pre_ACE,
+John Jay College of Criminal Justice,M10,2024-12-01,6.304823456,22295,pre_ACE,
+John Jay College of Criminal Justice,M10,2025-01-01,6.293144147,23051,pre_ACE,
+John Jay College of Criminal Justice,M10,2025-02-01,6.29658311,17755,pre_ACE,
+John Jay College of Criminal Justice,M10,2025-03-01,6.307694664,23021,pre_ACE,
+John Jay College of Criminal Justice,M10,2025-04-01,6.283421303,22057,pre_ACE,
+John Jay College of Criminal Justice,M10,2025-05-01,6.28559643,22175,pre_ACE,
+John Jay College of Criminal Justice,M10,2025-06-01,6.22851281,21448,pre_ACE,
+John Jay College of Criminal Justice,M10,2025-07-01,6.319490606,23116,pre_ACE,
+John Jay College of Criminal Justice,M104,2023-01-01,6.142346426,32741,pre_ACE,
+John Jay College of Criminal Justice,M104,2023-02-01,6.10008812,30053,pre_ACE,
+John Jay College of Criminal Justice,M104,2023-03-01,6.014171911,31701,pre_ACE,
+John Jay College of Criminal Justice,M104,2023-04-01,5.965554516,31748,pre_ACE,
+John Jay College of Criminal Justice,M104,2023-05-01,5.927327738,32091,pre_ACE,
+John Jay College of Criminal Justice,M104,2023-06-01,5.955957719,30483,pre_ACE,
+John Jay College of Criminal Justice,M104,2023-07-01,6.04186321,32440,pre_ACE,
+John Jay College of Criminal Justice,M104,2023-08-01,5.98095396,30959,pre_ACE,
+John Jay College of Criminal Justice,M104,2023-09-01,5.922521156,30942,pre_ACE,
+John Jay College of Criminal Justice,M104,2023-10-01,5.940859039,30536,pre_ACE,
+John Jay College of Criminal Justice,M104,2023-11-01,5.994306955,29907,pre_ACE,
+John Jay College of Criminal Justice,M104,2023-12-01,5.979010901,29614,pre_ACE,
+John Jay College of Criminal Justice,M104,2024-01-01,6.010757479,31880,pre_ACE,
+John Jay College of Criminal Justice,M104,2024-02-01,5.937308934,29982,pre_ACE,
+John Jay College of Criminal Justice,M104,2024-03-01,5.959181872,32087,pre_ACE,
+John Jay College of Criminal Justice,M104,2024-04-01,5.871368714,29825,pre_ACE,
+John Jay College of Criminal Justice,M104,2024-05-01,5.871007211,30269,pre_ACE,
+John Jay College of Criminal Justice,M104,2024-06-01,5.917645779,29677,pre_ACE,
+John Jay College of Criminal Justice,M104,2024-07-01,5.916104486,31555,pre_ACE,
+John Jay College of Criminal Justice,M104,2024-08-01,5.970820115,31115,pre_ACE,
+John Jay College of Criminal Justice,M104,2024-09-01,5.885758343,31097,pre_ACE,
+John Jay College of Criminal Justice,M104,2024-10-01,5.864456736,30969,pre_ACE,
+John Jay College of Criminal Justice,M104,2024-11-01,5.877473199,30410,pre_ACE,
+John Jay College of Criminal Justice,M104,2024-12-01,5.942211833,30597,pre_ACE,
+John Jay College of Criminal Justice,M104,2025-01-01,5.987049185,31665,pre_ACE,
+John Jay College of Criminal Justice,M104,2025-02-01,5.929118702,20964,pre_ACE,
+John Jay College of Criminal Justice,M104,2025-03-01,5.905873757,32773,pre_ACE,
+John Jay College of Criminal Justice,M104,2025-04-01,5.899037111,31109,pre_ACE,
+John Jay College of Criminal Justice,M104,2025-05-01,5.899611014,32576,pre_ACE,
+John Jay College of Criminal Justice,M104,2025-06-01,5.951082037,30400,pre_ACE,
+John Jay College of Criminal Justice,M104,2025-07-01,5.938835539,32112,pre_ACE,
+John Jay College of Criminal Justice,M20,2023-01-01,6.684893239,17811,pre_ACE,
+John Jay College of Criminal Justice,M20,2023-02-01,6.632897308,16083,pre_ACE,
+John Jay College of Criminal Justice,M20,2023-03-01,6.517137481,17472,pre_ACE,
+John Jay College of Criminal Justice,M20,2023-04-01,6.590569465,17491,pre_ACE,
+John Jay College of Criminal Justice,M20,2023-05-01,6.339502843,17245,pre_ACE,
+John Jay College of Criminal Justice,M20,2023-06-01,6.374805605,16563,pre_ACE,
+John Jay College of Criminal Justice,M20,2023-07-01,6.411030393,18002,pre_ACE,
+John Jay College of Criminal Justice,M20,2023-08-01,6.356034515,17528,pre_ACE,
+John Jay College of Criminal Justice,M20,2023-09-01,6.069538634,16916,pre_ACE,
+John Jay College of Criminal Justice,M20,2023-10-01,6.157489345,17464,pre_ACE,
+John Jay College of Criminal Justice,M20,2023-11-01,6.244033769,16426,pre_ACE,
+John Jay College of Criminal Justice,M20,2023-12-01,6.310398889,16794,pre_ACE,
+John Jay College of Criminal Justice,M20,2024-01-01,6.581308033,18279,pre_ACE,
+John Jay College of Criminal Justice,M20,2024-02-01,6.374471781,16795,pre_ACE,
+John Jay College of Criminal Justice,M20,2024-03-01,6.297916308,18054,pre_ACE,
+John Jay College of Criminal Justice,M20,2024-04-01,6.073228141,16668,pre_ACE,
+John Jay College of Criminal Justice,M20,2024-05-01,6.119750967,16613,pre_ACE,
+John Jay College of Criminal Justice,M20,2024-06-01,6.137564766,15998,pre_ACE,
+John Jay College of Criminal Justice,M20,2024-07-01,6.304243557,17295,pre_ACE,
+John Jay College of Criminal Justice,M20,2024-08-01,6.377715795,17312,pre_ACE,
+John Jay College of Criminal Justice,M20,2024-09-01,6.055984838,16299,pre_ACE,
+John Jay College of Criminal Justice,M20,2024-10-01,6.079996654,16616,pre_ACE,
+John Jay College of Criminal Justice,M20,2024-11-01,6.338445966,16145,pre_ACE,
+John Jay College of Criminal Justice,M20,2024-12-01,6.336540494,16062,pre_ACE,
+John Jay College of Criminal Justice,M20,2025-01-01,6.674722156,18210,pre_ACE,
+John Jay College of Criminal Justice,M20,2025-02-01,6.546854384,11768,pre_ACE,
+John Jay College of Criminal Justice,M20,2025-03-01,6.567426743,18024,pre_ACE,
+John Jay College of Criminal Justice,M20,2025-04-01,6.304287816,16744,pre_ACE,
+John Jay College of Criminal Justice,M20,2025-05-01,6.276718854,17460,pre_ACE,
+John Jay College of Criminal Justice,M20,2025-06-01,6.391888522,16563,pre_ACE,
+John Jay College of Criminal Justice,M20,2025-07-01,6.330978343,17374,pre_ACE,
+`;
+
+// Hunter College
+const HUNTER_COLLEGE_CSV = `campus,route_id,ym,weighted_speed,month_trip_count,phase,ace_start_month
+Hunter College,M101,2023-01-01,6.864664626,66322,pre_ACE,2024-09-01
+Hunter College,M101,2023-02-01,6.876821782,62028,pre_ACE,2024-09-01
+Hunter College,M101,2023-03-01,6.705622706,67776,pre_ACE,2024-09-01
+Hunter College,M101,2023-04-01,6.711911497,63538,pre_ACE,2024-09-01
+Hunter College,M101,2023-05-01,6.625123488,65580,pre_ACE,2024-09-01
+Hunter College,M101,2023-06-01,6.594943254,63493,pre_ACE,2024-09-01
+Hunter College,M101,2023-07-01,6.667176795,65034,pre_ACE,2024-09-01
+Hunter College,M101,2023-08-01,6.653890074,65047,pre_ACE,2024-09-01
+Hunter College,M101,2023-09-01,6.462318617,56508,pre_ACE,2024-09-01
+Hunter College,M101,2023-10-01,6.508041249,64014,pre_ACE,2024-09-01
+Hunter College,M101,2023-11-01,6.581400438,62892,pre_ACE,2024-09-01
+Hunter College,M101,2023-12-01,6.650609958,59930,pre_ACE,2024-09-01
+Hunter College,M101,2024-01-01,6.73331458,65230,pre_ACE,2024-09-01
+Hunter College,M101,2024-02-01,6.746523764,58577,pre_ACE,2024-09-01
+Hunter College,M101,2024-03-01,6.682907859,67503,pre_ACE,2024-09-01
+Hunter College,M101,2024-04-01,6.667484553,65449,pre_ACE,2024-09-01
+Hunter College,M101,2024-05-01,6.637342737,63873,pre_ACE,2024-09-01
+Hunter College,M101,2024-06-01,6.673482912,53389,pre_ACE,2024-09-01
+Hunter College,M101,2024-07-01,6.787122308,57708,pre_ACE,2024-09-01
+Hunter College,M101,2024-08-01,6.890878248,45551,pre_ACE,2024-09-01
+Hunter College,M101,2024-09-01,6.588443604,49265,ACE,2024-09-01
+Hunter College,M101,2024-10-01,6.51857088,65579,ACE,2024-09-01
+Hunter College,M101,2024-11-01,6.637476557,61358,ACE,2024-09-01
+Hunter College,M101,2024-12-01,6.697627158,61407,ACE,2024-09-01
+Hunter College,M101,2025-01-01,6.837019341,68345,ACE,2024-09-01
+Hunter College,M101,2025-02-01,6.711909901,48772,ACE,2024-09-01
+Hunter College,M101,2025-03-01,6.842889661,67260,ACE,2024-09-01
+Hunter College,M101,2025-04-01,6.74000506,67755,ACE,2024-09-01
+Hunter College,M101,2025-05-01,6.701324766,64308,ACE,2024-09-01
+Hunter College,M101,2025-06-01,6.754312422,60383,ACE,2024-09-01
+Hunter College,M101,2025-07-01,6.815952388,64433,ACE,2024-09-01
+Hunter College,M102,2023-01-01,6.45308419,36821,pre_ACE,
+Hunter College,M102,2023-02-01,6.430322966,33942,pre_ACE,
+Hunter College,M102,2023-03-01,6.368840774,39029,pre_ACE,
+Hunter College,M102,2023-04-01,6.259147311,36080,pre_ACE,
+Hunter College,M102,2023-05-01,6.206349955,36103,pre_ACE,
+Hunter College,M102,2023-06-01,6.164747796,34395,pre_ACE,
+Hunter College,M102,2023-07-01,6.250794366,36884,pre_ACE,
+Hunter College,M102,2023-08-01,6.217229695,34590,pre_ACE,
+Hunter College,M102,2023-09-01,6.13241854,32678,pre_ACE,
+Hunter College,M102,2023-10-01,6.177437444,36360,pre_ACE,
+Hunter College,M102,2023-11-01,6.221459623,35823,pre_ACE,
+Hunter College,M102,2023-12-01,6.29421452,35274,pre_ACE,
+Hunter College,M102,2024-01-01,6.36380342,37049,pre_ACE,
+Hunter College,M102,2024-02-01,6.226069012,32802,pre_ACE,
+Hunter College,M102,2024-03-01,6.269065056,36901,pre_ACE,
+Hunter College,M102,2024-04-01,6.089663046,34119,pre_ACE,
+Hunter College,M102,2024-05-01,6.101347673,33682,pre_ACE,
+Hunter College,M102,2024-06-01,6.140016677,30394,pre_ACE,
+Hunter College,M102,2024-07-01,6.271397098,31415,pre_ACE,
+Hunter College,M102,2024-08-01,6.442816649,26402,pre_ACE,
+Hunter College,M102,2024-09-01,6.060096284,29270,pre_ACE,
+Hunter College,M102,2024-10-01,5.991282518,35630,pre_ACE,
+Hunter College,M102,2024-11-01,6.154896455,35125,pre_ACE,
+Hunter College,M102,2024-12-01,6.180818996,35823,pre_ACE,
+Hunter College,M102,2025-01-01,6.326656623,38424,pre_ACE,
+Hunter College,M102,2025-02-01,6.307644574,25111,pre_ACE,
+Hunter College,M102,2025-03-01,6.339370296,36224,pre_ACE,
+Hunter College,M102,2025-04-01,6.192180618,37691,pre_ACE,
+Hunter College,M102,2025-05-01,6.201447829,35911,pre_ACE,
+Hunter College,M102,2025-06-01,6.209756412,33406,pre_ACE,
+Hunter College,M102,2025-07-01,6.23177682,36574,pre_ACE,
+Hunter College,M103,2023-01-01,6.659052299,35563,pre_ACE,
+Hunter College,M103,2023-02-01,6.624998603,33232,pre_ACE,
+Hunter College,M103,2023-03-01,6.51899989,37013,pre_ACE,
+Hunter College,M103,2023-04-01,6.534113851,35187,pre_ACE,
+Hunter College,M103,2023-05-01,6.469726158,35096,pre_ACE,
+Hunter College,M103,2023-06-01,6.390112612,33024,pre_ACE,
+Hunter College,M103,2023-07-01,6.503895172,36240,pre_ACE,
+Hunter College,M103,2023-08-01,6.492672883,34572,pre_ACE,
+Hunter College,M103,2023-09-01,6.448208368,30204,pre_ACE,
+Hunter College,M103,2023-10-01,6.460207553,34990,pre_ACE,
+Hunter College,M103,2023-11-01,6.488779723,34037,pre_ACE,
+Hunter College,M103,2023-12-01,6.582099351,34053,pre_ACE,
+Hunter College,M103,2024-01-01,6.578258042,35041,pre_ACE,
+Hunter College,M103,2024-02-01,6.597557618,33191,pre_ACE,
+Hunter College,M103,2024-03-01,6.542459301,35950,pre_ACE,
+Hunter College,M103,2024-04-01,6.473147801,32586,pre_ACE,
+Hunter College,M103,2024-05-01,6.554355667,30440,pre_ACE,
+Hunter College,M103,2024-06-01,6.669018078,27820,pre_ACE,
+Hunter College,M103,2024-07-01,6.688697915,29217,pre_ACE,
+Hunter College,M103,2024-08-01,6.780618344,26106,pre_ACE,
+Hunter College,M103,2024-09-01,6.483679957,26643,pre_ACE,
+Hunter College,M103,2024-10-01,6.42164187,33266,pre_ACE,
+Hunter College,M103,2024-11-01,6.550219127,33158,pre_ACE,
+Hunter College,M103,2024-12-01,6.55182171,33348,pre_ACE,
+Hunter College,M103,2025-01-01,6.577489558,36956,pre_ACE,
+Hunter College,M103,2025-02-01,6.620340765,23715,pre_ACE,
+Hunter College,M103,2025-03-01,6.677390529,35869,pre_ACE,
+Hunter College,M103,2025-04-01,6.531116522,35646,pre_ACE,
+Hunter College,M103,2025-05-01,6.643082489,35567,pre_ACE,
+Hunter College,M103,2025-06-01,6.690879757,32651,pre_ACE,
+Hunter College,M103,2025-07-01,6.709150185,34664,pre_ACE,
+Hunter College,M66,2023-01-01,5.802645258,23571,pre_ACE,
+Hunter College,M66,2023-02-01,5.818365493,21876,pre_ACE,
+Hunter College,M66,2023-03-01,5.653672569,24529,pre_ACE,
+Hunter College,M66,2023-04-01,5.564658409,24497,pre_ACE,
+Hunter College,M66,2023-05-01,5.375072548,25973,pre_ACE,
+Hunter College,M66,2023-06-01,5.596392866,25029,pre_ACE,
+Hunter College,M66,2023-07-01,5.932574066,24743,pre_ACE,
+Hunter College,M66,2023-08-01,5.933218427,25594,pre_ACE,
+Hunter College,M66,2023-09-01,5.381788524,23257,pre_ACE,
+Hunter College,M66,2023-10-01,5.404521361,25364,pre_ACE,
+Hunter College,M66,2023-11-01,5.299862087,23923,pre_ACE,
+Hunter College,M66,2023-12-01,5.540221946,23169,pre_ACE,
+Hunter College,M66,2024-01-01,5.607126833,24316,pre_ACE,
+Hunter College,M66,2024-02-01,5.161835676,22808,pre_ACE,
+Hunter College,M66,2024-03-01,5.242415878,24231,pre_ACE,
+Hunter College,M66,2024-04-01,5.029488557,24326,pre_ACE,
+Hunter College,M66,2024-05-01,4.963284178,23988,pre_ACE,
+Hunter College,M66,2024-06-01,5.227854947,22172,pre_ACE,
+Hunter College,M66,2024-07-01,5.392864188,24288,pre_ACE,
+Hunter College,M66,2024-08-01,5.360462162,24481,pre_ACE,
+Hunter College,M66,2024-09-01,4.935396,22891,pre_ACE,
+Hunter College,M66,2024-10-01,4.916250332,25134,pre_ACE,
+Hunter College,M66,2024-11-01,5.055247952,22836,pre_ACE,
+Hunter College,M66,2024-12-01,5.260292902,23055,pre_ACE,
+Hunter College,M66,2025-01-01,5.766105173,24856,pre_ACE,
+Hunter College,M66,2025-02-01,5.738741899,15978,pre_ACE,
+Hunter College,M66,2025-03-01,5.824871341,24097,pre_ACE,
+Hunter College,M66,2025-04-01,5.678432554,23573,pre_ACE,
+Hunter College,M66,2025-05-01,5.599633315,23094,pre_ACE,
+Hunter College,M66,2025-06-01,5.849620048,23375,pre_ACE,
+Hunter College,M66,2025-07-01,5.957794741,24789,pre_ACE,
+Hunter College,M72,2023-01-01,6.183911216,20206,pre_ACE,
+Hunter College,M72,2023-02-01,6.180044105,18248,pre_ACE,
+Hunter College,M72,2023-03-01,6.024276301,20066,pre_ACE,
+Hunter College,M72,2023-04-01,6.01158127,20113,pre_ACE,
+Hunter College,M72,2023-05-01,5.772448015,20652,pre_ACE,
+Hunter College,M72,2023-06-01,5.920956327,20104,pre_ACE,
+Hunter College,M72,2023-07-01,6.212740732,20428,pre_ACE,
+Hunter College,M72,2023-08-01,6.106053726,20886,pre_ACE,
+Hunter College,M72,2023-09-01,5.654878082,19985,pre_ACE,
+Hunter College,M72,2023-10-01,5.751772575,21203,pre_ACE,
+Hunter College,M72,2023-11-01,5.730027126,19301,pre_ACE,
+Hunter College,M72,2023-12-01,5.981806296,19653,pre_ACE,
+Hunter College,M72,2024-01-01,6.035165682,21118,pre_ACE,
+Hunter College,M72,2024-02-01,6.078502348,18840,pre_ACE,
+Hunter College,M72,2024-03-01,6.020370961,20457,pre_ACE,
+Hunter College,M72,2024-04-01,5.865465428,20331,pre_ACE,
+Hunter College,M72,2024-05-01,5.763030291,20514,pre_ACE,
+Hunter College,M72,2024-06-01,5.929333386,19601,pre_ACE,
+Hunter College,M72,2024-07-01,6.022437266,20513,pre_ACE,
+Hunter College,M72,2024-08-01,6.0559381,21002,pre_ACE,
+Hunter College,M72,2024-09-01,5.776434467,19179,pre_ACE,
+Hunter College,M72,2024-10-01,5.746492831,20312,pre_ACE,
+Hunter College,M72,2024-11-01,5.795643068,18767,pre_ACE,
+Hunter College,M72,2024-12-01,5.980100894,19111,pre_ACE,
+Hunter College,M72,2025-01-01,6.117335881,20898,pre_ACE,
+Hunter College,M72,2025-02-01,5.999777677,16153,pre_ACE,
+Hunter College,M72,2025-03-01,6.129455932,20758,pre_ACE,
+Hunter College,M72,2025-04-01,6.075331131,20121,pre_ACE,
+Hunter College,M72,2025-05-01,6.000007416,20336,pre_ACE,
+Hunter College,M72,2025-06-01,6.128596432,19943,pre_ACE,
+Hunter College,M72,2025-07-01,6.284904905,20849,pre_ACE,
+Hunter College,M98,2023-01-01,8.895815437,1902,pre_ACE,
+Hunter College,M98,2023-02-01,8.929149469,1683,pre_ACE,
+Hunter College,M98,2023-03-01,8.627405675,2056,pre_ACE,
+Hunter College,M98,2023-04-01,8.763134119,1753,pre_ACE,
+Hunter College,M98,2023-05-01,8.381479794,1906,pre_ACE,
+Hunter College,M98,2023-06-01,8.663337034,1950,pre_ACE,
+Hunter College,M98,2023-07-01,9.011577123,1778,pre_ACE,
+Hunter College,M98,2023-08-01,9.112946147,2063,pre_ACE,
+Hunter College,M98,2023-09-01,8.197225385,1709,pre_ACE,
+Hunter College,M98,2023-10-01,8.358806986,1979,pre_ACE,
+Hunter College,M98,2023-11-01,8.447334503,1855,pre_ACE,
+Hunter College,M98,2023-12-01,8.559901941,1780,pre_ACE,
+Hunter College,M98,2024-01-01,8.804139327,1988,pre_ACE,
+Hunter College,M98,2024-02-01,8.700228074,1804,pre_ACE,
+Hunter College,M98,2024-03-01,8.706647047,1896,pre_ACE,
+Hunter College,M98,2024-04-01,8.779369264,1999,pre_ACE,
+Hunter College,M98,2024-05-01,8.276336197,1981,pre_ACE,
+Hunter College,M98,2024-06-01,8.436226528,1817,pre_ACE,
+Hunter College,M98,2024-07-01,8.97618958,2009,pre_ACE,
+Hunter College,M98,2024-08-01,8.788258336,1955,pre_ACE,
+Hunter College,M98,2024-09-01,8.287674343,1809,pre_ACE,
+Hunter College,M98,2024-10-01,8.307177268,2083,pre_ACE,
+Hunter College,M98,2024-11-01,8.557435816,1821,pre_ACE,
+Hunter College,M98,2024-12-01,8.731835943,1858,pre_ACE,
+Hunter College,M98,2025-01-01,9.025067051,2027,pre_ACE,
+Hunter College,M98,2025-02-01,8.725500699,1768,pre_ACE,
+Hunter College,M98,2025-03-01,8.713284369,1940,pre_ACE,
+Hunter College,M98,2025-04-01,8.486392486,1981,pre_ACE,
+Hunter College,M98,2025-05-01,8.012623455,1850,pre_ACE,
+Hunter College,M98,2025-06-01,8.272521934,1876,pre_ACE,
+Hunter College,M98,2025-07-01,8.728578666,1946,pre_ACE,
+`;
+
+// The City College of New York
+const THE_CITY_COLLEGE_OF_NEW_YORK_CSV = `campus,route_id,ym,weighted_speed,month_trip_count,phase,ace_start_month
+The City College of New York,BX33,2023-01-01,7.061116418,13611,pre_ACE,
+The City College of New York,BX33,2023-02-01,6.92823441,12528,pre_ACE,
+The City College of New York,BX33,2023-03-01,6.802134564,14163,pre_ACE,
+The City College of New York,BX33,2023-04-01,6.838458338,13093,pre_ACE,
+The City College of New York,BX33,2023-05-01,6.706162368,13465,pre_ACE,
+The City College of New York,BX33,2023-06-01,6.779548405,13591,pre_ACE,
+The City College of New York,BX33,2023-07-01,6.96367003,13560,pre_ACE,
+The City College of New York,BX33,2023-08-01,6.844108489,13458,pre_ACE,
+The City College of New York,BX33,2023-09-01,6.648780469,12593,pre_ACE,
+The City College of New York,BX33,2023-10-01,6.773806303,13678,pre_ACE,
+The City College of New York,BX33,2023-11-01,6.727045453,12757,pre_ACE,
+The City College of New York,BX33,2023-12-01,6.990075311,12542,pre_ACE,
+The City College of New York,BX33,2024-01-01,6.897159614,13448,pre_ACE,
+The City College of New York,BX33,2024-02-01,6.807338863,12458,pre_ACE,
+The City College of New York,BX33,2024-03-01,6.750216453,13270,pre_ACE,
+The City College of New York,BX33,2024-04-01,6.863708781,13062,pre_ACE,
+The City College of New York,BX33,2024-05-01,6.664379649,13302,pre_ACE,
+The City College of New York,BX33,2024-06-01,6.667826998,12664,pre_ACE,
+The City College of New York,BX33,2024-07-01,6.565512554,12450,pre_ACE,
+The City College of New York,BX33,2024-08-01,6.630246649,12306,pre_ACE,
+The City College of New York,BX33,2024-09-01,6.551085238,12009,pre_ACE,
+The City College of New York,BX33,2024-10-01,6.578739381,13481,pre_ACE,
+The City College of New York,BX33,2024-11-01,6.674124112,11893,pre_ACE,
+The City College of New York,BX33,2024-12-01,6.925933141,12547,pre_ACE,
+The City College of New York,BX33,2025-01-01,7.122340554,13677,pre_ACE,
+The City College of New York,BX33,2025-02-01,7.069822517,10211,pre_ACE,
+The City College of New York,BX33,2025-03-01,6.795592563,13121,pre_ACE,
+The City College of New York,BX33,2025-04-01,6.82009468,13615,pre_ACE,
+The City College of New York,BX33,2025-05-01,6.702638131,13351,pre_ACE,
+The City College of New York,BX33,2025-06-01,6.690502142,12989,pre_ACE,
+The City College of New York,BX33,2025-07-01,6.838574004,13477,pre_ACE,
+`;
+
+// Brooklyn College
+const BROOKLYN_COLLEGE_CSV = `campus,route_id,ym,weighted_speed,month_trip_count,phase,ace_start_month
+Brooklyn College,B11,2023-01-01,6.20542128,30014,pre_ACE,
+Brooklyn College,B11,2023-02-01,6.169217344,25626,pre_ACE,
+Brooklyn College,B11,2023-03-01,6.013151599,29784,pre_ACE,
+Brooklyn College,B11,2023-04-01,6.440981718,29442,pre_ACE,
+Brooklyn College,B11,2023-05-01,6.089107729,29928,pre_ACE,
+Brooklyn College,B11,2023-06-01,6.139196887,29080,pre_ACE,
+Brooklyn College,B11,2023-07-01,6.480338175,29756,pre_ACE,
+Brooklyn College,B11,2023-08-01,6.364777762,31052,pre_ACE,
+Brooklyn College,B11,2023-09-01,5.962223579,25457,pre_ACE,
+Brooklyn College,B11,2023-10-01,6.078456469,29478,pre_ACE,
+Brooklyn College,B11,2023-11-01,5.936790925,27091,pre_ACE,
+Brooklyn College,B11,2023-12-01,6.120425665,27541,pre_ACE,
+Brooklyn College,B11,2024-01-01,6.126470845,29684,pre_ACE,
+Brooklyn College,B11,2024-02-01,6.156464235,27651,pre_ACE,
+Brooklyn College,B11,2024-03-01,6.127477276,28749,pre_ACE,
+Brooklyn College,B11,2024-04-01,6.159854796,28621,pre_ACE,
+Brooklyn College,B11,2024-05-01,6.060931103,28850,pre_ACE,
+Brooklyn College,B11,2024-06-01,6.157106567,27653,pre_ACE,
+Brooklyn College,B11,2024-07-01,6.437241074,29762,pre_ACE,
+Brooklyn College,B11,2024-08-01,6.540151733,29616,pre_ACE,
+Brooklyn College,B11,2024-09-01,5.824418631,26147,pre_ACE,
+Brooklyn College,B11,2024-10-01,6.132564815,29462,pre_ACE,
+Brooklyn College,B11,2024-11-01,6.055119697,26941,pre_ACE,
+Brooklyn College,B11,2024-12-01,6.13405357,27887,pre_ACE,
+Brooklyn College,B11,2025-01-01,6.157121074,29050,pre_ACE,
+Brooklyn College,B11,2025-02-01,6.050313024,24774,pre_ACE,
+Brooklyn College,B11,2025-03-01,6.057622811,27566,pre_ACE,
+Brooklyn College,B11,2025-04-01,6.112969847,27773,pre_ACE,
+Brooklyn College,B11,2025-05-01,6.18026615,27884,pre_ACE,
+Brooklyn College,B11,2025-06-01,6.181073787,27246,pre_ACE,
+Brooklyn College,B11,2025-07-01,6.319983125,28338,pre_ACE,
+Brooklyn College,B6,2023-01-01,8.078174846,99779,pre_ACE,
+Brooklyn College,B6,2023-02-01,8.034840748,89358,pre_ACE,
+Brooklyn College,B6,2023-03-01,7.896413481,102749,pre_ACE,
+Brooklyn College,B6,2023-04-01,8.0752696,94122,pre_ACE,
+Brooklyn College,B6,2023-05-01,7.808448202,98326,pre_ACE,
+Brooklyn College,B6,2023-06-01,7.941176325,95280,pre_ACE,
+Brooklyn College,B6,2023-07-01,8.235233557,90137,pre_ACE,
+Brooklyn College,B6,2023-08-01,8.210186706,95680,pre_ACE,
+Brooklyn College,B6,2023-09-01,7.802443271,89202,pre_ACE,
+Brooklyn College,B6,2023-10-01,7.835632385,95372,pre_ACE,
+Brooklyn College,B6,2023-11-01,7.839904043,92133,pre_ACE,
+Brooklyn College,B6,2023-12-01,7.881968387,92520,pre_ACE,
+Brooklyn College,B6,2024-01-01,8.00465832,98668,pre_ACE,
+Brooklyn College,B6,2024-02-01,7.947930524,89453,pre_ACE,
+Brooklyn College,B6,2024-03-01,7.858895692,98066,pre_ACE,
+Brooklyn College,B6,2024-04-01,7.971601955,94976,pre_ACE,
+Brooklyn College,B6,2024-05-01,7.74113486,97965,pre_ACE,
+Brooklyn College,B6,2024-06-01,7.891530637,93254,pre_ACE,
+Brooklyn College,B6,2024-07-01,8.174216966,94677,pre_ACE,
+Brooklyn College,B6,2024-08-01,8.222139611,92228,pre_ACE,
+Brooklyn College,B6,2024-09-01,7.709729245,82158,pre_ACE,
+Brooklyn College,B6,2024-10-01,7.805725221,87117,pre_ACE,
+Brooklyn College,B6,2024-11-01,7.793607677,80416,pre_ACE,
+Brooklyn College,B6,2024-12-01,7.866741926,83947,pre_ACE,
+Brooklyn College,B6,2025-01-01,8.016476007,87927,pre_ACE,
+Brooklyn College,B6,2025-02-01,7.938072494,76628,pre_ACE,
+Brooklyn College,B6,2025-03-01,7.989715892,99932,pre_ACE,
+Brooklyn College,B6,2025-04-01,8.002125571,98822,pre_ACE,
+Brooklyn College,B6,2025-05-01,7.867062744,96686,pre_ACE,
+Brooklyn College,B6,2025-06-01,7.958915036,93707,pre_ACE,
+Brooklyn College,B6,2025-07-01,8.223057951,93121,pre_ACE,
+`;
+
+// Guttman Community College
+const GUTTMAN_COMMUNITY_COLLEGE_CSV = `campus,route_id,ym,weighted_speed,month_trip_count,phase,ace_start_month
+Guttman Community College,M1,2023-01-01,6.839370875,31614,pre_ACE,
+Guttman Community College,M1,2023-02-01,6.786561167,29488,pre_ACE,
+Guttman Community College,M1,2023-03-01,6.645120534,32068,pre_ACE,
+Guttman Community College,M1,2023-04-01,6.617292624,30864,pre_ACE,
+Guttman Community College,M1,2023-05-01,6.496897253,31482,pre_ACE,
+Guttman Community College,M1,2023-06-01,6.512098531,30304,pre_ACE,
+Guttman Community College,M1,2023-07-01,6.69636688,31070,pre_ACE,
+Guttman Community College,M1,2023-08-01,6.499678973,31574,pre_ACE,
+Guttman Community College,M1,2023-09-01,6.482120755,28844,pre_ACE,
+Guttman Community College,M1,2023-10-01,6.491837555,30642,pre_ACE,
+Guttman Community College,M1,2023-11-01,6.594520018,29244,pre_ACE,
+Guttman Community College,M1,2023-12-01,6.678336522,29752,pre_ACE,
+Guttman Community College,M1,2024-01-01,6.78985756,33212,pre_ACE,
+Guttman Community College,M1,2024-02-01,6.719389896,30700,pre_ACE,
+Guttman Community College,M1,2024-03-01,6.688786857,31968,pre_ACE,
+Guttman Community College,M1,2024-04-01,6.473476254,31666,pre_ACE,
+Guttman Community College,M1,2024-05-01,6.480907913,31741,pre_ACE,
+Guttman Community College,M1,2024-06-01,6.597880345,29838,pre_ACE,
+Guttman Community College,M1,2024-07-01,6.599526516,32534,pre_ACE,
+Guttman Community College,M1,2024-08-01,6.580506835,30772,pre_ACE,
+Guttman Community College,M1,2024-09-01,6.434497186,29613,pre_ACE,
+Guttman Community College,M1,2024-10-01,6.388572056,32049,pre_ACE,
+Guttman Community College,M1,2024-11-01,6.592545115,30306,pre_ACE,
+Guttman Community College,M1,2024-12-01,6.637989632,31073,pre_ACE,
+Guttman Community College,M1,2025-01-01,6.759116486,32900,pre_ACE,
+Guttman Community College,M1,2025-02-01,6.638017326,21136,pre_ACE,
+Guttman Community College,M1,2025-03-01,6.727905279,31400,pre_ACE,
+Guttman Community College,M1,2025-04-01,6.585325762,30308,pre_ACE,
+Guttman Community College,M1,2025-05-01,6.537309418,29569,pre_ACE,
+Guttman Community College,M1,2025-06-01,6.554560586,30343,pre_ACE,
+Guttman Community College,M1,2025-07-01,6.602854677,32781,pre_ACE,
+Guttman Community College,M2,2023-01-01,7.317953761,30746,pre_ACE,2025-02-01
+Guttman Community College,M2,2023-02-01,7.306530933,27996,pre_ACE,2025-02-01
+Guttman Community College,M2,2023-03-01,7.159634755,31152,pre_ACE,2025-02-01
+Guttman Community College,M2,2023-04-01,7.11348438,29927,pre_ACE,2025-02-01
+Guttman Community College,M2,2023-05-01,6.967561966,30760,pre_ACE,2025-02-01
+Guttman Community College,M2,2023-06-01,6.997759665,29500,pre_ACE,2025-02-01
+Guttman Community College,M2,2023-07-01,7.227144919,30615,pre_ACE,2025-02-01
+Guttman Community College,M2,2023-08-01,7.013038715,29068,pre_ACE,2025-02-01
+Guttman Community College,M2,2023-09-01,7.020049947,28229,pre_ACE,2025-02-01
+Guttman Community College,M2,2023-10-01,6.993449389,30273,pre_ACE,2025-02-01
+Guttman Community College,M2,2023-11-01,7.074688542,28895,pre_ACE,2025-02-01
+Guttman Community College,M2,2023-12-01,7.182025546,28499,pre_ACE,2025-02-01
+Guttman Community College,M2,2024-01-01,7.289138479,30897,pre_ACE,2025-02-01
+Guttman Community College,M2,2024-02-01,7.230919605,28105,pre_ACE,2025-02-01
+Guttman Community College,M2,2024-03-01,7.161941219,30266,pre_ACE,2025-02-01
+Guttman Community College,M2,2024-04-01,7.017907433,29550,pre_ACE,2025-02-01
+Guttman Community College,M2,2024-05-01,6.929430608,29078,pre_ACE,2025-02-01
+Guttman Community College,M2,2024-06-01,7.106922643,27527,pre_ACE,2025-02-01
+Guttman Community College,M2,2024-07-01,7.226711204,30308,pre_ACE,2025-02-01
+Guttman Community College,M2,2024-08-01,7.183234004,28187,pre_ACE,2025-02-01
+Guttman Community College,M2,2024-09-01,6.96082553,28030,pre_ACE,2025-02-01
+Guttman Community College,M2,2024-10-01,6.898320125,29780,pre_ACE,2025-02-01
+Guttman Community College,M2,2024-11-01,7.088470948,28580,pre_ACE,2025-02-01
+Guttman Community College,M2,2024-12-01,7.182863864,27325,pre_ACE,2025-02-01
+Guttman Community College,M2,2025-01-01,7.281264007,31053,pre_ACE,2025-02-01
+Guttman Community College,M2,2025-02-01,7.18819999,20106,ACE,2025-02-01
+Guttman Community College,M2,2025-03-01,7.237933924,30088,ACE,2025-02-01
+Guttman Community College,M2,2025-04-01,7.054379977,29564,ACE,2025-02-01
+Guttman Community College,M2,2025-05-01,6.993783081,28812,ACE,2025-02-01
+Guttman Community College,M2,2025-06-01,7.086932265,28026,ACE,2025-02-01
+Guttman Community College,M2,2025-07-01,7.115286587,30486,ACE,2025-02-01
+Guttman Community College,M3,2023-01-01,6.17444907,36163,pre_ACE,
+Guttman Community College,M3,2023-02-01,6.157306906,32991,pre_ACE,
+Guttman Community College,M3,2023-03-01,6.028943361,36075,pre_ACE,
+Guttman Community College,M3,2023-04-01,6.043553622,34339,pre_ACE,
+Guttman Community College,M3,2023-05-01,5.92360152,35358,pre_ACE,
+Guttman Community College,M3,2023-06-01,5.919744605,33958,pre_ACE,
+Guttman Community College,M3,2023-07-01,6.119807513,36115,pre_ACE,
+Guttman Community College,M3,2023-08-01,5.968688482,34736,pre_ACE,
+Guttman Community College,M3,2023-09-01,5.98732952,32498,pre_ACE,
+Guttman Community College,M3,2023-10-01,5.985929591,34797,pre_ACE,
+Guttman Community College,M3,2023-11-01,6.016494326,32966,pre_ACE,
+Guttman Community College,M3,2023-12-01,6.086569566,31917,pre_ACE,
+Guttman Community College,M3,2024-01-01,6.120471343,35064,pre_ACE,
+Guttman Community College,M3,2024-02-01,6.060957482,32961,pre_ACE,
+Guttman Community College,M3,2024-03-01,6.054711672,34362,pre_ACE,
+Guttman Community College,M3,2024-04-01,5.908065556,33849,pre_ACE,
+Guttman Community College,M3,2024-05-01,5.927766869,33199,pre_ACE,
+Guttman Community College,M3,2024-06-01,6.007485364,31272,pre_ACE,
+Guttman Community College,M3,2024-07-01,6.027367713,34972,pre_ACE,
+Guttman Community College,M3,2024-08-01,6.014331081,31934,pre_ACE,
+Guttman Community College,M3,2024-09-01,5.913920007,31766,pre_ACE,
+Guttman Community College,M3,2024-10-01,5.896301009,34133,pre_ACE,
+Guttman Community College,M3,2024-11-01,5.975915329,32727,pre_ACE,
+Guttman Community College,M3,2024-12-01,6.089569269,33222,pre_ACE,
+Guttman Community College,M3,2025-01-01,6.10997518,35879,pre_ACE,
+Guttman Community College,M3,2025-02-01,6.07159055,28130,pre_ACE,
+Guttman Community College,M3,2025-03-01,6.086616495,35206,pre_ACE,
+Guttman Community College,M3,2025-04-01,5.949932027,34384,pre_ACE,
+Guttman Community College,M3,2025-05-01,5.892938388,34400,pre_ACE,
+Guttman Community College,M3,2025-06-01,5.947177573,32951,pre_ACE,
+Guttman Community College,M3,2025-07-01,5.949273756,35458,pre_ACE,
+Guttman Community College,M5,2023-01-01,7.39477135,34423,pre_ACE,
+Guttman Community College,M5,2023-02-01,7.377830461,31224,pre_ACE,
+Guttman Community College,M5,2023-03-01,7.284680299,34073,pre_ACE,
+Guttman Community College,M5,2023-04-01,7.255327473,32456,pre_ACE,
+Guttman Community College,M5,2023-05-01,7.103376479,32989,pre_ACE,
+Guttman Community College,M5,2023-06-01,7.187476721,32413,pre_ACE,
+Guttman Community College,M5,2023-07-01,7.180355043,33627,pre_ACE,
+Guttman Community College,M5,2023-08-01,7.1833883,33931,pre_ACE,
+Guttman Community College,M5,2023-09-01,7.016972697,31407,pre_ACE,
+Guttman Community College,M5,2023-10-01,7.030821057,32323,pre_ACE,
+Guttman Community College,M5,2023-11-01,7.123287159,31118,pre_ACE,
+Guttman Community College,M5,2023-12-01,7.146697938,30143,pre_ACE,
+Guttman Community College,M5,2024-01-01,7.286326685,33923,pre_ACE,
+Guttman Community College,M5,2024-02-01,7.23683502,30873,pre_ACE,
+Guttman Community College,M5,2024-03-01,7.231308669,33279,pre_ACE,
+Guttman Community College,M5,2024-04-01,7.113218481,31918,pre_ACE,
+Guttman Community College,M5,2024-05-01,6.996697634,30334,pre_ACE,
+Guttman Community College,M5,2024-06-01,7.085448569,29844,pre_ACE,
+Guttman Community College,M5,2024-07-01,7.158659014,32806,pre_ACE,
+Guttman Community College,M5,2024-08-01,7.213086941,32410,pre_ACE,
+Guttman Community College,M5,2024-09-01,7.089332852,29852,pre_ACE,
+Guttman Community College,M5,2024-10-01,7.067898983,31772,pre_ACE,
+Guttman Community College,M5,2024-11-01,7.183069425,30468,pre_ACE,
+Guttman Community College,M5,2024-12-01,7.233945905,29641,pre_ACE,
+Guttman Community College,M5,2025-01-01,7.382301375,34193,pre_ACE,
+Guttman Community College,M5,2025-02-01,7.237556546,25987,pre_ACE,
+Guttman Community College,M5,2025-03-01,7.231345195,34063,pre_ACE,
+Guttman Community College,M5,2025-04-01,7.156122377,32589,pre_ACE,
+Guttman Community College,M5,2025-05-01,7.07627873,32013,pre_ACE,
+Guttman Community College,M5,2025-06-01,7.127347008,31031,pre_ACE,
+Guttman Community College,M5,2025-07-01,7.097340636,33618,pre_ACE,
+`;
+
+function parseCsv(input: string): Row[] {
+  const lines = input.trim().split(/\r?\n/);
+  const header = lines.shift();
+  if (!header) return [];
+  const rows: Row[] = [];
+  for (const line of lines) {
+    const parts = line.split(/,(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)/).map((s) => s.trim());
+    const [campus, route_id, ym, weighted_speed, month_trip_count, phase, ace_start_month] = parts;
+    rows.push({
+      campus,
+      route_id,
+      ym,
+      weighted_speed: Number(weighted_speed),
+      month_trip_count: Number(month_trip_count),
+      phase: (phase as Row["phase"]) || "pre_ACE",
+      ace_start_month: ace_start_month ? ace_start_month : null,
+    });
+  }
+  return rows;
+}
+
+type ChartPoint = {
+  ym: string;
+  [key: string]: number | string | null;
+};
+
+const COLORS = [
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
+  "var(--chart-6)",
+  "var(--chart-7)",
+  "var(--chart-8)",
+];
+
+const CAMPUS_OPTIONS = [
+  "Guttman Community College",
+  "Baruch College",
+  "Borough of Manhattan Community College",
+  "School of Public Health",
+  "New York City College of Technology",
+  "John Jay College of Criminal Justice",
+  "Hunter College",
+  "The City College of New York",
+  "Brooklyn College",
+] as const;
+
+function useAllCampusRows() {
+  return useMemo(() => {
+    const baruch = parseCsv(BARUCH_CSV);
+    const bmcc = parseCsv(BMCC_CSV);
+    const schoolOfPublicHealth = parseCsv(SCHOOL_OF_PUBLIC_HEALTH_CSV);
+    const newYorkCityCollegeOfTechnology = parseCsv(NEW_YORK_CITY_COLLEGE_OF_TECHNOLOGY_CSV);
+    const johnJayCollegeOfCriminalJustice = parseCsv(JOHN_JAY_COLLEGE_OF_CRIMINAL_JUSTICE_CSV);
+    const hunterCollege = parseCsv(HUNTER_COLLEGE_CSV);
+    const theCityCollegeOfNewYork = parseCsv(THE_CITY_COLLEGE_OF_NEW_YORK_CSV);
+    const brooklynCollege = parseCsv(BROOKLYN_COLLEGE_CSV);
+    const guttmanCommunityCollege = parseCsv(GUTTMAN_COMMUNITY_COLLEGE_CSV);
+    return [
+      ...baruch,
+      ...bmcc,
+      ...schoolOfPublicHealth,
+      ...newYorkCityCollegeOfTechnology,
+      ...johnJayCollegeOfCriminalJustice,
+      ...hunterCollege,
+      ...theCityCollegeOfNewYork,
+      ...brooklynCollege,
+      ...guttmanCommunityCollege,
+    ];
+  }, []);
+}
+
+export default function CampusCharts() {
+  const allRows = useAllCampusRows();
+  const [campus, setCampus] = useState<string>("Guttman Community College");
+  const [yMetric, setYMetric] = useState<"weighted_speed" | "month_trip_count">("weighted_speed");
+
+  const { data, series, aceMarkers } = useMemo(() => {
+    // Per-campus whitelist of routes to display (and order), with ACE flags for reference
+    const campusRouteWhitelist: Record<string, Array<{ id: string; ace: boolean }>> = {
+      "Guttman Community College": [
+        { id: "M4", ace: true },
+        { id: "M3", ace: false },
+        { id: "M5", ace: false },
+        { id: "M1", ace: false },
+        { id: "M2", ace: true },
+      ],
+      "New York City College of Technology": [
+        { id: "B41", ace: true },
+        { id: "B38", ace: false },
+        { id: "B52", ace: false },
+        { id: "B26", ace: true },
+        { id: "B25", ace: true },
+      ],
+    };
+
+    let rows = allRows.filter((r) => r.campus === campus);
+    const whitelist = campusRouteWhitelist[campus];
+    if (whitelist) {
+      const allowed = new Set(whitelist.map((w) => w.id));
+      rows = rows.filter((r) => allowed.has(r.route_id));
+    }
+
+    const months = Array.from(new Set(rows.map((r) => r.ym))).sort();
+    let routes = Array.from(new Set(rows.map((r) => r.route_id))).sort();
+    // If a whitelist is present, keep order as specified by whitelist
+    if (whitelist) {
+      const present = new Set(routes);
+      routes = whitelist.map((w) => w.id).filter((id) => present.has(id));
+    }
+
+    const markers = new Map<string, string>();
+    for (const r of rows) {
+      if (r.ace_start_month) markers.set(r.route_id, r.ace_start_month);
+    }
+
+    const dataPoints: ChartPoint[] = months.map((ym) => ({ ym }));
+
+    for (const route of routes) {
+      const preKey = `pre_${route}`;
+      const aceKey = `ace_${route}`;
+      for (const pt of dataPoints) {
+        pt[preKey] = null;
+        pt[aceKey] = null;
+      }
+      for (const r of rows.filter((x) => x.route_id === route)) {
+        const target = dataPoints.find((d) => d.ym === r.ym);
+        if (!target) continue;
+        const value = (r as any)[yMetric];
+        if (r.phase === "ACE") {
+          target[aceKey] = Number(value);
+        } else {
+          target[preKey] = Number(value);
+        }
+      }
+    }
+
+    const seriesKeys: Array<{ key: string; name: string; dashed: boolean; color: string }> = [];
+    routes.forEach((route, idx) => {
+      const color = COLORS[idx % COLORS.length];
+      seriesKeys.push({ key: `pre_${route}`, name: `${route} (pre-ACE)`, dashed: true, color });
+      seriesKeys.push({ key: `ace_${route}`, name: `${route} (ACE)`, dashed: false, color });
+    });
+
+    return { data: dataPoints, series: seriesKeys, aceMarkers: Array.from(markers.entries()) };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allRows, yMetric, campus]);
+
+  const axisColor = "color-mix(in srgb, var(--chart-1) 25%, transparent)";
+
+  return (
+    <Card className="rounded-3xl border border-border/60 bg-card/70">
+      <CardHeader>
+        <div className="flex items-center justify-between gap-3">
+          <CardTitle className="text-sm">Campus charts</CardTitle>
+          <div className="flex items-center gap-2">
+            <Select value={campus} onValueChange={setCampus}>
+              <SelectTrigger className="h-8 w-[220px]">
+                <SelectValue placeholder="Select campus" />
+              </SelectTrigger>
+              <SelectContent>
+                {CAMPUS_OPTIONS.map((c) => (
+                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={yMetric} onValueChange={(v: "weighted_speed" | "month_trip_count") => setYMetric(v)}>
+              <SelectTrigger className="h-8 w-[220px]">
+                <SelectValue placeholder="Y metric" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="weighted_speed">Avg speed (mph)</SelectItem>
+                <SelectItem value="month_trip_count">Trip count</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="h-[360px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={data} margin={{ left: 12, right: 12, top: 8, bottom: 4 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={axisColor} />
+              <XAxis dataKey="ym" stroke={axisColor} tick={{ fontSize: 10 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+              <YAxis stroke={axisColor} tick={{ fontSize: 10 }} tickLine={false} axisLine={false} label={{ value: yMetric === "weighted_speed" ? "Speed (mph)" : "Trips", angle: -90, position: "insideLeft", offset: 8 }} />
+              <Tooltip
+                contentStyle={{
+                  background: "var(--card)",
+                  borderRadius: "var(--radius-sm)",
+                  border: "1px solid var(--border)",
+                  fontSize: 11,
+                }}
+              />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              {series.map((s, idx) => (
+                <Line
+                  key={s.key}
+                  type="monotone"
+                  dataKey={s.key}
+                  name={s.name}
+                  stroke={s.color}
+                  strokeWidth={2}
+                  dot={false}
+                  connectNulls
+                  strokeDasharray={s.dashed ? "6 4" : undefined}
+                  opacity={s.dashed ? 0.9 : 1}
+                />
+              ))}
+              {aceMarkers.map(([route, x]) => (
+                <ReferenceLine
+                  key={`marker-${route}-${x}`}
+                  x={x!}
+                  stroke="var(--neutral)"
+                  strokeDasharray="6 6"
+                  label={{ value: `${route} ACE start`, position: "insideTopLeft", fontSize: 10, fill: "var(--neutral)" }}
+                />
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+        <p className="mt-3 text-[11px] text-muted-foreground">
+          Solid = ACE; Dashed = non-ACE. Dataset: Baruch campus monthly route speeds.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+
