@@ -28,7 +28,7 @@ export default function XEmbed({ handle = "MTA" }: { handle?: string }) {
       <a
         className="twitter-timeline"
         data-height="520"
-        href={`https://twitter.com/${handle}`}
+        href={`https://x.com/${handle}`}
       >
         Tweets by {handle}
       </a>

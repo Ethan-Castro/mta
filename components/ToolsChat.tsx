@@ -3,6 +3,7 @@
 import { Chat, useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { useMemo, useState } from "react";
+import { Streamdown } from "streamdown";
 import {
   PromptInputModelSelect,
   PromptInputModelSelectTrigger,
@@ -114,7 +115,7 @@ export default function ToolsChat() {
   const helpText = useMemo(
     () =>
       showTools
-        ? "Watching tool execution. Try: 'How many violations rows in 2024?' or 'List allowed tables'."
+        ? "Watching tool execution. Try: 'Search the web for latest MTA service advisories' or 'What did @MTA post today?'"
         : "Focusing on final output. Toggle to watch tool data.",
     [showTools]
   );
@@ -161,7 +162,7 @@ export default function ToolsChat() {
       <div className="mb-3 max-h-[18rem] space-y-3 overflow-y-auto rounded-xl border border-border/60 bg-background/80 p-3 sm:max-h-[22rem] sm:p-4" role="log" aria-label="Messages">
         {messages.length === 0 && (
           <div className="text-sm text-muted-foreground">
-            Sample prompts: "How many violations rows in 2024?", "Show row count for bus_segment_speeds_2025", or "Plot violations trend for M15-SBS".
+            Sample prompts: "Search MTA instagram latest updates", "Find recent MTA tweets about service changes", or "Summarize current MTA disruptions with citations".
           </div>
         )}
 
@@ -175,7 +176,9 @@ export default function ToolsChat() {
                 switch (part.type) {
                   case "text": {
                     return (
-                      <div key={`${message.id}-text-${i}`}>{part.text}</div>
+                      <div key={`${message.id}-text-${i}`} className="prose prose-sm max-w-none dark:prose-invert">
+                        <Streamdown>{part.text}</Streamdown>
+                      </div>
                     );
                   }
                   case "tool-weather":
@@ -282,7 +285,7 @@ export default function ToolsChat() {
           placeholder={
             status === "streaming"
               ? "Streaming…"
-              : "Ask about the weather, e.g., New York in celsius"
+              : "Ask about MTA. e.g., 'Latest MTA tweets', 'Current MTA service changes'"
           }
           onChange={(e) => setInput(e.currentTarget.value)}
           aria-label="Message"

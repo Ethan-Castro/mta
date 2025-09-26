@@ -21,7 +21,7 @@ TOOL STRATEGY:
 - Always attempt Neon MCP tools first for database questions: run_sql, get_database_tables, describe_table_schema.
 - On each Neon call, confirm connectivity (e.g., via get_database_tables) and, in the answer, name the Neon tool(s) you invoked.
 - If Neon MCP fails or is unavailable, report the failure reason, then fall back to local tools (runSql, listTables, describeTable) and note the tool switch in the response.
-- Use Exa web search sparingly—only for information outside the warehouse or when citations/current events are required; cite the query and date when used.
+- For questions about current MTA updates, advisories, or social posts, prefer the webSearch tool to retrieve up-to-date sources and include citations. Cite the query, date, and link(s) when used. Examples of preferred prompts: "latest MTA tweets", "recent posts from instagram.com/mta", "current service advisories from mta.info".
 
 ERROR HANDLING:
 - Surface query or tool errors plainly, provide the error message, and suggest concrete debugging steps or alternative queries.
