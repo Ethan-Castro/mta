@@ -4,9 +4,10 @@ import { StackProvider, StackTheme } from "@stackframe/stack";
 import { stackServerApp } from "../stack/server";
 import { Geist, Geist_Mono } from "next/font/google";
 import GlobalHeader from "@/components/GlobalHeader";
-import GlobalScopeBar from "@/components/GlobalScopeBar";
+import MarketTickerBar from "@/components/MarketTickerBar";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { logEnvironmentStatus } from "@/lib/env-validation";
+import ConditionalTicker from "@/components/ConditionalTicker";
 import "./globals.css";
 
 // Validate environment variables during development
@@ -48,10 +49,10 @@ export default function RootLayout({
             <Suspense fallback={<div className="border-b border-border/60 bg-background/85 px-4 py-3 text-sm text-foreground/60 sm:px-6">Loading workspace…</div>}>
               <GlobalHeader />
             </Suspense>
-            <Suspense fallback={<div className="border-b border-border/60 bg-background/85 px-4 py-2 text-sm text-foreground/60 sm:px-6">Loading filters…</div>}>
-              <GlobalScopeBar />
+            <Suspense fallback={<div className="border-b border-border/60 bg-background/85 px-4 py-2 text-sm text-foreground/60 sm:px-6">Loading ticker…</div>}>
+              <ConditionalTicker />
             </Suspense>
-            <main className="flex-1 pb-8 pt-4 sm:pb-12 sm:pt-6 lg:pt-8 overflow-x-hidden">{children}</main>
+            <main className="flex-1 pb-8 pt-2 sm:pb-12 sm:pt-3 lg:pt-4 overflow-x-hidden">{children}</main>
           </div>
         </ThemeProvider>
       </StackTheme></StackProvider></body>

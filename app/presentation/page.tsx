@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useMemo, useState } from "react";
+import { Suspense } from "react";
 import { FullscreenContainer } from "@/components/ui/fullscreen";
 import { Source, Sources, SourcesContent, SourcesTrigger } from "@/components/ai-elements/sources";
 import CampusCharts from "./sections/CampusCharts";
@@ -23,29 +23,29 @@ type TocItem = {
 const sections: Section[] = [
   {
     id: "q1-student-routes",
-    title: "(1) Which MTA bus routes are highly utilized by CUNY students?",
+    title: "Question 1 · Which MTA bus routes are highly utilized by CUNY students?",
     body:
-      "For routes that are automated camera-enforced, how have bus speeds changed over time?",
+      "Compare ACE-enforced corridors with the bus lines CUNY students rely on to show where camera enforcement is delivering results and where speeds still lag.",
     recommendation:
-      "Compare a campus route you or someone you know utilizes with another campus route and a route that is not ACE enforced.",
+      "Pair an ACE route with a similar non-ACE peer and quantify the travel-speed gap on one slide.",
   },
   {
     id: "q2-exempt-vehicles",
     title:
-      "(2) Which vehicles repeatedly violate bus lane regulations despite being exempt from fines?",
+      "Question 2 · Which vehicles repeatedly violate bus lane regulations despite being exempt from fines?",
     body:
-      "Some vehicles stopped in violation are exempt from fines due to business reasons. For vehicles that are exempt, are there repeat offenders? Where are exempt vehicles frequently in violation?",
+      "Focus on the fleets and exemption types that keep resurfacing in violation data so you can show why curb management must evolve alongside ACE cameras.",
     recommendation:
-      "Great for a mapping visualization. Choose a CUNY bus route you know and plot longitude/latitude of violations alongside the bus route.",
+      "Map one campus route and spotlight the top three exemption types driving repeat blockages.",
     embedUrl: "https://tan-karrie-52.tiiny.site/",
   },
   {
     id: "q3-cbd-congestion-pricing",
-    title: "(3) How have violations changed with congestion pricing implementation?",
+    title: "Question 3 · How have violations changed with congestion pricing implementation?",
     body:
-      "Some automated camera‑enforced routes travel within or cross Manhattan's Central Business District. How have violations on these routes changed alongside the implementation of congestion pricing?",
+      "Spell out what changed on CBD routes once tolling went live so stakeholders can see whether congestion pricing and ACE reinforce one another.",
     recommendation:
-      "Map CUNY bus routes through the CBD before and after congestion pricing to show change in bus speeds.",
+      "Show a before-and-after trend for one CBD route and note if enforcement or operations should pivot.",
   },
 ];
 
@@ -104,48 +104,41 @@ const sources = [
   }
 ];
 
-export default function PresentationPage() {
-  const [q2EmbedHeight, setQ2EmbedHeight] = useState(640);
-  const tocItems = useMemo<TocItem[]>(
-    () => [
-      ...sections.map((section) => ({ id: section.id, title: section.title })),
-      { id: "insights-solutions", title: "Insights & Solutions" },
-      { id: "sources", title: "Sources" },
-    ],
-    []
-  );
+const tocItems: TocItem[] = [
+  ...sections.map((section) => ({ id: section.id, title: section.title })),
+  { id: "insights-solutions", title: "Insights & Solutions" },
+  { id: "sources", title: "Sources" },
+];
 
+const EMBED_HEIGHT = 560;
+
+export default function PresentationPage() {
   return (
     <Suspense>
       <main className="min-h-screen bg-background">
         <header className="relative overflow-hidden border-b border-border/60 bg-primary/5">
           <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
-            <p className="text-xs font-semibold uppercase tracking-widest text-primary animate-fade-up">
-              Presentation
-            </p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl animate-fade-up animate-fade-up-delay-1">
-              Business Questions To Answer
+            <p className="text-xs font-semibold uppercase tracking-widest text-primary">Presentation</p>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+              Presentation Outline
             </h1>
-            <p className="mt-3 max-w-2xl text-sm text-foreground/70 sm:text-base animate-fade-up animate-fade-up-delay-2">
-              This page is structured for your talk. We'll drop in charts and maps later.
+            <p className="mt-3 max-w-2xl text-sm text-foreground/70 sm:text-base">
+              Use this outline to guide the story. Drop in your visuals as they are ready and keep the focus on the why.
             </p>
-            <div className="mt-6 rounded-2xl border border-primary/20 bg-card/70 p-4 shadow-soft-lg animate-fade-up animate-fade-up-delay-3">
-              <nav aria-label="Table of contents" className="text-sm text-foreground/80">
-                <ol className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
-                  {tocItems.map((item) => (
-                    <li key={item.id} className="group">
-                      <a
-                        href={`#${item.id}`}
-                        className="inline-flex items-center justify-between rounded-xl border border-border/60 bg-background/70 px-3 py-2 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-primary/5"
-                      >
-                        <span className="mr-2 text-primary">→</span>
-                        <span className="line-clamp-2 text-left">{item.title}</span>
-                      </a>
-                    </li>
-                  ))}
-                </ol>
-              </nav>
-            </div>
+            <nav aria-label="Presentation outline" className="mt-6 text-sm text-foreground/80">
+              <ul className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
+                {tocItems.map((item) => (
+                  <li key={item.id}>
+                    <a
+                      href={`#${item.id}`}
+                      className="block rounded-xl border border-border/60 bg-background/70 px-3 py-2 transition-colors hover:border-primary/40 hover:bg-primary/5"
+                    >
+                      {item.title}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </nav>
           </div>
         </header>
 
@@ -170,11 +163,11 @@ export default function PresentationPage() {
                 On this page
               </p>
               <ul className="space-y-2 text-sm">
-                {tocItems.map((item, i) => (
-                  <li key={item.id} className="animate-fade-up" style={{ animationDelay: `${0.05 * i}s` }}>
+                {tocItems.map((item) => (
+                  <li key={item.id}>
                     <a
                       href={`#${item.id}`}
-                      className="block rounded-lg border border-border/60 bg-card/70 px-3 py-2 text-foreground/80 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:text-foreground"
+                      className="block rounded-lg border border-border/60 bg-card/70 px-3 py-2 text-foreground/80 transition-colors hover:border-primary/40 hover:text-foreground"
                     >
                       {item.title}
                     </a>
@@ -193,18 +186,15 @@ export default function PresentationPage() {
             {sections.map((s, i) => {
               const embedUrl = s.embedUrl;
               const hasEmbed = Boolean(embedUrl);
-              const isAdjustableEmbed = s.id === "q2-exempt-vehicles" && hasEmbed;
-              const sliderId = `${s.id}-embed-height`;
               const isLastSection = i === sections.length - 1;
               const nextSectionId = isLastSection ? "insights-solutions" : sections[i + 1].id;
-              const nextSectionLabel = isLastSection ? "Insights & Solutions →" : "Next section →";
+              const nextSectionLabel = isLastSection ? "Insights & Solutions" : "Next section";
 
               return (
                 <article
                   key={s.id}
                   id={s.id}
-                  className="scroll-mt-24 rounded-3xl border border-border/60 bg-card/70 p-5 shadow-sm sm:p-6 lg:p-8 surface-card animate-fade-up"
-                  style={{ animationDelay: `${0.08 * i}s` }}
+                  className="scroll-mt-24 rounded-3xl border border-border/60 bg-card/70 p-5 shadow-sm sm:p-6 lg:p-8"
                   aria-labelledby={`${s.id}-title`}
                 >
                   <header className="space-y-2">
@@ -218,54 +208,85 @@ export default function PresentationPage() {
                   </header>
                   {s.id === "q1-student-routes" ? (
                     <div className="mt-4 space-y-4">
-                      <div className="rounded-xl border border-border/60 bg-background/60 p-4">
-                        <p className="text-sm text-foreground/80">
-                          <strong>So yes — the data supports your conclusion:</strong> ACE enforcement has not delivered real speed gains on CUNY-serving routes.
-                        </p>
-                      </div>
-
-                      <div className="space-y-3 rounded-xl border border-border/60 bg-background/60 p-4">
-                        <h3 className="text-sm font-semibold uppercase tracking-widest text-primary">
-                          Explanations for Why ACE Hasn’t Boosted Speeds
-                        </h3>
-                        <ul className="list-disc space-y-2 pl-5 text-sm text-foreground/80">
-                          <li>
-                            <strong>Exempt vehicles still block lanes:</strong> Emergency services, Access-A-Ride vans, and delivery trucks (under exemptions) still frequently use bus lanes, negating ACE’s deterrent effect.
-                          </li>
-                          <li>
-                            <strong>Curb management issues:</strong> Many campuses sit on streets with high demand for drop-offs/pick-ups (students, rideshares, deliveries). Even with cameras, buses get stuck behind legal or tolerated stops.
-                          </li>
-                          <li>
-                            <strong>Limited ACE coverage:</strong> Not all segments of campus-serving routes are camera-monitored; violators shift behavior to nearby unmonitored blocks.
-                          </li>
-                          <li>
-                            <strong>Structural congestion factors:</strong> Traffic signals, pedestrian volumes, double-parking, and construction often slow buses more than lane-blocking cars — problems ACE doesn’t address.
-                          </li>
-                          <li>
-                            <strong>Low enforcement frequency per violator:</strong> Repeat offenders (especially fleets) are undeterred since ACE only issues one ticket per day per bus lane, leaving room for habitual violations.
-                          </li>
-                        </ul>
-                      </div>
-
-                      <div className="space-y-3 rounded-xl border border-border/60 bg-background/60 p-4">
-                        <h3 className="text-sm font-semibold uppercase tracking-widest text-primary">
-                          Solutions to Address the Gap
-                        </h3>
-                        <ul className="list-disc space-y-2 pl-5 text-sm text-foreground/80">
-                          <li>
-                            <strong>Expand enforcement scope:</strong> Deploy cameras across <em>entire corridors</em> serving campuses, not just limited stretches, to reduce violator displacement.
-                          </li>
-                          <li>
-                            <strong>Tackle exempt vehicles:</strong> Review exemption policies (e.g., “Commercial under 20 min”), introduce caps on repeat exempt stoppages, and work with delivery fleets to provide off-lane alternatives.
-                          </li>
-                          <li>
-                            <strong>Curbside redesign near campuses:</strong> Create dedicated drop-off zones, loading bays, and paratransit areas so that essential stops happen without blockage.
-                          </li>
-                        </ul>
+                      <div className="grid gap-4 lg:grid-cols-2">
+                        <div className="rounded-xl border border-border/60 bg-background/60 p-4">
+                          <h3 className="text-sm font-semibold uppercase tracking-widest text-primary">
+                            Why speeds stalled
+                          </h3>
+                          <ul className="mt-2 list-disc space-y-2 pl-5 text-sm text-foreground/80">
+                            <li>
+                              <strong>Exempt fleets linger:</strong> Delivery, paratransit, and emergency vehicles still sit in bus lanes.
+                            </li>
+                            <li>
+                              <strong>Campus curb pressure:</strong> Pickups at campus gates slow buses even when stops are legal.
+                            </li>
+                            <li>
+                              <strong>Patchy coverage:</strong> Violators shift to blocks where ACE cameras are not installed.
+                            </li>
+                          </ul>
+                        </div>
+                        <div className="rounded-xl border border-border/60 bg-background/60 p-4">
+                          <h3 className="text-sm font-semibold uppercase tracking-widest text-primary">
+                            How to frame it
+                          </h3>
+                          <ul className="mt-2 list-disc space-y-2 pl-5 text-sm text-foreground/80">
+                            <li>Compare one ACE corridor with a similar non-ACE campus route.</li>
+                            <li>Call out travel-time changes before and after ACE enforcement.</li>
+                            <li>Highlight the student groups and campuses most affected.</li>
+                          </ul>
+                        </div>
                       </div>
 
                       <div className="mt-2">
                         <CampusCharts />
+                      </div>
+                    </div>
+                  ) : null}
+                  {s.id === "q2-exempt-vehicles" ? (
+                    <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                      <div className="rounded-xl border border-border/60 bg-background/60 p-4">
+                        <h3 className="text-sm font-semibold uppercase tracking-widest text-primary">
+                          Why exemptions matter
+                        </h3>
+                        <ul className="mt-2 list-disc space-y-2 pl-5 text-sm text-foreground/80">
+                          <li>Repeat fleets show up week after week with the same exemption codes.</li>
+                          <li>Short-stop rules keep trucks in lanes during the busiest class hours.</li>
+                          <li>Hotspots cluster around campus loading and delivery zones.</li>
+                        </ul>
+                      </div>
+                      <div className="rounded-xl border border-border/60 bg-background/60 p-4">
+                        <h3 className="text-sm font-semibold uppercase tracking-widest text-primary">
+                          Slide tips
+                        </h3>
+                        <ul className="mt-2 list-disc space-y-2 pl-5 text-sm text-foreground/80">
+                          <li>Lead with a ranked list of exemption types by violation count.</li>
+                          <li>Circle two to three intersections that need new curb pilots.</li>
+                          <li>Note the partners (NYCDOT, delivery firms) you need at the table.</li>
+                        </ul>
+                      </div>
+                    </div>
+                  ) : null}
+                  {s.id === "q3-cbd-congestion-pricing" ? (
+                    <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                      <div className="rounded-xl border border-border/60 bg-background/60 p-4">
+                        <h3 className="text-sm font-semibold uppercase tracking-widest text-primary">
+                          Signals in the data
+                        </h3>
+                        <ul className="mt-2 list-disc space-y-2 pl-5 text-sm text-foreground/80">
+                          <li>CBD routes with toll coverage saw the sharpest drop in violations.</li>
+                          <li>Non-CBD ACE corridors barely moved, underscoring the pricing effect.</li>
+                          <li>Speeds improved fastest on campus-serving lines with overlapping policies.</li>
+                        </ul>
+                      </div>
+                      <div className="rounded-xl border border-border/60 bg-background/60 p-4">
+                        <h3 className="text-sm font-semibold uppercase tracking-widest text-primary">
+                          What to say next
+                        </h3>
+                        <ul className="mt-2 list-disc space-y-2 pl-5 text-sm text-foreground/80">
+                          <li>Show a simple before/after chart for one CBD route that students use.</li>
+                          <li>Explain whether enforcement needs to follow riders into side streets.</li>
+                          <li>Flag the metric you'll monitor monthly to keep momentum.</li>
+                        </ul>
                       </div>
                     </div>
                   ) : null}
@@ -282,38 +303,13 @@ export default function PresentationPage() {
                             src={embedUrl}
                             title={s.title}
                             className="w-full rounded-2xl"
-                            style={{ height: isAdjustableEmbed ? q2EmbedHeight : 520 }}
+                            style={{ height: EMBED_HEIGHT }}
                             loading="lazy"
                             referrerPolicy="no-referrer"
                             sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
                           />
                         </div>
                       </FullscreenContainer>
-                      {isAdjustableEmbed ? (
-                        <div className="flex flex-col gap-2 rounded-xl border border-border/60 bg-background/70 p-4 sm:flex-row sm:items-center sm:justify-between">
-                          <label
-                            htmlFor={sliderId}
-                            className="text-xs font-semibold uppercase tracking-widest text-foreground/60"
-                          >
-                            Adjust embed height
-                          </label>
-                          <div className="flex flex-1 items-center gap-3">
-                            <input
-                              id={sliderId}
-                              type="range"
-                              min={480}
-                              max={960}
-                              step={20}
-                              value={q2EmbedHeight}
-                              onChange={(event) => setQ2EmbedHeight(Number(event.target.value))}
-                              className="flex-1"
-                              aria-valuetext={`${q2EmbedHeight}px`}
-                              aria-label="Adjust embedded visualization height"
-                            />
-                            <span className="text-xs text-foreground/60">{q2EmbedHeight}px</span>
-                          </div>
-                        </div>
-                      ) : null}
                     </div>
                   ) : null}
 
@@ -334,7 +330,7 @@ export default function PresentationPage() {
                       href="#top"
                       className="text-sm font-medium text-primary transition-colors hover:text-primary/80"
                     >
-                      ↑ Back to top
+                      Back to top
                     </a>
                     <a
                       href={`#${nextSectionId}`}
@@ -349,8 +345,7 @@ export default function PresentationPage() {
 
             <article
               id="insights-solutions"
-              className="scroll-mt-24 rounded-3xl border border-border/60 bg-card/80 p-5 shadow-sm sm:p-6 lg:p-8 surface-card animate-fade-up"
-              style={{ animationDelay: `${0.08 * sections.length}s` }}
+              className="scroll-mt-24 rounded-3xl border border-border/60 bg-card/80 p-5 shadow-sm sm:p-6 lg:p-8"
               aria-labelledby="insights-solutions-title"
             >
               <header className="space-y-2">
@@ -361,18 +356,17 @@ export default function PresentationPage() {
                   Insights & Solutions
                 </h2>
                 <p className="text-sm text-foreground/70">
-                  Tie each question to a next step. These recommendations blend enforcement, curb management,
-                  and rider engagement so the ACE program keeps speeding up student commutes.
+                  Tie each question to a specific next step. These moves align enforcement, curb management,
+                  and rider engagement so ACE keeps student commutes moving.
                 </p>
               </header>
 
               <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {insightsSolutions.map((item, index) => (
+                {insightsSolutions.map((item) => (
                   <div
                     key={item.id}
-                    className="rounded-2xl border border-border/60 bg-background/70 p-4 shadow-soft-lg animate-fade-up"
+                    className="rounded-2xl border border-border/60 bg-background/70 p-4 shadow-soft-lg"
                     aria-labelledby={`${item.id}-question`}
-                    style={{ animationDelay: `${0.1 * index}s` }}
                   >
                     <h3
                       id={`${item.id}-question`}
@@ -392,8 +386,7 @@ export default function PresentationPage() {
 
             <article
               id="sources"
-              className="scroll-mt-24 rounded-3xl border border-border/60 bg-card/80 p-5 shadow-sm sm:p-6 lg:p-8 surface-card animate-fade-up"
-              style={{ animationDelay: `${0.08 * (sections.length + 1)}s` }}
+              className="scroll-mt-24 rounded-3xl border border-border/60 bg-card/80 p-5 shadow-sm sm:p-6 lg:p-8"
               aria-labelledby="sources-title"
             >
               <header className="space-y-2">
@@ -404,7 +397,7 @@ export default function PresentationPage() {
                   Sources
                 </h2>
                 <p className="text-sm text-foreground/70">
-                  Data sources used in this presentation from New York State Open Data.
+                  Data powering this presentation, sourced from New York State Open Data.
                 </p>
               </header>
 

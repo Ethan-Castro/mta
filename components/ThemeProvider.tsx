@@ -2,7 +2,15 @@
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
-type ThemeName = "light" | "dark" | "mta-light" | "mta-dark" | "subway" | "subway-light";
+type ThemeName =
+  | "light"
+  | "dark"
+  | "mta-light"
+  | "mta-dark"
+  | "subway"
+  | "subway-light"
+  | "finance-light"
+  | "finance-dark";
 
 type ThemeContextValue = {
   theme: ThemeName;
@@ -19,6 +27,8 @@ const THEME_OPTIONS: ThemeContextValue["themes"] = [
   { value: "mta-dark", label: "MTA Night", description: "Midnight blue focus with amber cues" },
   { value: "subway", label: "Subway Board (Dark)", description: "Solid black board with bold line badges" },
   { value: "subway-light", label: "Subway Arrival (Light)", description: "White board with colored badges and dividers" },
+  { value: "finance-light", label: "Modern Light", description: "Crisp blue accents on white" },
+  { value: "finance-dark", label: "Modern Night", description: "Deep navy surfaces with luminous blue" },
 ];
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
@@ -37,13 +47,21 @@ function getPreferredTheme(): ThemeName {
   const stored = getStoredTheme();
   if (stored) return stored;
   const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches;
-  return prefersDark ? "dark" : "light";
+  return prefersDark ? "finance-dark" : "finance-light";
 }
 
 function applyTheme(theme: ThemeName) {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
-  root.classList.remove("dark", "theme-mta", "theme-mta-dark", "theme-subway", "theme-subway-light");
+  root.classList.remove(
+    "dark",
+    "theme-mta",
+    "theme-mta-dark",
+    "theme-subway",
+    "theme-subway-light",
+    "theme-finance",
+    "theme-finance-dark"
+  );
 
   switch (theme) {
     case "light":
@@ -64,10 +82,18 @@ function applyTheme(theme: ThemeName) {
     case "subway-light":
       root.classList.add("theme-subway-light");
       break;
+    case "finance-light":
+      root.classList.add("theme-finance");
+      break;
+    case "finance-dark":
+      root.classList.add("theme-finance", "theme-finance-dark", "dark");
+      break;
   }
 
   root.dataset.theme = theme;
-  root.style.colorScheme = theme === "dark" || theme === "mta-dark" || theme === "subway" ? "dark" : "light";
+  const isDark =
+    theme === "dark" || theme === "mta-dark" || theme === "subway" || theme === "finance-dark";
+  root.style.colorScheme = isDark ? "dark" : "light";
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {

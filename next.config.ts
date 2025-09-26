@@ -13,6 +13,20 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  webpack(config, { dev }) {
+    if (dev) {
+      // Disable persistent cache in dev to avoid pack.gz header/cache corruption issues
+      // and ensure .next folder is rebuilt cleanly when needed
+      if (config.cache && typeof config.cache === "object") {
+        config.cache = {
+          type: "memory",
+        } as any;
+      } else {
+        (config as any).cache = { type: "memory" };
+      }
+    }
+    return config;
+  },
 };
 
 export default nextConfig;

@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import GroupedBar from "@/components/charts/GroupedBar";
+import Sparkline from "@/components/charts/Sparkline";
 import { bearingDegrees, bearingToCardinal, formatDistance, haversineDistanceKm, type LatLng } from "@/lib/geo/location";
 import { BRAND_PRIMARY_HEX } from "@/lib/ui/colors";
 
@@ -276,6 +277,18 @@ export default function OperationsPage() {
     [hotspotMetrics, enabledRoutes, campusRouteIds, routeLookup]
   );
 
+  // Compute overall data window from route metrics (for page context)
+  const dataWindow = useMemo(() => {
+    if (!routeMetrics.length) return null as null | { first: string; last: string };
+    let first: string | null = null;
+    let last: string | null = null;
+    for (const row of routeMetrics) {
+      if (row.firstSeen && (!first || row.firstSeen < first)) first = row.firstSeen;
+      if (row.lastSeen && (!last || row.lastSeen > last)) last = row.lastSeen;
+    }
+    return first && last ? { first, last } : null;
+  }, [routeMetrics]);
+
   const filteredRepeaters = useMemo(() => {
     const staticRepeaters = new Map(curatedRepeaters.map((row) => [row.vehicleId, row]));
     return repeaterMetrics
@@ -442,6 +455,74 @@ export default function OperationsPage() {
     [filteredHotspots]
   );
 
+  // Quick insight picks (route and hotspot highlights)
+  const highestMonthlyRoute = useMemo(() => {
+    if (!filteredRoutes.length) return null as any;
+    const rows = filteredRoutes.map((route) => {
+      const metrics = routeMetricsMap.get(route.routeId);
+      let averageMonthly = Number(route.averageMonthlyViolations ?? 0);
+      if (metrics?.violations && metrics.firstSeen && metrics.lastSeen) {
+        const start = new Date(metrics.firstSeen);
+        const end = new Date(metrics.lastSeen);
+        if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())) {
+          const months = Math.max(
+            1,
+            end.getFullYear() * 12 + end.getMonth() - (start.getFullYear() * 12 + start.getMonth()) + 1
+          );
+          averageMonthly = Math.round(metrics.violations / months);
+        }
+      }
+      const dynamicExemptShare = metrics?.violations
+        ? (metrics.exemptCount / metrics.violations) * 100
+        : Number(route.exemptSharePct ?? 0);
+      return { routeId: route.routeId, routeName: route.routeName, averageMonthly, dynamicExemptShare };
+    });
+    return rows.sort((a, b) => b.averageMonthly - a.averageMonthly)[0] || null;
+  }, [filteredRoutes, routeMetricsMap]);
+
+  const highestExemptRoute = useMemo(() => {
+    if (!filteredRoutes.length) return null as any;
+    const rows = filteredRoutes.map((route) => {
+      const metrics = routeMetricsMap.get(route.routeId);
+      const dynamicExemptShare = metrics?.violations
+        ? (metrics.exemptCount / metrics.violations) * 100
+        : Number(route.exemptSharePct ?? 0);
+      return { routeId: route.routeId, routeName: route.routeName, dynamicExemptShare };
+    });
+    return rows.sort((a, b) => b.dynamicExemptShare - a.dynamicExemptShare)[0] || null;
+  }, [filteredRoutes, routeMetricsMap]);
+
+  const fastestSpeedRoute = useMemo(() => {
+    if (!filteredRoutes.length) return null as any;
+    const rows = filteredRoutes
+      .filter((r) => typeof r.speedChangePct === "number")
+      .map((r) => ({ routeId: r.routeId, routeName: r.routeName, speed: Number(r.speedChangePct) }));
+    return rows.sort((a, b) => b.speed - a.speed)[0] || null;
+  }, [filteredRoutes]);
+
+  // Micro-trend sparkline data for KPI cards
+  const speedSpark = useMemo(() => {
+    const rows = filteredRoutes
+      .map((r) => ({ label: r.routeId, value: Math.max(0, Number(r.speedChangePct ?? 0)) }))
+      .filter((p) => Number.isFinite(p.value));
+    return rows.slice(0, 20);
+  }, [filteredRoutes]);
+
+  const exemptSpark = useMemo(() => {
+    const rows = filteredRouteMetrics
+      .map((row) => ({
+        label: row.busRouteId,
+        value: row.violations ? (row.exemptCount / row.violations) * 100 : 0,
+      }))
+      .filter((p) => Number.isFinite(p.value));
+    return rows.slice(0, 20);
+  }, [filteredRouteMetrics]);
+
+  const hotspotSpark = useMemo(() => {
+    const rows = topHotspots.map((h, i) => ({ label: String(i + 1), value: Number(h.violations || 0) }));
+    return rows;
+  }, [topHotspots]);
+
   const routeTable = useMemo(() => {
     return filteredRoutes
       .map((route) => {
@@ -488,7 +569,12 @@ export default function OperationsPage() {
     <div className="space-y-4 sm:space-y-6">
       <header className="animate-fade-up space-y-1">
         <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Operations</h1>
-        <p className="text-sm text-foreground/70">Compare routes, speeds, and violations.</p>
+        <p className="text-sm text-foreground/70">Monitor hotspots, exemption pressure, and speed changes in one place.</p>
+        {dataWindow && (
+          <p className="text-xs text-foreground/60">
+            Data window: {new Date(dataWindow.first).toLocaleDateString()} – {new Date(dataWindow.last).toLocaleDateString()}
+          </p>
+        )}
       </header>
       {(curatedError || campusError) && (
         <div className="animate-fade-up rounded-lg border border-destructive/60 bg-destructive/10 p-3 text-xs text-destructive space-y-1 shadow-sm">
@@ -504,24 +590,48 @@ export default function OperationsPage() {
           <div>
             <h2 id="operations-brief" className="text-sm font-semibold text-foreground">What this answers</h2>
             <p className="text-xs text-muted-foreground">
-              Tackle Datathon Questions 1 and 2 by benchmarking campus corridors, exposing repeat exempt fleets, and staging
-              field deployments.
+              Benchmark campus corridors, surface repeat exempt fleets, and prioritize field deployments.
             </p>
           </div>
           <ul className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
-            <li>• Filter campus routes and compare ACE vs non-ACE speeds.</li>
-            <li>• Map hotspots for on-street teams and document DOT coordination needs.</li>
-            <li>• Use scenario playbooks to script SQL + visualization steps for the copilot.</li>
-            <li>• Swap Neon queries into tool cards once the database connection is live.</li>
+            <li>Filter campus routes and compare ACE versus non-ACE speeds.</li>
+            <li>Map hotspots for on-street teams and document DOT coordination needs.</li>
+            <li>Use scenario playbooks for ready-to-run SQL and visualization prompts.</li>
+            <li>Replace sample queries with the live Neon connection once the database is wired up.</li>
           </ul>
         </div>
+      </section>
+
+      {/* Quick insights summary */}
+      <section className="animate-fade-up animate-fade-up-delay-2 rounded-xl border border-border/60 bg-card/80 p-4 shadow-soft-lg sm:p-5">
+        <h2 className="text-sm font-semibold">Quick insights</h2>
+        <ul className="mt-2 space-y-1 text-sm text-foreground/80">
+          {highestMonthlyRoute ? (
+            <li>
+              Monthly violations leader: <strong>{highestMonthlyRoute.routeId}</strong> · {integer.format(highestMonthlyRoute.averageMonthly)}
+              {" "}| Exempt {formatPercentValue(highestMonthlyRoute.dynamicExemptShare)}
+            </li>
+          ) : (
+            <li>No route metrics available for current filters.</li>
+          )}
+          {topHotspots[0] ? (
+            <li>
+              Highest-pressure stop: <strong>{topHotspots[0].stopName ?? "Unknown stop"}</strong> ({topHotspots[0].busRouteId}) · {integer.format(topHotspots[0].violations)} total
+            </li>
+          ) : null}
+          {fastestSpeedRoute ? (
+            <li>
+              Largest speed gain: <strong>{fastestSpeedRoute.routeId}</strong> · {formatChange(fastestSpeedRoute.speed)}
+            </li>
+          ) : null}
+        </ul>
       </section>
       {dataError && (
         <div className="animate-fade-up rounded-lg border border-destructive/60 bg-destructive/10 p-3 text-xs text-destructive shadow-sm">
           {dataError}
         </div>
       )}
-      <div className="grid grid-cols-1 gap-3 animate-fade-up animate-fade-up-delay-2 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 animate-fade-up animate-fade-up-delay-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
         <InsightCard
           title="Avg speed delta"
           value={formatChange(avgSpeedDelta)}
@@ -529,6 +639,11 @@ export default function OperationsPage() {
           trendLabel="Routes"
           trendDelta={`${filteredRoutes.length}`}
           trendPositive={avgSpeedDelta >= 0}
+          footer={
+            speedSpark.length ? (
+              <Sparkline data={speedSpark} height={72} color="var(--chart-3)" valueFormatter={(v) => `${v.toFixed(1)}%`} />
+            ) : null
+          }
         />
         <InsightCard
           title="ACE coverage"
@@ -545,6 +660,11 @@ export default function OperationsPage() {
           trendLabel="Repeat fleets"
           trendDelta={`${filteredRepeaters.length}`}
           trendPositive={avgExemptShare < 15}
+          footer={
+            exemptSpark.length ? (
+              <Sparkline data={exemptSpark} height={72} color="var(--chart-2)" valueFormatter={(v) => `${v.toFixed(1)}%`} />
+            ) : null
+          }
         />
         <InsightCard
           title="Hotspot load"
@@ -553,6 +673,11 @@ export default function OperationsPage() {
           trendLabel="Hotspots"
           trendDelta={`${filteredHotspots.length}`}
           trendPositive={false}
+          footer={
+            hotspotSpark.length ? (
+              <Sparkline data={hotspotSpark} height={72} color="var(--chart-6)" valueFormatter={(v) => integer.format(v)} />
+            ) : null
+          }
         />
       </div>
       <section

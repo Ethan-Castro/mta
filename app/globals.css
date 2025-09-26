@@ -180,6 +180,93 @@
   --sidebar-ring: #6e7bf0;
 }
 
+/* Finance Platform Theme (Coinbase/Robinhood-inspired) */
+.theme-finance {
+  --background: #ffffff;
+  --foreground: #0b1221;
+  --card: #ffffff;
+  --card-foreground: #0b1221;
+  --popover: #ffffff;
+  --popover-foreground: #0b1221;
+  --primary: #2b6ff7; /* finance blue */
+  --primary-foreground: #ffffff;
+  --secondary: #f5f7fb; /* subtle tinted panels */
+  --secondary-foreground: #0b1221;
+  --muted: #f3f6ff;
+  --muted-foreground: #5a6478;
+  --accent: #00c2ff; /* cyan accent for highlights */
+  --accent-foreground: #06223a;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --success: #16a34a; /* green up */
+  --info: #0ea5e9;
+  --warning: #f59e0b;
+  --neutral: #64748b;
+  --border: #e6eaf2; /* soft cool border */
+  --input: #e6eaf2;
+  --ring: #2b6ff7;
+  --chart-1: #2b6ff7; /* blue */
+  --chart-2: #22c55e; /* green */
+  --chart-3: #f59e0b; /* amber */
+  --chart-4: #a855f7; /* purple */
+  --chart-5: #ef4444; /* red */
+  --chart-6: #14b8a6; /* teal */
+  --chart-7: #0ea5e9; /* sky */
+  --chart-8: #f97316; /* orange */
+  --radius: 0.75rem; /* slightly larger radii */
+  --sidebar: #f7f9fc;
+  --sidebar-foreground: #0b1221;
+  --sidebar-primary: #2b6ff7;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #00c2ff;
+  --sidebar-accent-foreground: #06223a;
+  --sidebar-border: #e6eaf2;
+  --sidebar-ring: #2b6ff7;
+}
+
+.theme-finance.theme-finance-dark,
+.theme-finance-dark {
+  --background: #0b1221; /* deep navy */
+  --foreground: #e6ecff;
+  --card: #121a2f; /* elevated surfaces */
+  --card-foreground: #e6ecff;
+  --popover: #121a2f;
+  --popover-foreground: #e6ecff;
+  --primary: #7aa5ff; /* luminous blue */
+  --primary-foreground: #08111f;
+  --secondary: #0f1a30;
+  --secondary-foreground: #dbe6ff;
+  --muted: #0f1a30;
+  --muted-foreground: #9fb3ff;
+  --accent: #40d7ff;
+  --accent-foreground: #07121e;
+  --destructive: #f87171;
+  --destructive-foreground: #2b0501;
+  --success: #39d98a;
+  --info: #38bdf8;
+  --warning: #fbbf24;
+  --neutral: #cbd5f5;
+  --border: #1b2744;
+  --input: #1b2744;
+  --ring: #3765ea;
+  --chart-1: #7aa5ff;
+  --chart-2: #4ade80;
+  --chart-3: #f59e0b;
+  --chart-4: #a855f7;
+  --chart-5: #f87171;
+  --chart-6: #2dd4bf;
+  --chart-7: #38bdf8;
+  --chart-8: #f97316;
+  --sidebar: #0b1221;
+  --sidebar-foreground: #e6ecff;
+  --sidebar-primary: #7aa5ff;
+  --sidebar-primary-foreground: #08111f;
+  --sidebar-accent: #12365a;
+  --sidebar-accent-foreground: #cfe9ff;
+  --sidebar-border: #1b2744;
+  --sidebar-ring: #3765ea;
+}
+
 /* Subway Board Theme (portable tokens) */
 .theme-subway {
   /* General look & feel */

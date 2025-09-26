@@ -155,6 +155,13 @@ function ExecutivePageContent() {
 
   const prompts = useMemo(() => starterPrompts.slice(0, 4), [starterPrompts]);
 
+  const cbdChangeCopy =
+    cbdViolationDrop === 0
+      ? "held steady"
+      : cbdViolationDrop < 0
+      ? `dropped by ${formatPercent(Math.abs(cbdViolationDrop))}`
+      : `rose by ${formatPercent(Math.abs(cbdViolationDrop))}`;
+
   const [trendData, setTrendData] = useState<SparklinePoint[]>([]);
   const [trendRouteId, setTrendRouteId] = useState<string | null>(null);
   const [trendLoading, setTrendLoading] = useState(false);
@@ -220,7 +227,7 @@ function ExecutivePageContent() {
     <div className="space-y-4 sm:space-y-6">
       <header className="animate-fade-up space-y-1">
         <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Executive</h1>
-        <p className="text-sm text-foreground/70">KPIs, trends, and AI summaries.</p>
+        <p className="text-sm text-foreground/70">Executive-level KPIs, trendlines, and AI-ready talking points.</p>
       </header>
       {curatedError && (
         <div className="animate-fade-up rounded-lg border border-destructive/60 bg-destructive/10 p-3 text-xs text-destructive shadow-sm">
@@ -235,9 +242,9 @@ function ExecutivePageContent() {
           <div className="space-y-1">
             <h2 id="executive-overview" className="text-sm font-semibold text-foreground">Headline</h2>
             <p className="text-sm text-foreground/80">
-              ACE corridors improved average bus speeds by {formatPercent(Math.max(0, aceSpeedGain))}
-              {" "}
-              ({cbdViolationDrop !== 0 ? `${cbdViolationDrop > 0 ? "▼" : "▲"}${formatPercent(Math.abs(cbdViolationDrop))} vs prior window` : "vs prior window"}); exemptions and hotspots vary by campus type.
+              ACE corridors improved average bus speeds by {formatPercent(Math.max(0, aceSpeedGain))} vs the prior window.
+              CBD violations {cbdChangeCopy} over the same period.
+              Exemptions and hotspots vary by campus type.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -260,10 +267,10 @@ function ExecutivePageContent() {
         {showExplain && (
           <div className="mt-3 rounded-md border border-foreground/10 bg-background/80 p-3 text-foreground/80 shadow-sm">
             <ul className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
-              <li>• Compare ACE vs non-ACE corridors.</li>
-              <li>• Quantify exempt share and recurring fleets.</li>
-              <li>• Use AI prompts to generate briefings.</li>
-              <li>• Switch campus type to reframe the story.</li>
+              <li>Compare ACE and non-ACE corridors.</li>
+              <li>Quantify exempt share and recurring fleets.</li>
+              <li>Use the AI prompts to generate briefings.</li>
+              <li>Adjust the campus filter to reframe the story.</li>
             </ul>
           </div>
         )}
@@ -302,7 +309,7 @@ function ExecutivePageContent() {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 id="exec-trend" className="text-sm font-medium">Monthly violations trend</h2>
-              <p className="text-xs text-muted-foreground">Neon-powered counts for the highlighted campus route.</p>
+              <p className="text-xs text-muted-foreground">Monthly Neon counts for the highlighted campus route.</p>
             </div>
             <span className="text-xs text-foreground/60">Route focus: {trendRouteId}</span>
           </div>
@@ -345,7 +352,7 @@ function ExecutivePageContent() {
               </div>
             </div>
           )}
-          <p className="text-[11px] text-muted-foreground">Tip: adjust the campus filter to compare other executive corridors.</p>
+          <p className="text-[11px] text-muted-foreground">Tip: adjust the campus filter to swap in another executive corridor.</p>
         </section>
       )}
       <section
@@ -354,7 +361,7 @@ function ExecutivePageContent() {
       >
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <h2 id="exec-narratives" className="text-sm font-medium">Narratives to brief</h2>
-          <span className="text-xs text-foreground/60">Anchor updates to the three core business questions.</span>
+          <span className="text-xs text-foreground/60">Tie updates back to the three core business questions.</span>
         </div>
         <ul className="space-y-3 text-sm text-foreground/80">
           {topRoutes.map((route) => (
@@ -384,7 +391,7 @@ function ExecutivePageContent() {
       >
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <h2 id="exec-prompts" className="text-sm font-medium">Pre-drafted AI prompts</h2>
-          <span className="text-xs text-foreground/60">Paste into the assistant or API to generate ready-to-send briefings.</span>
+          <span className="text-xs text-foreground/60">Paste these into the assistant or API to generate ready-to-send briefings.</span>
         </div>
         <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
           {prompts.map((prompt) => (
@@ -415,7 +422,7 @@ function ExecutivePageContent() {
                 <ConversationEmptyState
                   icon={<MessageSquare className="size-6" />}
                   title="Ask for executive insights"
-                  description="Summaries, key risks, and highlights"
+                  description="Ask for summaries, key risks, and highlights"
                 />
               ) : (
                 messages.map((message) => (
@@ -446,7 +453,7 @@ function ExecutivePageContent() {
           >
             <PromptInputTextarea
               value={input}
-              placeholder="Ask for an executive summary..."
+              placeholder="Ask for an executive-ready summary..."
               onChange={(e) => setInput(e.currentTarget.value)}
               className="min-h-[60px] resize-none bg-transparent pr-12 text-sm focus:outline-none"
             />

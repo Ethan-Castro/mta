@@ -272,7 +272,7 @@ export default function OperationsView({ data }: { data: Promise<OpsData> }) {
     <div className="space-y-4 sm:space-y-6">
       <header className="animate-fade-up space-y-1">
         <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Operations</h1>
-        <p className="text-sm text-foreground/70">Compare routes, speeds, and violations.</p>
+        <p className="text-sm text-foreground/70">Monitor hotspots, exemption pressure, and speed changes in one place.</p>
       </header>
       <section
         aria-labelledby="operations-brief"
@@ -282,15 +282,14 @@ export default function OperationsView({ data }: { data: Promise<OpsData> }) {
           <div>
             <h2 id="operations-brief" className="text-sm font-semibold text-foreground">What this answers</h2>
             <p className="text-xs text-muted-foreground">
-              Tackle Datathon Questions 1 and 2 by benchmarking campus corridors, exposing repeat exempt fleets, and staging
-              field deployments.
+              Answer Questions 1 and 2 by benchmarking campus corridors, surfacing repeat exempt fleets, and staging field deployments.
             </p>
           </div>
           <ul className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
-            <li>• Filter campus routes and compare ACE vs non-ACE speeds.</li>
-            <li>• Map hotspots for on-street teams and document DOT coordination needs.</li>
-            <li>• Use scenario playbooks to script SQL + visualization steps for the copilot.</li>
-            <li>• Swap Neon queries into tool cards once the database connection is live.</li>
+            <li>Filter campus routes and compare ACE versus non-ACE speeds.</li>
+            <li>Map hotspots for on-street teams and document DOT coordination needs.</li>
+            <li>Use scenario playbooks for ready-to-run SQL and visualization prompts.</li>
+            <li>Replace sample queries with the live Neon connection once the database is wired up.</li>
           </ul>
         </div>
       </section>
@@ -582,4 +581,3 @@ export default function OperationsView({ data }: { data: Promise<OpsData> }) {
     </div>
   );
 }
-

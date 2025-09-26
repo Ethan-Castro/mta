@@ -192,7 +192,7 @@ export default function PolicyPage() {
     <div className="space-y-6">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">Policy View</h1>
-        <p className="text-sm text-foreground/70">Quantify ACE and congestion pricing impact.</p>
+        <p className="text-sm text-foreground/70">Quantify how ACE and congestion pricing intersect.</p>
       </header>
       {(curatedError || campusError) && (
         <div className="rounded-lg border border-destructive/60 bg-destructive/10 p-3 text-xs text-destructive space-y-1">
@@ -205,13 +205,13 @@ export default function PolicyPage() {
           <div className="space-y-2">
             <h2 id="policy-brief" className="text-sm font-semibold text-foreground">Connect to Question 3</h2>
             <p className="text-xs text-muted-foreground">
-              Compare ACE corridors that cross the CBD against congestion pricing milestones and assemble policy-ready narratives.
+              Compare ACE corridors that cross the CBD against congestion pricing milestones so policy talking points stay grounded in data.
             </p>
             <ul className="grid gap-2 text-xs text-muted-foreground md:grid-cols-2">
-              <li>• Track violation deltas and speed gains since tolling went live.</li>
-              <li>• Surface which campuses benefit most from faster CBD lanes.</li>
-              <li>• Attach documentation so every insight is citation-ready.</li>
-              <li>• Flag non-CBD comparators to justify ACE expansion priorities.</li>
+              <li>Track violation deltas and speed gains since congestion pricing launched.</li>
+              <li>Surface which campuses gain the most from faster CBD lanes.</li>
+              <li>Attach documentation so every insight stays citation-ready.</li>
+              <li>Flag non-CBD comparators to justify the next ACE expansion.</li>
             </ul>
           </div>
           <div className="flex min-w-[210px] flex-col gap-2 text-xs text-muted-foreground">
