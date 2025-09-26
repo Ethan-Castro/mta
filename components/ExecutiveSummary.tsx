@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Loader2, Sparkles } from "lucide-react";
+import { Response } from "@/components/ai-elements/response";
 
 export default function ExecutiveSummary() {
   const [routeId, setRouteId] = useState("");
@@ -91,7 +92,9 @@ export default function ExecutiveSummary() {
           <div className="relative overflow-hidden rounded-lg border border-primary/15 bg-background/95 p-4 text-sm leading-relaxed text-foreground/90 shadow-inner animate-fade-up">
             <span className="pointer-events-none absolute inset-x-4 top-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent opacity-60" aria-hidden />
             <span className="pointer-events-none absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-primary/40 via-primary/20 to-transparent" aria-hidden />
-            <div className="relative z-10 whitespace-pre-wrap">{text}</div>
+            <div className="relative z-10">
+              <Response>{text}</Response>
+            </div>
           </div>
         )}
       </div>

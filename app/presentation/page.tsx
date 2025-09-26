@@ -2,6 +2,7 @@
 
 import { Suspense, useMemo, useState } from "react";
 import { FullscreenContainer } from "@/components/ui/fullscreen";
+import { Source, Sources, SourcesContent, SourcesTrigger } from "@/components/ai-elements/sources";
 import CampusCharts from "./sections/CampusCharts";
 import CongestionPricingChart from "./sections/CongestionPricingChart";
 import ExemptVehiclesChart from "./sections/ExemptVehiclesChart";
@@ -84,12 +85,32 @@ const insightsSolutions = [
   },
 ];
 
+const sources = [
+  {
+    title: "MTA Bus Automated Camera Enforcement Violations: Beginning October 2019",
+    href: "https://data.ny.gov/Transportation/MTA-Bus-Automated-Camera-Enforcement-Violations-Be/kh8p-hcbm/about_data"
+  },
+  {
+    title: "City University of New York (CUNY) University Campus Locations",
+    href: "https://data.ny.gov/Education/City-University-of-New-York-CUNY-University-Campus/irqs-74ez/about_data"
+  },
+  {
+    title: "MTA Bus Route Segment Speeds: 2023 - 2024",
+    href: "https://data.ny.gov/Transportation/MTA-Bus-Route-Segment-Speeds-2023-2024/58t6-89vi/about_data"
+  },
+  {
+    title: "MTA Bus Route Segment Speeds: Beginning 2025",
+    href: "https://data.ny.gov/Transportation/MTA-Bus-Route-Segment-Speeds-Beginning-2025/kufs-yh3x/about_data"
+  }
+];
+
 export default function PresentationPage() {
   const [q2EmbedHeight, setQ2EmbedHeight] = useState(640);
   const tocItems = useMemo<TocItem[]>(
     () => [
       ...sections.map((section) => ({ id: section.id, title: section.title })),
       { id: "insights-solutions", title: "Insights & Solutions" },
+      { id: "sources", title: "Sources" },
     ],
     []
   );
@@ -135,8 +156,6 @@ export default function PresentationPage() {
               <iframe 
                 src="https://www.loom.com/embed/7c07cc04d6b04a6683f35c2c97113b1e?sid=daf2fd5c-eafd-45e7-99b2-9bfe76bf8796" 
                 frameBorder="0" 
-                webkitallowfullscreen="true"
-                mozallowfullscreen="true"
                 allowFullScreen 
                 style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}
               />
@@ -368,6 +387,36 @@ export default function PresentationPage() {
                     </ul>
                   </div>
                 ))}
+              </div>
+            </article>
+
+            <article
+              id="sources"
+              className="scroll-mt-24 rounded-3xl border border-border/60 bg-card/80 p-5 shadow-sm sm:p-6 lg:p-8 surface-card animate-fade-up"
+              style={{ animationDelay: `${0.08 * (sections.length + 1)}s` }}
+              aria-labelledby="sources-title"
+            >
+              <header className="space-y-2">
+                <h2
+                  id="sources-title"
+                  className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl"
+                >
+                  Sources
+                </h2>
+                <p className="text-sm text-foreground/70">
+                  Data sources used in this presentation from New York State Open Data.
+                </p>
+              </header>
+
+              <div className="mt-6">
+                <Sources>
+                  <SourcesTrigger count={sources.length} />
+                  <SourcesContent>
+                    {sources.map((source) => (
+                      <Source key={source.href} href={source.href} title={source.title} />
+                    ))}
+                  </SourcesContent>
+                </Sources>
               </div>
             </article>
           </section>
