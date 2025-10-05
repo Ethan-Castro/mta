@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo } from "react";
 import { usePathname } from "next/navigation";
-import { ArrowUpRightIcon, LayoutDashboardIcon, LogInIcon, LogOutIcon, UserIcon, UserPlusIcon, ChevronDownIcon, BarChart3Icon, MapIcon, UsersIcon, FileTextIcon, BrainIcon, MessageSquareIcon, ClockIcon } from "lucide-react";
+import { ArrowUpRightIcon, LayoutDashboardIcon, LogInIcon, LogOutIcon, UserIcon, UserPlusIcon, ChevronDownIcon, BarChart3Icon, MapIcon, UsersIcon, FileTextIcon, BrainIcon, MessageSquareIcon, ClockIcon, DatabaseIcon } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { useUser } from "@stackframe/stack";
 import { stackClientApp } from "@/stack/client";
@@ -25,7 +25,8 @@ type GlobalRoute =
   | "/students"
   | "/policy"
   | "/data-science"
-  | "/chat";
+  | "/chat"
+  | "/more-data";
 
 // Primary navigation items (always visible)
 const PRIMARY_NAV_ITEMS: Array<{ href: GlobalRoute; label: string; icon?: React.ComponentType<any> }> = [
@@ -41,6 +42,7 @@ const SECONDARY_NAV_ITEMS: Array<{ href: GlobalRoute | "/real-time"; label: stri
   { href: "/students", label: "CUNY Students", icon: UsersIcon },
   { href: "/policy", label: "Policy", icon: FileTextIcon },
   { href: "/data-science", label: "Data Science", icon: BrainIcon },
+  { href: "/more-data", label: "More Data", icon: DatabaseIcon },
   { href: "/real-time", label: "Real-time", icon: ClockIcon },
 ];
 
@@ -69,10 +71,10 @@ export default function GlobalHeader() {
           </div>
           <div className="min-w-0 flex items-baseline gap-2">
             <Link href="/" className="text-sm font-semibold tracking-tight text-foreground whitespace-nowrap">
-              ACE Insight Studio
+              NYC Transport Data
             </Link>
             <span className="hidden sm:inline text-xs text-foreground/60 truncate max-w-[40ch]">
-              — The most trusted place to analyze ACE policy and mobility trends
+              — Unified MTA and DOT data for comprehensive transit insights
             </span>
           </div>
         </div>

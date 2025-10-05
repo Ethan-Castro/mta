@@ -878,10 +878,10 @@ export default function AskAI() {
       <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-1">
           <h2 className="text-xl font-semibold tracking-tight">
-            Ask the ACE assistant
+            Ask the Transport assistant
           </h2>
           <p className="text-muted-foreground text-sm">
-            Explore automated bus lane enforcement data with AI-native UI
+            Explore unified MTA and DOT data with AI-native UI
             elements powered by Vercel AI Elements.
           </p>
         </div>
@@ -1431,7 +1431,7 @@ export default function AskAI() {
           <PromptInputTextarea
             value={inputValue}
             onChange={(event) => setInputValue(event.target.value)}
-            placeholder="Ask about ACE violations, exemptions, trends, or tooling…"
+            placeholder="Ask about transit data, violations, traffic patterns, or trends…"
             aria-label="Message"
           />
         </PromptInputBody>

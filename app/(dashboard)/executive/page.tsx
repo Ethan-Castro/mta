@@ -4,6 +4,10 @@ import { useEffect, useMemo, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import ExecutiveSummary from "@/components/ExecutiveSummary";
 import ExecutiveKpis from "@/components/ExecutiveKpis";
+import { ViewModeProvider, ViewModeToggle, AdaptiveMetric, SimpleContent, DetailedContent, ExpertContent } from "@/components/ViewModeToggle";
+import { SmartTooltip, JargonTerm } from "@/components/ui/smart-tooltip";
+import StoryCard, { StoryCardGrid } from "@/components/StoryCard";
+import ContextPanel, { MetricWithContext } from "@/components/ContextPanel";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import {
@@ -227,7 +231,7 @@ function ExecutivePageContent() {
     <div className="space-y-4 sm:space-y-6">
       <header className="animate-fade-up space-y-1">
         <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Executive</h1>
-        <p className="text-sm text-foreground/70">Executive-level KPIs, trendlines, and AI-ready talking points.</p>
+        <p className="text-sm text-foreground/70">Executive-level KPIs, trendlines, and AI-ready talking points from MTA and DOT data.</p>
       </header>
       {curatedError && (
         <div className="animate-fade-up rounded-lg border border-destructive/60 bg-destructive/10 p-3 text-xs text-destructive shadow-sm">
@@ -411,7 +415,7 @@ function ExecutivePageContent() {
         <ExecutiveSummary />
       </div>
       <div className="surface-card animate-fade-up rounded-xl border border-foreground/10 bg-card/80 p-4 shadow-soft-lg sm:p-5">
-        <h2 className="mb-3 text-sm font-medium">Ask the ACE assistant</h2>
+        <h2 className="mb-3 text-sm font-medium">Ask the Transport assistant</h2>
         <div className="flex flex-col">
           <Conversation
             className="relative w-full overflow-hidden rounded-lg border border-foreground/10 bg-background/80 shadow-inner"

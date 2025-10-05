@@ -3,6 +3,8 @@ import SocialMonitor from "@/components/real-time/SocialMonitor";
 import { aceApi } from "@/lib/aceApi";
 import { getRouteTotals, getViolationTotals, type RouteTotalsRow } from "@/lib/data/violations";
 import { isDbConfigured } from "@/lib/db";
+import { SmartTooltip } from "@/components/ui/smart-tooltip";
+import AboutDashboard from "@/components/AboutDashboard";
 
 export const metadata = {
   title: "Real-time | ACE Insight Studio",
@@ -168,14 +170,23 @@ export default async function Page() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 sm:px-6">
-      <div className="mb-8 rounded-3xl border border-border/50 bg-gradient-to-br from-primary/10 via-background to-background p-6 sm:p-8">
+      <div className="mb-6 rounded-3xl border border-border/50 bg-gradient-to-br from-primary/10 via-background to-background p-6 sm:p-8">
         <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-primary">Real-time pulse</p>
-            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">ACE Live Operations Center</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+                <SmartTooltip termId="ace" showIcon iconType="info">
+                  ACE Live Operations Center
+                </SmartTooltip>
+              </h1>
+            </div>
             <p className="max-w-2xl text-sm text-muted-foreground">
-              Monitoring the last {lookbackDays} days of ACE enforcement activity, automated model readiness, and public
-              sentiment. Window {dataWindowLabel}.
+              Monitoring the last{" "}
+              <SmartTooltip termId="lookback-window" plainText={`${lookbackDays}-day monitoring period`}>
+                {lookbackDays} days
+              </SmartTooltip>
+              {" "}of bus lane enforcement activity, automated model readiness, and public sentiment. Window {dataWindowLabel}.
             </p>
             {!usingLiveData && fallbackReason ? (
               <span className="inline-flex items-center gap-2 rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-amber-500">
@@ -185,37 +196,49 @@ export default async function Page() {
             ) : null}
           </div>
           <div className="rounded-2xl border border-primary/40 bg-background/60 px-5 py-4 text-right shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-wide text-primary/80">Violations ({lookbackDays}d)</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-primary/80">
+              <SmartTooltip termId="violations">
+                Violations ({lookbackDays}d)
+              </SmartTooltip>
+            </p>
             <p className="mt-2 text-3xl font-semibold text-primary">{integerFormatter.format(totals.totalViolations)}</p>
             <p className="mt-1 text-[11px] text-muted-foreground">
-              Exempt share {percentFormatter.format(exemptShare)}
+              <SmartTooltip termId="exempt-share">
+                Exempt share
+              </SmartTooltip>{" "}
+              {percentFormatter.format(exemptShare)}
             </p>
           </div>
         </div>
       </div>
+
+      <AboutDashboard />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <SummaryCard
           label={`Violations (${lookbackDays}d)`}
           value={integerFormatter.format(totals.totalViolations)}
           hint={`Window ${dataWindowLabel}`}
+          tooltipId="violations"
         />
         <SummaryCard
           label="Exempt share"
           value={percentFormatter.format(exemptShare)}
           description={`Exempt ${integerFormatter.format(totals.totalExempt)} of ${integerFormatter.format(totals.totalViolations)} total`}
           accent="warning"
+          tooltipId="exempt-share"
         />
         <SummaryCard
           label="Routes observed"
           value={integerFormatter.format(totals.activeRoutes)}
-          description={usingLiveData ? "Live Neon query of active ACE corridors." : "Snapshot of demo corridors."}
+          description={usingLiveData ? "Live query of active bus lane corridors." : "Snapshot of demo corridors."}
+          tooltipId="active-routes"
         />
         <SummaryCard
           label="Latest month processed"
           value={latestMonthLabel}
           description={usingLiveData ? "Live data refreshed nightly." : "Demo snapshot refreshed weekly."}
-          hint={`Source ${usingLiveData ? "Neon connection" : "Curated sample"}`}
+          hint={`Source ${usingLiveData ? "Live connection" : "Curated sample"}`}
         />
       </div>
 
@@ -224,8 +247,12 @@ export default async function Page() {
           <div className="rounded-2xl border border-border/60 bg-card/80 p-4 sm:p-5">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-sm font-semibold sm:text-base">System pulse</h2>
-                <p className="text-xs text-muted-foreground">Automated health across data, models, and sentiment feeds.</p>
+                <h2 className="text-sm font-semibold sm:text-base">
+                  <SmartTooltip termId="system-pulse" showIcon iconType="info">
+                    Data & System Status
+                  </SmartTooltip>
+                </h2>
+                <p className="text-xs text-muted-foreground">Automated health across data sources, AI models, and social feeds.</p>
               </div>
               <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Updated {lastGeneratedLabel}</span>
             </div>
@@ -239,8 +266,12 @@ export default async function Page() {
           <div className="rounded-2xl border border-border/60 bg-card/80 p-4 sm:p-5">
             <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
               <div>
-                <h2 className="text-sm font-semibold sm:text-base">Route watchlist</h2>
-                <p className="text-xs text-muted-foreground">Highest enforcement activity in the past {lookbackDays} days.</p>
+                <h2 className="text-sm font-semibold sm:text-base">
+                  <SmartTooltip termId="route-watchlist" showIcon iconType="info">
+                    Most Active Routes
+                  </SmartTooltip>
+                </h2>
+                <p className="text-xs text-muted-foreground">Routes with the most cars caught blocking bus lanes in the past {lookbackDays} days.</p>
               </div>
               <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Sorted by violations</span>
             </div>
@@ -293,9 +324,10 @@ type SummaryCardProps = {
   hint?: string;
   description?: string;
   accent?: "default" | "success" | "warning";
+  tooltipId?: string;
 };
 
-function SummaryCard({ label, value, hint, description, accent = "default" }: SummaryCardProps) {
+function SummaryCard({ label, value, hint, description, accent = "default", tooltipId }: SummaryCardProps) {
   const valueClass =
     accent === "success"
       ? "text-emerald-500"
@@ -303,9 +335,17 @@ function SummaryCard({ label, value, hint, description, accent = "default" }: Su
       ? "text-amber-400"
       : "text-foreground";
 
+  const labelContent = tooltipId ? (
+    <SmartTooltip termId={tooltipId} showIcon iconType="info">
+      {label}
+    </SmartTooltip>
+  ) : (
+    label
+  );
+
   return (
     <div className="rounded-2xl border border-border/60 bg-card/80 p-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{labelContent}</p>
       <p className={`mt-2 text-2xl font-semibold ${valueClass}`}>{value}</p>
       {description ? <p className="mt-2 text-xs text-muted-foreground leading-snug">{description}</p> : null}
       {hint ? <p className="mt-1 text-[11px] text-muted-foreground/80">{hint}</p> : null}
@@ -322,6 +362,21 @@ type StatusRowProps = {
 };
 
 function StatusRow({ label, value, description, ok, additional }: StatusRowProps) {
+  // Add tooltips for technical terms
+  const getTooltipId = (label: string) => {
+    if (label.toLowerCase().includes('neon')) return 'neon-warehouse';
+    if (label.toLowerCase().includes('model')) return 'model-api';
+    if (label.toLowerCase().includes('social')) return 'social-sentiment';
+    return undefined;
+  };
+
+  const tooltipId = getTooltipId(label);
+  const labelContent = tooltipId ? (
+    <SmartTooltip termId={tooltipId} showIcon iconType="info">
+      {label}
+    </SmartTooltip>
+  ) : label;
+
   return (
     <div className="flex items-start gap-3 rounded-xl border border-border/60 bg-background/70 p-3">
       <span
@@ -330,7 +385,7 @@ function StatusRow({ label, value, description, ok, additional }: StatusRowProps
       />
       <div className="flex-1">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-sm font-semibold">{label}</p>
+          <p className="text-sm font-semibold">{labelContent}</p>
           <span className={`text-xs font-medium ${ok ? "text-emerald-500" : "text-amber-500"}`}>{value}</span>
         </div>
         <p className="mt-1 text-xs text-muted-foreground leading-snug">{description}</p>
@@ -352,15 +407,26 @@ function RouteWatchRow({ route, index, lookbackDays }: RouteWatchRowProps) {
   const relative = lastSeenDate ? formatRelative(lastSeenDate) : null;
   const absolute = lastSeenDate ? dateTimeFormatter.format(lastSeenDate) : null;
 
+  // Detect SBS routes
+  const isSBS = route.busRouteId.includes('SBS');
+  const routeLabel = isSBS ? (
+    <SmartTooltip termId="sbs-route" plainText={`${route.busRouteId} (Select Bus Service - express route)`}>
+      {route.busRouteId}
+    </SmartTooltip>
+  ) : route.busRouteId;
+
   return (
     <div className="flex gap-3 rounded-xl border border-border/60 bg-background/70 p-3 sm:p-4">
       <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-sm font-semibold text-primary">#{index + 1}</div>
       <div className="flex-1">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-baseline sm:justify-between">
           <div>
-            <p className="text-sm font-semibold sm:text-base">{route.busRouteId}</p>
+            <p className="text-sm font-semibold sm:text-base">{routeLabel}</p>
             <p className="text-xs text-muted-foreground">
-              Exempt share {percentFormatter.format(share)} · {integerFormatter.format(route.exemptCount)} exempt
+              <SmartTooltip termId="exempt-share">
+                Exempt share
+              </SmartTooltip>{" "}
+              {percentFormatter.format(share)} · {integerFormatter.format(route.exemptCount)} exempt
             </p>
           </div>
           <div className="text-sm sm:text-base">
@@ -381,3 +447,4 @@ function RouteWatchRow({ route, index, lookbackDays }: RouteWatchRowProps) {
     </div>
   );
 }
+

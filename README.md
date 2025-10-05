@@ -1,9 +1,9 @@
 
-# 🚍 [MTA ACE Insight Studio - CLICK HERE](https://mta-data.com)
+# 🚍 [NYC Transport Data - CLICK HERE](https://mta-data.com)
 
-**Executive-ready analytics platform for the MTA ACE Datathon 2025**
+**Unified MTA and DOT analytics platform**
 
-This project was built for the **MTA ACE Datathon 2025** to analyze and visualize Automated Bus Lane Enforcement (ACE) data, congestion pricing impacts, and CUNY student mobility patterns. It leverages modern web technologies, serverless databases, and AI integrations to provide real-time insights for executives, policy makers, and data scientists.
+This project combines **MTA and NYC Department of Transportation data** to provide comprehensive transit insights. Built for executive decision-making, it analyzes bus lane enforcement (ACE), traffic patterns, congestion pricing impacts, and CUNY student mobility. It leverages modern web technologies, serverless databases, and AI integrations to provide real-time insights for executives, policy makers, and data scientists.
 
 ---
 
@@ -28,10 +28,10 @@ This project was built for the **MTA ACE Datathon 2025** to analyze and visualiz
 - **AI Copilot** for SQL queries, visualization, speech-to-text, and report generation.
 
 ### Data Sources
-- **NYC Open Data**: ACE violations dataset ([kh8p-hcbm](https://data.cityofnewyork.us/))  
-- **CUNY Data**: Campus metrics and locations  
-- **Socrata API**: Real-time updates  
-- **MTA Bus Speed Data**: Historical and 2025 live data  
+- **MTA Data**: Bus speed data, ACE violations dataset ([kh8p-hcbm](https://data.cityofnewyork.us/))
+- **NYC DOT Data**: Traffic patterns, congestion metrics, infrastructure data
+- **CUNY Data**: Campus metrics and locations
+- **Socrata API**: Real-time updates
 - **NYC Police Precinct Data**: Violation enforcement context  
 
 ---
@@ -39,10 +39,10 @@ This project was built for the **MTA ACE Datathon 2025** to analyze and visualiz
 ## 📊 Site Structure
 
 ### Core Views
-- **Home (`/`)**: Persona navigation, business questions, prediction cards.  
-- **Executive Dashboard (`/executive`)**: KPIs, trend analysis, AI-generated summaries.  
-- **Operations Dashboard (`/operations`)**: Route benchmarking, ACE hotspots, exempt vehicle tracking.  
-- **ACE Copilot (`/chat`)**: Multi-model AI chat, SQL execution, visualization, email export.  
+- **Home (`/`)**: Persona navigation, business questions, prediction cards.
+- **Executive Dashboard (`/executive`)**: KPIs, trend analysis, AI-generated summaries.
+- **Operations Dashboard (`/operations`)**: Route benchmarking, ACE hotspots, exempt vehicle tracking.
+- **Transport Copilot (`/chat`)**: Multi-model AI chat, SQL execution, visualization, email export.  
 - **Additional Views**:  
   - `/map` – Spatial analysis  
   - `/students` – CUNY student routes  
@@ -164,7 +164,7 @@ This project addresses **MTA Datathon 2025**’s three core business questions:
    * How have violations and speeds changed under congestion pricing?
    * Mapping performance pre- and post-policy.
 
-📌 **ACE’s mission**: Keep bus lanes clear, improve speeds (average +5%, up to +30% in some corridors).
+📌 **Mission**: Integrate MTA and DOT data to improve transit reliability, reduce congestion, and optimize bus speeds (average +5%, up to +30% in some corridors).
 
 ---
 
@@ -197,14 +197,14 @@ This project addresses **MTA Datathon 2025**’s three core business questions:
 
 ## 🏆 Team Vision
 
-This project delivers **real-time, AI-powered analytics** to support MTA’s mission of improving bus speeds and reliability through ACE enforcement. It is designed to be **scalable, production-ready, and executive-friendly** for decision-making.
+This project delivers **real-time, AI-powered analytics** by unifying MTA and NYC DOT data to improve bus speeds, reduce congestion, and optimize transportation infrastructure. It is designed to be **scalable, production-ready, and executive-friendly** for decision-making.
 
 ---
 
 ## 🔗 Related API Repositories
 
-This project builds on dedicated API services developed for the datathon.  
-The following repositories contain the training, preprocessing, and API logic that power the insights in **MTA ACE Insight Studio**:
+This project builds on dedicated API services developed for the datathon.
+The following repositories contain the training, preprocessing, and API logic that power the insights in **NYC Transport Data**:
 
 - [**mta-ace-api**](https://github.com/Ethan-Castro/mta-ace-api)  
   Backend service focused on Automated Camera Enforcement (ACE) violation data, including preprocessing, route-level aggregations, and enforcement metrics.
