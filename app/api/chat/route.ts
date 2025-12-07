@@ -470,7 +470,7 @@ export async function POST(req: Request) {
   alias("survival_cox", "survivalCox");
 
   const result = streamText({
-    model: headerModel ?? attachmentModel ?? (model || "openai/gpt-5-mini"),
+    model: headerModel ?? attachmentModel ?? (model || "moonshotai/kimi-k2-0905"),
     system: system || SYSTEM_PROMPTS.default,
     messages: convertToModelMessages(messages),
     toolChoice: "auto",

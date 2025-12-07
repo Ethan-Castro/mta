@@ -19,8 +19,13 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}));
     const { data } = body || {};
 
-    // Ensure Vercel AI Gateway key is available for the default Gateway provider
-    process.env.AI_GATEWAY_API_KEY = process.env.AI_GATEWAY_API_KEY || "vck_71Q1WAPSF8Hxrgs9wXw0k8sdl8oHndAnZch694sGbRkTa7aHuT46f1oo";
+    // Require the Vercel AI Gateway key to be provided at runtime (no hard-coded fallback)
+    if (!process.env.AI_GATEWAY_API_KEY) {
+      return NextResponse.json(
+        { ok: false, error: "AI_GATEWAY_API_KEY must be set in the environment." },
+        { status: 500 }
+      );
+    }
 
     const { object } = await generateObject({
       model: "openai/gpt-5-mini",
@@ -33,5 +38,4 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: e?.message || String(e) }, { status: 500 });
   }
 }
-
 

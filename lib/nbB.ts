@@ -1,16 +1,24 @@
 const ENV_KEYS = ["NEXT_PUBLIC_NOTEBOOK_B_BASE", "NEXT_PUBLIC_ACE_API_BASE", "NOTEBOOK_B_BASE"] as const;
+const MISSING_BASE_ERROR = "Notebook B base URL is not configured (set NEXT_PUBLIC_NOTEBOOK_B_BASE).";
 
-function resolveBase(): string {
+function resolveBase(): string | null {
   for (const key of ENV_KEYS) {
     const value = process.env[key];
     if (value && value.trim()) {
       return value.replace(/\/$/, "");
     }
   }
-  throw new Error("Notebook B base URL is not configured (set NEXT_PUBLIC_NOTEBOOK_B_BASE).");
+  return null;
 }
 
 const BASE_URL = resolveBase();
+
+function requireBase(): string {
+  if (!BASE_URL) {
+    throw new Error(MISSING_BASE_ERROR);
+  }
+  return BASE_URL;
+}
 
 async function handleResponse<T>(res: Response, path: string): Promise<T> {
   if (!res.ok) {
@@ -28,7 +36,7 @@ async function handleResponse<T>(res: Response, path: string): Promise<T> {
 }
 
 function buildUrl(path: string): string {
-  return `${BASE_URL}${path}`;
+  return `${requireBase()}${path}`;
 }
 
 async function get<T>(path: string, options: { revalidate?: number } = {}): Promise<T> {
@@ -52,6 +60,7 @@ let healthPromise: Promise<NotebookBHealth | null> | null = null;
 export async function health(): Promise<NotebookBHealth | null> {
   if (!healthPromise) {
     healthPromise = (async () => {
+      if (!BASE_URL) return null;
       try {
         return await get<NotebookBHealth>("/health", { revalidate: 60 });
       } catch (error) {
@@ -82,7 +91,7 @@ export async function riskScore<T = unknown>(avgSpeedMph: number, tripsPerHour: 
     avg_speed_mph: String(avgSpeedMph),
     trips_per_hour: String(tripsPerHour),
   }).toString();
-  const res = await fetch(`${BASE_URL}/risk/score?${qs}`, {
+  const res = await fetch(`${requireBase()}/risk/score?${qs}`, {
     cache: "no-store",
   });
   return handleResponse<T>(res, "/risk/score");

@@ -1,16 +1,24 @@
 const ENV_KEYS = ["NEXT_PUBLIC_NOTEBOOK_A_BASE", "NOTEBOOK_A_BASE"] as const;
+const MISSING_BASE_ERROR = "Notebook A base URL is not configured (set NEXT_PUBLIC_NOTEBOOK_A_BASE).";
 
-function resolveBase(): string {
+function resolveBase(): string | null {
   for (const key of ENV_KEYS) {
     const value = process.env[key];
     if (value && value.trim()) {
       return value.replace(/\/$/, "");
     }
   }
-  throw new Error("Notebook A base URL is not configured (set NEXT_PUBLIC_NOTEBOOK_A_BASE).");
+  return null;
 }
 
 const BASE_URL = resolveBase();
+
+function requireBase(): string {
+  if (!BASE_URL) {
+    throw new Error(MISSING_BASE_ERROR);
+  }
+  return BASE_URL;
+}
 
 async function handleResponse<T>(res: Response, path: string): Promise<T> {
   if (!res.ok) {
@@ -28,7 +36,7 @@ async function handleResponse<T>(res: Response, path: string): Promise<T> {
 }
 
 function buildUrl(path: string): string {
-  return `${BASE_URL}${path}`;
+  return `${requireBase()}${path}`;
 }
 
 async function get<T>(path: string, options: { revalidate?: number } = {}): Promise<T> {
@@ -88,6 +96,7 @@ let healthPromise: Promise<NotebookAHealth | null> | null = null;
 export async function health(): Promise<NotebookAHealth | null> {
   if (!healthPromise) {
     healthPromise = (async () => {
+      if (!BASE_URL) return null;
       try {
         return await get<NotebookAHealth>("/health", { revalidate: 60 });
       } catch (error) {

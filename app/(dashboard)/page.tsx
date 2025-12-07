@@ -1,21 +1,6 @@
 "use client";
 
 import { Suspense } from "react";
-import { AppSidebar } from "@/components/app-sidebar"
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb"
-import { Separator } from "@/components/ui/separator"
-import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from "@/components/ui/sidebar"
 import { FullscreenContainer } from "@/components/ui/fullscreen";
 import { Source, Sources, SourcesContent, SourcesTrigger } from "@/components/ai-elements/sources";
 import CampusCharts from "./presentation/sections/CampusCharts";
@@ -129,103 +114,77 @@ const EMBED_HEIGHT = 560;
 
 export default function Page() {
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <SidebarInset>
-        <header className="flex h-12 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-10">
-          <div className="flex items-center gap-2 px-3">
-            <SidebarTrigger className="-ml-1 h-8 w-8" />
-            <Separator
-              orientation="vertical"
-              className="mr-2 h-3 data-[orientation=vertical]:h-3"
-            />
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem className="hidden md:block">
-                  <BreadcrumbLink href="#" className="text-sm">
-                    MTA Dashboard
-                  </BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator className="hidden md:block" />
-                <BreadcrumbItem>
-                  <BreadcrumbPage className="text-sm">Overview</BreadcrumbPage>
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
+    <Suspense fallback={null}>
+      <main className="min-h-screen bg-background">
+        <header className="relative overflow-hidden border-b border-border/60 bg-primary/5">
+          <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
+            <p className="text-xs font-semibold uppercase tracking-widest text-primary">Overview</p>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+              MTA Bus Lane Enforcement Analysis
+            </h1>
+            <p className="mt-3 max-w-2xl text-sm text-foreground/70 sm:text-base">
+              Analysis of ACE camera enforcement effectiveness for CUNY student bus routes and congestion pricing impact.
+            </p>
+            <nav aria-label="Analysis outline" className="mt-6 text-sm text-foreground/80">
+              <ul className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
+                {tocItems.map((item) => (
+                  <li key={item.id}>
+                    <a
+                      href={`#${item.id}`}
+                      className="block rounded-xl border border-border/60 bg-background/70 px-3 py-2 transition-colors hover:border-primary/40 hover:bg-primary/5"
+                    >
+                      {item.title}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </nav>
           </div>
         </header>
-        <Suspense>
-          <main className="min-h-screen bg-background">
-            <header className="relative overflow-hidden border-b border-border/60 bg-primary/5">
-              <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
-                <p className="text-xs font-semibold uppercase tracking-widest text-primary">Overview</p>
-                <h1 className="mt-2 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-                  MTA Bus Lane Enforcement Analysis
-                </h1>
-                <p className="mt-3 max-w-2xl text-sm text-foreground/70 sm:text-base">
-                  Analysis of ACE camera enforcement effectiveness for CUNY student bus routes and congestion pricing impact.
-                </p>
-                <nav aria-label="Analysis outline" className="mt-6 text-sm text-foreground/80">
-                  <ul className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
-                    {tocItems.map((item) => (
-                      <li key={item.id}>
-                        <a
-                          href={`#${item.id}`}
-                          className="block rounded-xl border border-border/60 bg-background/70 px-3 py-2 transition-colors hover:border-primary/40 hover:bg-primary/5"
-                        >
-                          {item.title}
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                </nav>
-              </div>
-            </header>
 
-            {/* Loom Video Embed */}
-            <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-              <div className="rounded-2xl border border-border/60 bg-card/70 p-4 shadow-sm">
-                <div style={{ position: "relative", paddingBottom: "57.446808510638306%", height: 0 }}>
-                  <iframe 
-                    src="https://www.loom.com/embed/7c07cc04d6b04a6683f35c2c97113b1e?sid=daf2fd5c-eafd-45e7-99b2-9bfe76bf8796" 
-                    frameBorder="0" 
-                    allowFullScreen 
-                    style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}
-                  />
-                </div>
-              </div>
+        {/* Loom Video Embed */}
+        <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+          <div className="rounded-2xl border border-border/60 bg-card/70 p-4 shadow-sm">
+            <div style={{ position: "relative", paddingBottom: "57.446808510638306%", height: 0 }}>
+              <iframe 
+                src="https://www.loom.com/embed/7c07cc04d6b04a6683f35c2c97113b1e?sid=daf2fd5c-eafd-45e7-99b2-9bfe76bf8796" 
+                frameBorder="0" 
+                allowFullScreen 
+                style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}
+              />
             </div>
+          </div>
+        </div>
 
-            <div className="mx-auto grid max-w-6xl grid-cols-1 gap-6 px-4 py-10 sm:grid-cols-[260px_1fr] sm:gap-8 sm:px-6 lg:py-14">
-              <aside className="hidden sm:block">
-                <div className="sticky top-20 space-y-3">
-                  <p className="text-xs font-semibold uppercase tracking-widest text-foreground/60">
-                    On this page
-                  </p>
-                  <ul className="space-y-2 text-sm">
-                    {tocItems.map((item) => (
-                      <li key={item.id}>
-                        <a
-                          href={`#${item.id}`}
-                          className="block rounded-lg border border-border/60 bg-card/70 px-3 py-2 text-foreground/80 transition-colors hover:border-primary/40 hover:text-foreground"
-                        >
-                          {item.title}
-                        </a>
-                      </li>
-                    ))}
-                    <li className="pt-2">
-                      <a href="#top" className="text-xs text-primary hover:underline">
-                        Back to top
-                      </a>
-                    </li>
-                  </ul>
-                </div>
-              </aside>
+        <div className="mx-auto grid max-w-6xl grid-cols-1 gap-6 px-4 py-10 sm:grid-cols-[260px_1fr] sm:gap-8 sm:px-6 lg:py-14">
+          <aside className="hidden sm:block">
+            <div className="sticky top-20 space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-widest text-foreground/60">
+                On this page
+              </p>
+              <ul className="space-y-2 text-sm">
+                {tocItems.map((item) => (
+                  <li key={item.id}>
+                    <a
+                      href={`#${item.id}`}
+                      className="block rounded-lg border border-border/60 bg-card/70 px-3 py-2 text-foreground/80 transition-colors hover:border-primary/40 hover:text-foreground"
+                    >
+                      {item.title}
+                    </a>
+                  </li>
+                ))}
+                <li className="pt-2">
+                  <a href="#top" className="text-xs text-primary hover:underline">
+                    Back to top
+                  </a>
+                </li>
+              </ul>
+            </div>
+          </aside>
 
-              <section id="top" className="space-y-8">
+          <section id="top" className="space-y-8">
                 {sections.map((s, i) => {
                   const embedUrl = s.embedUrl;
-                  const hasEmbed = Boolean(embedUrl);
                   const isLastSection = i === sections.length - 1;
                   const nextSectionId = isLastSection ? "insights-solutions" : sections[i + 1].id;
                   const nextSectionLabel = isLastSection ? "Insights & Solutions" : "Next section";
@@ -456,7 +415,5 @@ export default function Page() {
             </div>
           </main>
         </Suspense>
-      </SidebarInset>
-    </SidebarProvider>
   )
 }

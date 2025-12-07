@@ -24,7 +24,7 @@ import { BRAND_PRIMARY_HEX } from "@/lib/ui/colors";
 export default function ToolsChat() {
   const [input, setInput] = useState("");
   const [showTools, setShowTools] = useState(true);
-  const [model, setModel] = useState<string>("openai/gpt-5-mini");
+  const [model, setModel] = useState<string>("moonshotai/kimi-k2-0905");
   const chat = useMemo(
     () =>
       new Chat({

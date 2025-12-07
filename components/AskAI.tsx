@@ -470,7 +470,7 @@ function deriveToolState(toolLogs: ToolLogEntry[], baseInput: Record<string, unk
 export default function AskAI() {
   const user = useUser();
   const [inputValue, setInputValue] = useState("");
-  const [model, setModel] = useState("openai/gpt-5-mini");
+  const [model, setModel] = useState("moonshotai/kimi-k2-0905");
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [status, setStatus] = useState<ChatStatus | undefined>();

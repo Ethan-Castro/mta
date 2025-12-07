@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/sidebar"
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
-  await stackServerApp.getUser({ or: "redirect" })
+  // Allow anonymous access to the dashboard (no auth redirect)
 
   return (
     <>

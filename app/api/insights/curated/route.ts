@@ -27,6 +27,15 @@ const ALL_KEYS = [
 
 type CuratedKey = (typeof ALL_KEYS)[number];
 
+async function loadWithFallback<T>(label: string, loader: () => Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await loader();
+  } catch (error) {
+    console.error(`[curated] failed to load ${label}`, error);
+    return fallback;
+  }
+}
+
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
@@ -57,51 +66,51 @@ export async function GET(req: Request) {
     for (const key of requestedKeys) {
       switch (key) {
         case "routes":
-          payload.routes = await getRouteComparisons();
+          payload.routes = await loadWithFallback("routes", getRouteComparisons, []);
           break;
         case "hotspots":
-          payload.hotspots = await getCuratedHotspots();
+          payload.hotspots = await loadWithFallback("hotspots", getCuratedHotspots, []);
           break;
         case "repeaters":
-          payload.repeaters = await getExemptRepeaterSummaries();
+          payload.repeaters = await loadWithFallback("repeaters", getExemptRepeaterSummaries, []);
           break;
         case "cbdRoutes":
-          payload.cbdRoutes = await getCbdRouteTrends();
+          payload.cbdRoutes = await loadWithFallback("cbdRoutes", getCbdRouteTrends, []);
           break;
         case "documents":
-          payload.documents = await getDocumentationLinks();
+          payload.documents = await loadWithFallback("documents", getDocumentationLinks, []);
           break;
         case "prompts": {
-          const prompts = await ensurePrompts();
+          const prompts = await loadWithFallback("prompts", ensurePrompts, []);
           payload.prompts = prompts;
           break;
         }
         case "starterPrompts": {
-          if (needsAllPrompts) {
-            const prompts = await ensurePrompts();
-            payload.starterPrompts = prompts.filter((prompt) => prompt.category.toLowerCase() === "starter");
-          } else {
-            payload.starterPrompts = await getAiPrompts("starter");
-          }
+          const prompts = needsAllPrompts
+            ? await loadWithFallback("prompts", ensurePrompts, [])
+            : await loadWithFallback("starterPrompts", () => getAiPrompts("starter"), []);
+          payload.starterPrompts = Array.isArray(prompts)
+            ? prompts.filter((prompt) => (prompt?.category || "").toLowerCase() === "starter")
+            : [];
           break;
         }
         case "studentPrompts": {
-          if (needsAllPrompts) {
-            const prompts = await ensurePrompts();
-            payload.studentPrompts = prompts.filter((prompt) => prompt.category.toLowerCase() === "student");
-          } else {
-            payload.studentPrompts = await getAiPrompts("student");
-          }
+          const prompts = needsAllPrompts
+            ? await loadWithFallback("prompts", ensurePrompts, [])
+            : await loadWithFallback("studentPrompts", () => getAiPrompts("student"), []);
+          payload.studentPrompts = Array.isArray(prompts)
+            ? prompts.filter((prompt) => (prompt?.category || "").toLowerCase() === "student")
+            : [];
           break;
         }
         case "analystScenarios":
-          payload.analystScenarios = await getAnalystScenarios();
+          payload.analystScenarios = await loadWithFallback("analystScenarios", getAnalystScenarios, []);
           break;
         case "studentProfiles":
-          payload.studentProfiles = await getStudentCommuteProfiles();
+          payload.studentProfiles = await loadWithFallback("studentProfiles", getStudentCommuteProfiles, []);
           break;
         case "studentDbRecipes":
-          payload.studentDbRecipes = await getStudentDbRecipes();
+          payload.studentDbRecipes = await loadWithFallback("studentDbRecipes", getStudentDbRecipes, []);
           break;
       }
     }

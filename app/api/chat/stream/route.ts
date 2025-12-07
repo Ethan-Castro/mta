@@ -580,7 +580,7 @@ export async function POST(req: Request) {
     };
 
     const result = streamText({
-      model: headerModel ?? (model || "openai/gpt-5-mini"),
+      model: headerModel ?? (model || "moonshotai/kimi-k2-0905"),
       // Centralized system prompt: edit in lib/ai/system-prompts.ts
       system: SYSTEM_PROMPTS.streaming,
       messages: modelMessages,
